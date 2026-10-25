@@ -47,15 +47,15 @@ class ThemeController extends ValueNotifier<AppTheme> {
 
   static String _serialize(AppTheme t) {
     return const JsonEncoder.withIndent('  ').convert({
-      'cornerRadius': t.cornerRadius,
-      'borderWidth': t.borderWidth,
+      'cornerRadius': _num(t.cornerRadius),
+      'borderWidth': _num(t.borderWidth),
       'fontFamily': t.fontFamily,
       'monospaceFontFamily': t.monospaceFontFamily,
       'fontSize': {
-        'title': t.fontSizeTitle,
-        'heading': t.fontSizeHeading,
-        'body': t.fontSizeBody,
-        'caption': t.fontSizeCaption,
+        'title': _num(t.fontSizeTitle),
+        'heading': _num(t.fontSizeHeading),
+        'body': _num(t.fontSizeBody),
+        'caption': _num(t.fontSizeCaption),
       },
       'background': _hex(t.background),
       'border': _hex(t.border),
@@ -64,6 +64,8 @@ class ThemeController extends ValueNotifier<AppTheme> {
       'accent': _hex(t.accent),
     });
   }
+
+  static Object _num(double v) => v % 1 == 0 ? v.toInt() : v;
 
   static String _hex(Color c) {
     return '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';

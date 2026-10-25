@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// App theme parsed from `assets/theme.json`.
+/// App theme parsed from the user's `%APPDATA%\Nyaxis\ui\theme.json`.
 ///
 /// The constructor values are the fallbacks for missing/malformed JSON keys.
 @immutable
@@ -14,11 +14,11 @@ class AppTheme {
     this.fontSizeHeading = 16,
     this.fontSizeBody = 13,
     this.fontSizeCaption = 11,
-    this.background = const Color(0xffeff1f5),
-    this.border = const Color(0xffbcc0cc),
-    this.textPrimary = const Color(0xff4c4f69),
-    this.textDim = const Color(0xff6c6f85),
-    this.accent = const Color(0xff8839ef),
+    this.background = const Color(0xff1e1e2e),
+    this.border = const Color(0xff45475a),
+    this.textPrimary = const Color(0xffcdd6f4),
+    this.textDim = const Color(0xffa6adc8),
+    this.accent = const Color(0xffcba6f7),
   });
 
   final double cornerRadius;
