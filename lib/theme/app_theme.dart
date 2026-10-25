@@ -15,6 +15,7 @@ class AppTheme {
     this.fontSizeBody = 13,
     this.fontSizeCaption = 11,
     this.background = const Color(0xff1e1e2e),
+    this.backgroundOpacity = 1.0,
     this.border = const Color(0xff45475a),
     this.textPrimary = const Color(0xffcdd6f4),
     this.textDim = const Color(0xffa6adc8),
@@ -35,6 +36,15 @@ class AppTheme {
   final double fontSizeCaption;
 
   final Color background;
+
+  /// How opaque the window background paints over the desktop, 0..1.
+  /// Applied to [background] when it is painted; hex strings in the JSON
+  /// stay alpha-free.
+  final double backgroundOpacity;
+
+  /// [background] with its opacity applied; the thing the shell paints.
+  Color get backgroundColor =>
+      background.withValues(alpha: backgroundOpacity);
   final Color border;
   final Color textPrimary;
   final Color textDim;
@@ -85,6 +95,7 @@ class AppTheme {
     double? fontSizeBody,
     double? fontSizeCaption,
     Color? background,
+    double? backgroundOpacity,
     Color? border,
     Color? textPrimary,
     Color? textDim,
@@ -100,6 +111,7 @@ class AppTheme {
       fontSizeBody: fontSizeBody ?? this.fontSizeBody,
       fontSizeCaption: fontSizeCaption ?? this.fontSizeCaption,
       background: background ?? this.background,
+      backgroundOpacity: backgroundOpacity ?? this.backgroundOpacity,
       border: border ?? this.border,
       textPrimary: textPrimary ?? this.textPrimary,
       textDim: textDim ?? this.textDim,
@@ -143,6 +155,10 @@ class AppTheme {
           (sizes['body'] as num?)?.toDouble() ?? _fallback.fontSizeBody,
       fontSizeCaption:
           (sizes['caption'] as num?)?.toDouble() ?? _fallback.fontSizeCaption,
+      backgroundOpacity: ((json['backgroundOpacity'] as num?)?.toDouble() ??
+              _fallback.backgroundOpacity)
+          .clamp(0.0, 1.0)
+          .toDouble(),
       background: _color(json['background'], _fallback.background),
       border: _color(json['border'], _fallback.border),
       textPrimary: _color(json['textPrimary'], _fallback.textPrimary),

@@ -58,6 +58,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
         'caption': _num(t.fontSizeCaption),
       },
       'background': _hex(t.background),
+      'backgroundOpacity': _num(t.backgroundOpacity),
       'border': _hex(t.border),
       'textPrimary': _hex(t.textPrimary),
       'textDim': _hex(t.textDim),
