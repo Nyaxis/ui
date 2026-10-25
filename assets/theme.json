@@ -1,0 +1,10 @@
+{
+  "cornerRadius": 0,
+  "borderWidth": 4,
+  "fontFamily": "Fredoka",
+  "background": "#eff1f5",
+  "border": "#cba6f7",
+  "textPrimary": "#4c4f69",
+  "textDim": "#6c6f85",
+  "accent": "#8839ef"
+}
