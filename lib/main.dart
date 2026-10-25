@@ -43,6 +43,14 @@ class NyaxisApp extends StatelessWidget {
             ),
             // otherwise the scaffold paints square corners into the clip
             scaffoldBackgroundColor: Colors.transparent,
+            // base styles: primary font + type scale on the Material slots
+            fontFamily: theme.fontFamily,
+            textTheme: TextTheme(
+              titleLarge: theme.titleStyle,
+              headlineSmall: theme.headingStyle,
+              bodyMedium: theme.bodyStyle,
+              bodySmall: theme.captionStyle,
+            ),
           ),
           home: WindowShell(controller: controller),
         );

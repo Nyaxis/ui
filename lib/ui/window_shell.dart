@@ -47,15 +47,7 @@ class _WindowShellState extends State<WindowShell> {
         child: Row(
           children: [
             const SizedBox(width: 14),
-            Text(
-              'Nyaxis',
-              style: TextStyle(
-                color: theme.textPrimary,
-                fontSize: 15,
-                fontFamily: theme.fontFamily,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            Text('Nyaxis', style: theme.titleStyle),
             const Spacer(),
           ],
         ),

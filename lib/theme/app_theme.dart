@@ -1,32 +1,89 @@
 import 'package:flutter/material.dart';
 
+/// App theme parsed from `assets/theme.json`.
+///
+/// The constructor values are the fallbacks for missing/malformed JSON keys.
 @immutable
 class AppTheme {
   const AppTheme({
     this.cornerRadius = 0,
     this.borderWidth = 1,
     this.fontFamily = 'Fredoka',
-    this.background = const Color(0x1E1E2EFF),
-    this.border = const Color(0xCBA6F7FF),
-    this.textPrimary = const Color(0xFFE8EAED),
-    this.textDim = const Color(0xFF9AA0A6),
-    this.accent = const Color(0xFF7C5CFF),
+    this.monospaceFontFamily = 'JetBrainsMono',
+    this.fontSizeTitle = 22,
+    this.fontSizeHeading = 16,
+    this.fontSizeBody = 13,
+    this.fontSizeCaption = 11,
+    this.background = const Color(0xffeff1f5),
+    this.border = const Color(0xffbcc0cc),
+    this.textPrimary = const Color(0xff4c4f69),
+    this.textDim = const Color(0xff6c6f85),
+    this.accent = const Color(0xff8839ef),
   });
 
   final double cornerRadius;
 
   final double borderWidth;
+
   final String fontFamily;
+
+  final String monospaceFontFamily;
+
+  final double fontSizeTitle;
+  final double fontSizeHeading;
+  final double fontSizeBody;
+  final double fontSizeCaption;
+
   final Color background;
   final Color border;
   final Color textPrimary;
   final Color textDim;
   final Color accent;
 
+  TextStyle get titleStyle => TextStyle(
+    fontFamily: fontFamily,
+    fontSize: fontSizeTitle,
+    fontWeight: FontWeight.w600,
+    color: textPrimary,
+  );
+
+  TextStyle get headingStyle => TextStyle(
+    fontFamily: fontFamily,
+    fontSize: fontSizeHeading,
+    fontWeight: FontWeight.w600,
+    color: textPrimary,
+  );
+
+  TextStyle get bodyStyle => TextStyle(
+    fontFamily: fontFamily,
+    fontSize: fontSizeBody,
+    fontWeight: FontWeight.w500,
+    color: textPrimary,
+  );
+
+  TextStyle get captionStyle => TextStyle(
+    fontFamily: fontFamily,
+    fontSize: fontSizeCaption,
+    fontWeight: FontWeight.w400,
+    color: textDim,
+  );
+
+  TextStyle get monoStyle => TextStyle(
+    fontFamily: monospaceFontFamily,
+    fontSize: fontSizeBody,
+    fontWeight: FontWeight.w500,
+    color: textPrimary,
+  );
+
   AppTheme copyWith({
     double? cornerRadius,
     double? borderWidth,
     String? fontFamily,
+    String? monospaceFontFamily,
+    double? fontSizeTitle,
+    double? fontSizeHeading,
+    double? fontSizeBody,
+    double? fontSizeCaption,
     Color? background,
     Color? border,
     Color? textPrimary,
@@ -37,6 +94,11 @@ class AppTheme {
       cornerRadius: cornerRadius ?? this.cornerRadius,
       borderWidth: borderWidth ?? this.borderWidth,
       fontFamily: fontFamily ?? this.fontFamily,
+      monospaceFontFamily: monospaceFontFamily ?? this.monospaceFontFamily,
+      fontSizeTitle: fontSizeTitle ?? this.fontSizeTitle,
+      fontSizeHeading: fontSizeHeading ?? this.fontSizeHeading,
+      fontSizeBody: fontSizeBody ?? this.fontSizeBody,
+      fontSizeCaption: fontSizeCaption ?? this.fontSizeCaption,
       background: background ?? this.background,
       border: border ?? this.border,
       textPrimary: textPrimary ?? this.textPrimary,
@@ -59,10 +121,28 @@ class AppTheme {
   static const _fallback = AppTheme();
 
   factory AppTheme.fromJson(Map<String, dynamic> json) {
+    final sizes = json['fontSize'] is Map<String, dynamic>
+        ? json['fontSize'] as Map<String, dynamic>
+        : const <String, dynamic>{};
     return AppTheme(
-      cornerRadius: (json['cornerRadius'] as num?)?.toDouble() ?? _fallback.cornerRadius,
-      borderWidth: (json['borderWidth'] as num?)?.toDouble() ?? _fallback.borderWidth,
-      fontFamily: json['fontFamily'] is String ? json['fontFamily'] as String : _fallback.fontFamily,
+      cornerRadius:
+          (json['cornerRadius'] as num?)?.toDouble() ?? _fallback.cornerRadius,
+      borderWidth:
+          (json['borderWidth'] as num?)?.toDouble() ?? _fallback.borderWidth,
+      fontFamily: json['fontFamily'] is String
+          ? json['fontFamily'] as String
+          : _fallback.fontFamily,
+      monospaceFontFamily: json['monospaceFontFamily'] is String
+          ? json['monospaceFontFamily'] as String
+          : _fallback.monospaceFontFamily,
+      fontSizeTitle:
+          (sizes['title'] as num?)?.toDouble() ?? _fallback.fontSizeTitle,
+      fontSizeHeading:
+          (sizes['heading'] as num?)?.toDouble() ?? _fallback.fontSizeHeading,
+      fontSizeBody:
+          (sizes['body'] as num?)?.toDouble() ?? _fallback.fontSizeBody,
+      fontSizeCaption:
+          (sizes['caption'] as num?)?.toDouble() ?? _fallback.fontSizeCaption,
       background: _color(json['background'], _fallback.background),
       border: _color(json['border'], _fallback.border),
       textPrimary: _color(json['textPrimary'], _fallback.textPrimary),

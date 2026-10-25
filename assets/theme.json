@@ -1,9 +1,16 @@
 {
   "cornerRadius": 0,
-  "borderWidth": 4,
+  "borderWidth": 3,
   "fontFamily": "Fredoka",
-  "background": "#eff1f5",
-  "border": "#cba6f7",
+  "monospaceFontFamily": "JetBrainsMono",
+  "fontSize": {
+    "title": 22,
+    "heading": 16,
+    "body": 13,
+    "caption": 11
+  },
+  "background": "#cba6f7",
+  "border": "#bcc0cc",
   "textPrimary": "#4c4f69",
   "textDim": "#6c6f85",
   "accent": "#8839ef"

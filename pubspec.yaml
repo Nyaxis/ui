@@ -65,6 +65,9 @@ flutter:
     - family: Fredoka
       fonts:
         - asset: assets/fonts/Fredoka-VariableFont.ttf
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-VariableFont.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:
