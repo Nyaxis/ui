@@ -1,5 +1,87 @@
 import 'package:flutter/material.dart';
 
+/// Backdrop blur used while [AppTheme.acrylic] is on. Names and defaults
+/// follow Hyprland's `decoration:blur` section; [strength] is ours, the mix
+/// between the sharp backdrop and the blurred one.
+@immutable
+class BlurSettings {
+  const BlurSettings({
+    this.size = 8,
+    this.passes = 1,
+    this.strength = 1.0,
+    this.noise = 0.0117,
+    this.contrast = 0.8916,
+    this.brightness = 0.8172,
+    this.vibrancy = 0.1696,
+  });
+
+  /// Sample offset per pass; the spread of each blur step.
+  final double size;
+
+  /// Down/up levels; each one halves the resolution and roughly doubles the
+  /// radius, so effective radius is about `size * 2^passes`.
+  final int passes;
+
+  /// 0 keeps the sharp backdrop, 1 is fully blurred.
+  final double strength;
+
+  final double noise;
+  final double contrast;
+  final double brightness;
+  final double vibrancy;
+
+  BlurSettings copyWith({
+    double? size,
+    int? passes,
+    double? strength,
+    double? noise,
+    double? contrast,
+    double? brightness,
+    double? vibrancy,
+  }) {
+    return BlurSettings(
+      size: size ?? this.size,
+      passes: passes ?? this.passes,
+      strength: strength ?? this.strength,
+      noise: noise ?? this.noise,
+      contrast: contrast ?? this.contrast,
+      brightness: brightness ?? this.brightness,
+      vibrancy: vibrancy ?? this.vibrancy,
+    );
+  }
+
+  static const _fallback = BlurSettings();
+
+  factory BlurSettings.fromJson(Map<String, dynamic> json) {
+    double number(String key, double fallback, double min, double max) =>
+        ((json[key] as num?)?.toDouble() ?? fallback)
+            .clamp(min, max)
+            .toDouble();
+    return BlurSettings(
+      size: number('size', _fallback.size, 0, 64),
+      passes: ((json['passes'] as num?)?.toInt() ?? _fallback.passes).clamp(
+        0,
+        8,
+      ),
+      strength: number('strength', _fallback.strength, 0, 1),
+      noise: number('noise', _fallback.noise, 0, 1),
+      contrast: number('contrast', _fallback.contrast, 0, 2),
+      brightness: number('brightness', _fallback.brightness, 0, 2),
+      vibrancy: number('vibrancy', _fallback.vibrancy, 0, 1),
+    );
+  }
+
+  Map<String, Object> toJson() => {
+    'size': size,
+    'passes': passes,
+    'strength': strength,
+    'noise': noise,
+    'contrast': contrast,
+    'brightness': brightness,
+    'vibrancy': vibrancy,
+  };
+}
+
 /// App theme parsed from the user's `%APPDATA%\Nyaxis\ui\theme.json`.
 ///
 /// The constructor values are the fallbacks for missing/malformed JSON keys.
@@ -16,6 +98,8 @@ class AppTheme {
     this.fontSizeCaption = 11,
     this.background = const Color(0xff1e1e2e),
     this.backgroundOpacity = 1.0,
+    this.acrylic = false,
+    this.blur = const BlurSettings(),
     this.border = const Color(0xff45475a),
     this.textPrimary = const Color(0xffcdd6f4),
     this.textDim = const Color(0xffa6adc8),
@@ -43,8 +127,10 @@ class AppTheme {
   final double backgroundOpacity;
 
   /// [background] with its opacity applied; the thing the shell paints.
-  Color get backgroundColor =>
-      background.withValues(alpha: backgroundOpacity);
+  Color get backgroundColor => background.withValues(alpha: backgroundOpacity);
+
+  final bool acrylic;
+  final BlurSettings blur;
   final Color border;
   final Color textPrimary;
   final Color textDim;
@@ -96,6 +182,8 @@ class AppTheme {
     double? fontSizeCaption,
     Color? background,
     double? backgroundOpacity,
+    bool? acrylic,
+    BlurSettings? blur,
     Color? border,
     Color? textPrimary,
     Color? textDim,
@@ -112,6 +200,8 @@ class AppTheme {
       fontSizeCaption: fontSizeCaption ?? this.fontSizeCaption,
       background: background ?? this.background,
       backgroundOpacity: backgroundOpacity ?? this.backgroundOpacity,
+      acrylic: acrylic ?? this.acrylic,
+      blur: blur ?? this.blur,
       border: border ?? this.border,
       textPrimary: textPrimary ?? this.textPrimary,
       textDim: textDim ?? this.textDim,
@@ -155,10 +245,17 @@ class AppTheme {
           (sizes['body'] as num?)?.toDouble() ?? _fallback.fontSizeBody,
       fontSizeCaption:
           (sizes['caption'] as num?)?.toDouble() ?? _fallback.fontSizeCaption,
-      backgroundOpacity: ((json['backgroundOpacity'] as num?)?.toDouble() ??
-              _fallback.backgroundOpacity)
-          .clamp(0.0, 1.0)
-          .toDouble(),
+      acrylic: json['acrylic'] is bool
+          ? json['acrylic'] as bool
+          : _fallback.acrylic,
+      blur: json['blur'] is Map<String, dynamic>
+          ? BlurSettings.fromJson(json['blur'] as Map<String, dynamic>)
+          : _fallback.blur,
+      backgroundOpacity:
+          ((json['backgroundOpacity'] as num?)?.toDouble() ??
+                  _fallback.backgroundOpacity)
+              .clamp(0.0, 1.0)
+              .toDouble(),
       background: _color(json['background'], _fallback.background),
       border: _color(json['border'], _fallback.border),
       textPrimary: _color(json['textPrimary'], _fallback.textPrimary),

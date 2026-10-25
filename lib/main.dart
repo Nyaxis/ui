@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'native/window_effects.dart';
+import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
 import 'ui/window_shell.dart';
 
@@ -14,6 +16,14 @@ Future<void> main() async {
   // The runner creates a WS_POPUP window with DWM glass; there is no OS
   // chrome and the rounded corners are painted by WindowShell alone.
   await windowManager.center();
+
+  void applyWindowEffect(AppTheme theme) => WindowEffects.apply(
+    acrylic: theme.acrylic,
+    cornerRadius: theme.cornerRadius,
+    blur: theme.blur,
+  );
+  applyWindowEffect(themeController.value);
+  themeController.addListener(() => applyWindowEffect(themeController.value));
 
   runApp(NyaxisApp(controller: themeController));
 }
