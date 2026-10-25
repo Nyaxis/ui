@@ -13,6 +13,7 @@ constexpr DWORD kWdaExcludeFromCapture = 0x11;
 
 constexpr UINT_PTR kCaptureTimer = 1;
 constexpr UINT kCaptureIntervalMs = 8;
+constexpr ULONGLONG kCaptureRetryMs = 1000;
 
 }  // namespace
 
@@ -236,8 +237,12 @@ void BlurWindow::Sync() {
 
 void BlurWindow::EnsureCapture() {
   HMONITOR monitor = MonitorFromWindow(target_, MONITOR_DEFAULTTONEAREST);
-  if (!capture_.active() || capture_.monitor() != monitor) {
-    capture_.Start(d3d_.Get(), monitor);
+  if ((!capture_.active() || capture_.monitor() != monitor) &&
+      GetTickCount64() >= next_capture_attempt_) {
+    if (!capture_.Start(d3d_.Get(), monitor)) {
+      // Don't hammer a capture that can't start (secure desktop, ...).
+      next_capture_attempt_ = GetTickCount64() + kCaptureRetryMs;
+    }
   }
   SetTimer(hwnd_, kCaptureTimer, kCaptureIntervalMs, nullptr);
 }
@@ -253,9 +258,7 @@ void BlurWindow::OnCaptureTimer() {
     Sync();
     return;
   }
-  // Wait briefly for the first image; a static desktop may not produce one
-  // on its own. After that, poll without blocking.
-  if (capture_.Update(capture_.has_frame() ? 0 : 50)) {
+  if (capture_.Update()) {
     content_dirty_ = true;
     Sync();
   }

@@ -80,6 +80,7 @@ class BlurWindow {
   Microsoft::WRL::ComPtr<IDCompositionRectangleClip> clip_;
 
   DesktopCapture capture_;
+  ULONGLONG next_capture_attempt_ = 0;
   KawaseBlur blur_;
 };
 
