@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../editor/luau_lsp.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import 'skinnable_icon.dart';
@@ -95,9 +96,16 @@ class _WindowShellState extends State<WindowShell> {
                       Expanded(
                         child: MonacoEditor(
                           backgroundColor: theme.background,
+                          page: MonacoPageConfig(
+                            customCss:
+                                'html, body { background: ${_hex(theme.background)} !important; }',
+                          ),
+                          loadingBuilder: (_) =>
+                              ColoredBox(color: theme.background),
                           onReady: (controller) {
                             _monaco = controller;
                             _applyMonacoTheme();
+                            attachLuauLsp(controller);
                           },
                           options: EditorOptions(
                             theme: _monacoTheme,
