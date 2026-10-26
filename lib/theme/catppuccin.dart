@@ -1,5 +1,5 @@
 /// the palettes shipped with the default theme; each flavor fills the roles
-/// the same way: Base, Mantle, Surface 1, Text, Subtext 0 and Mauve
+/// the same way: Base, Mantle, Surface 1, Text, Subtext 0, Mauve and Red
 const catppuccinPalettes = <String, Map<String, String>>{
   'Catppuccin Latte': {
     'background': '#eff1f5',
@@ -8,6 +8,7 @@ const catppuccinPalettes = <String, Map<String, String>>{
     'textPrimary': '#4c4f69',
     'textDim': '#6c6f85',
     'accent': '#8839ef',
+    'red': '#d20f39',
   },
   'Catppuccin Frappé': {
     'background': '#303446',
@@ -16,6 +17,7 @@ const catppuccinPalettes = <String, Map<String, String>>{
     'textPrimary': '#c6d0f5',
     'textDim': '#a5adce',
     'accent': '#ca9ee6',
+    'red': '#e78284',
   },
   'Catppuccin Macchiato': {
     'background': '#24273a',
@@ -24,6 +26,7 @@ const catppuccinPalettes = <String, Map<String, String>>{
     'textPrimary': '#cad3f5',
     'textDim': '#a5adcb',
     'accent': '#c6a0f6',
+    'red': '#ed8796',
   },
   'Catppuccin Mocha': {
     'background': '#1e1e2e',
@@ -32,6 +35,7 @@ const catppuccinPalettes = <String, Map<String, String>>{
     'textPrimary': '#cdd6f4',
     'textDim': '#a6adc8',
     'accent': '#cba6f7',
+    'red': '#f38ba8',
   },
 };
 

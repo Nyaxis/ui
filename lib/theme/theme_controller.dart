@@ -113,10 +113,10 @@ class ThemeController extends ValueNotifier<AppTheme> {
         .whereType<File>()
         .map((f) => f.uri.pathSegments.last.split('.').first)
         .toSet();
-    for (final name in const ['minimize', 'maximize', 'close']) {
+    for (final name in const ['minimize', 'maximize', 'close', 'sidebar']) {
       if (!existing.contains(name)) {
         await File('${icons.path}\\$name.svg').writeAsString(
-          await rootBundle.loadString('assets/icons/titlebar/$name-16.svg'),
+          await rootBundle.loadString('assets/icons/$name-16.svg'),
           flush: true,
         );
       }
@@ -253,6 +253,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
       'textPrimary': _hex(t.textPrimary),
       'textDim': _hex(t.textDim),
       'accent': _hex(t.accent),
+      'red': _hex(t.red),
     });
   }
 

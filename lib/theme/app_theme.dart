@@ -22,6 +22,7 @@ class AppTheme {
     this.textPrimary = const Color(0xffcdd6f4),
     this.textDim = const Color(0xffa6adc8),
     this.accent = const Color(0xffcba6f7),
+    this.red = const Color(0xfff38ba8),
   });
 
   final double cornerRadius;
@@ -54,6 +55,9 @@ class AppTheme {
   final Color textPrimary;
   final Color textDim;
   final Color accent;
+
+  /// destructive actions, such as hovering the close button
+  final Color red;
 
   TextStyle get titleStyle => TextStyle(
     fontFamily: fontFamily,
@@ -108,6 +112,7 @@ class AppTheme {
     Color? textPrimary,
     Color? textDim,
     Color? accent,
+    Color? red,
   }) {
     return AppTheme(
       cornerRadius: cornerRadius ?? this.cornerRadius,
@@ -127,6 +132,7 @@ class AppTheme {
       textPrimary: textPrimary ?? this.textPrimary,
       textDim: textDim ?? this.textDim,
       accent: accent ?? this.accent,
+      red: red ?? this.red,
     );
   }
 
@@ -189,6 +195,7 @@ class AppTheme {
       textPrimary: _color(colors['textPrimary'], _fallback.textPrimary),
       textDim: _color(colors['textDim'], _fallback.textDim),
       accent: _color(colors['accent'], _fallback.accent),
+      red: _color(colors['red'], _fallback.red),
     );
   }
 }
