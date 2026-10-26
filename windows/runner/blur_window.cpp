@@ -65,16 +65,20 @@ bool BlurWindow::Create(HWND target) {
   window_class.lpfnWndProc = BlurWindow::WndProc;
   RegisterClass(&window_class);
 
-  // No redirection bitmap: DirectComposition supplies every pixel. Click-
-  // through and non-activating so it never steals input from Flutter.
+  // No redirection bitmap: DirectComposition supplies every pixel. The window
+  // covers the whole monitor, so it has to be truly click-through: only
+  // layered + transparent windows pass mouse input to other processes'
+  // windows (HTTRANSPARENT stops at the thread boundary). Non-activating so
+  // it never steals focus from Flutter.
   hwnd_ = CreateWindowEx(
       WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE |
-          WS_EX_TRANSPARENT,
+          WS_EX_LAYERED | WS_EX_TRANSPARENT,
       kBlurWindowClassName, L"", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr,
       GetModuleHandle(nullptr), this);
   if (!hwnd_) {
     return false;
   }
+  SetLayeredWindowAttributes(hwnd_, 0, 255, LWA_ALPHA);
   return InitGraphics();
 }
 

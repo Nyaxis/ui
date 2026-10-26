@@ -14,11 +14,11 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
 
-  blur_window_ = std::make_unique<BlurWindow>();
-  if (blur_window_->Create(GetHandle())) {
-    BlurWindow::SetActive(blur_window_.get());
+  backdrop_window_ = std::make_unique<HostBackdropWindow>();
+  if (backdrop_window_->Create(GetHandle())) {
+    HostBackdropWindow::SetActive(backdrop_window_.get());
   } else {
-    blur_window_ = nullptr;
+    backdrop_window_ = nullptr;
   }
 
   RECT frame = GetClientArea();
@@ -47,7 +47,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
-  blur_window_ = nullptr;
+  backdrop_window_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -75,8 +75,8 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       break;
     case WM_WINDOWPOSCHANGED:
     case WM_SHOWWINDOW:
-      if (blur_window_) {
-        blur_window_->Sync();
+      if (backdrop_window_) {
+        backdrop_window_->Sync();
       }
       break;
   }
