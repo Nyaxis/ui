@@ -39,7 +39,13 @@ class _WindowShellState extends State<WindowShell> {
                 padding: EdgeInsets.all(theme.borderWidth),
                 child: Scaffold(
                   backgroundColor: Colors.transparent,
-                  body: _titleBar(theme),
+                  body: Column(
+                    children: [
+                      _titleBar(theme),
+                      const Expanded(child: SizedBox.expand()),
+                      _bottomBar(theme),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -50,6 +56,33 @@ class _WindowShellState extends State<WindowShell> {
   }
 
   static const _titleBarHeight = 40.0;
+  static const _bottomBarHeight = 28.0;
+
+  Widget _bottomBar(AppTheme theme) {
+    return Container(
+      height: _bottomBarHeight,
+      decoration: BoxDecoration(
+        color: theme.titleBar,
+        border: Border(
+          top: BorderSide(color: theme.border, width: theme.borderWidth),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Spacer(),
+          _BarButton(
+            name: 'sidebar',
+            extent: _bottomBarHeight,
+            size: _bottomBarHeight * 0.65,
+            hoverInset: 2,
+            hoverRadius: 4,
+            theme: theme,
+            onPressed: () {},
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _titleBar(AppTheme theme) {
     return Container(
@@ -73,18 +106,25 @@ class _WindowShellState extends State<WindowShell> {
               ),
             ),
           ),
-          _WindowButton(
+          _BarButton(
             name: 'minimize',
+            extent: _titleBarHeight,
+            size: _titleBarHeight * 0.4,
             theme: theme,
             onPressed: windowManager.minimize,
           ),
-          _WindowButton(
+          _BarButton(
             name: 'maximize',
+            extent: _titleBarHeight,
+            size: _titleBarHeight * 0.4,
             theme: theme,
             onPressed: _toggleMaximize,
           ),
-          _WindowButton(
+          _BarButton(
             name: 'close',
+            extent: _titleBarHeight,
+            size: _titleBarHeight * 0.4,
+            destructive: true,
             theme: theme,
             onPressed: windowManager.close,
           ),
@@ -102,23 +142,78 @@ class _WindowShellState extends State<WindowShell> {
   }
 }
 
-class _WindowButton extends StatefulWidget {
-  const _WindowButton({
+class _BarButton extends StatefulWidget {
+  const _BarButton({
     required this.name,
+    required this.extent,
+    required this.size,
     required this.theme,
     required this.onPressed,
+    this.hoverInset = 0,
+    this.hoverRadius = 0,
+    this.destructive = false,
   });
 
   final String name;
+
+  /// the button is a square the height of its bar
+  final double extent;
+  final double size;
+
+  /// space between the button's edge and its hover fill, and the fill's corner
+  /// radius
+  final double hoverInset;
+  final double hoverRadius;
+
+  /// hovers in the theme's red instead of the border color
+  final bool destructive;
   final AppTheme theme;
   final VoidCallback onPressed;
 
   @override
-  State<_WindowButton> createState() => _WindowButtonState();
+  State<_BarButton> createState() => _BarButtonState();
 }
 
-class _WindowButtonState extends State<_WindowButton> {
+class _BarButtonState extends State<_BarButton> {
   bool _hovered = false;
+  bool _pressed = false;
+
+  Color _fillColor(AppTheme theme) {
+    if (!_hovered && !_pressed) {
+      return Colors.transparent;
+    }
+    final base = widget.destructive ? theme.red : theme.border;
+    if (!_pressed) {
+      return base;
+    }
+    final shift = widget.destructive ? theme.background : theme.textPrimary;
+    return Color.alphaBlend(
+      shift.withValues(alpha: widget.destructive ? 0.2 : 0.1),
+      base,
+    );
+  }
+
+  /// a button with an inset hover is a rounded square, otherwise the fill
+  /// covers the whole button
+  Widget _hoverFill(AppTheme theme) {
+    final onRed = widget.destructive && (_hovered || _pressed);
+    final fill = Container(
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: _fillColor(theme),
+        borderRadius: BorderRadius.circular(widget.hoverRadius),
+      ),
+      child: SkinnableIcon(
+        name: widget.name,
+        size: widget.size,
+        color: onRed ? theme.background : theme.textPrimary,
+      ),
+    );
+    if (widget.hoverInset == 0) {
+      return fill;
+    }
+    return Center(child: AspectRatio(aspectRatio: 1, child: fill));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -128,16 +223,14 @@ class _WindowButtonState extends State<_WindowButton> {
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
         onTap: widget.onPressed,
         child: Container(
-          width: 46,
-          alignment: Alignment.center,
-          color: _hovered ? theme.border : Colors.transparent,
-          child: SkinnableIcon(
-            name: widget.name,
-            size: _WindowShellState._titleBarHeight * 0.4,
-            color: theme.textPrimary,
-          ),
+          width: widget.extent,
+          padding: EdgeInsets.all(widget.hoverInset),
+          child: _hoverFill(theme),
         ),
       ),
     );
