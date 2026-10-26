@@ -43,8 +43,14 @@ class _WindowShellState extends State<WindowShell> {
     await connectLuauLsp(controller);
   }
 
-  static String _hex(Color c) =>
-      '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+  /// `#rrggbb`, with an alpha suffix when [opacity] is given
+  static String _hex(Color c, [double? opacity]) {
+    final rgb = (c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0');
+    final alpha = opacity == null
+        ? ''
+        : (opacity * 255).round().toRadixString(16).padLeft(2, '0');
+    return '#$rgb$alpha';
+  }
 
   /// the editor is drawn by monaco, so the palette reaches it as a custom
   /// monaco theme
@@ -63,11 +69,15 @@ class _WindowShellState extends State<WindowShell> {
           'editor.background': _hex(theme.background),
           'editor.foreground': _hex(theme.textPrimary),
           'editorGutter.background': _hex(theme.background),
-          'editorLineNumber.foreground': _hex(theme.textDim),
-          'editorLineNumber.activeForeground': _hex(theme.textPrimary),
+          'editorLineNumber.foreground': _hex(theme.lineNumber),
+          'editorLineNumber.activeForeground': _hex(theme.accent),
           'editorCursor.foreground': _hex(theme.accent),
-          'editor.selectionBackground': _hex(theme.border),
-          'editor.lineHighlightBackground': _hex(theme.titleBar),
+          'editor.selectionBackground': _hex(
+            theme.selection,
+            dark ? 0.25 : 0.3,
+          ),
+          'editor.lineHighlightBackground': _hex(theme.textPrimary, 0.07),
+          'editorIndentGuide.background1': _hex(theme.border, 0.6),
           'editorWidget.background': _hex(theme.titleBar),
           'editorWidget.border': _hex(theme.border),
         },
@@ -304,6 +314,12 @@ class _TabState extends State<_Tab> {
 
   bool _hovered = false;
 
+  /// the tab bar's color, slightly darker
+  Color _inactive(AppTheme theme) {
+    final hsl = HSLColor.fromColor(theme.titleBar);
+    return hsl.withLightness((hsl.lightness - 0.03).clamp(0.0, 1.0)).toColor();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
@@ -319,7 +335,7 @@ class _TabState extends State<_Tab> {
           padding: const EdgeInsets.only(left: 14, right: 8),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: widget.selected ? theme.background : null,
+            color: widget.selected ? theme.background : _inactive(theme),
             border: Border(right: widget.line),
           ),
           child: Row(
