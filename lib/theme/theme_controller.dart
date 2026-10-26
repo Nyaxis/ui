@@ -35,9 +35,14 @@ class ThemeController extends ValueNotifier<AppTheme> {
     return null;
   }
 
-  /// the active theme is named by `config.json` in the root
+  /// the active theme is named by `config.json` in the folder above the root,
+  /// where config shared with the rest of Nyaxis lives
   static Future<String> _activeName(Directory root) async {
-    final config = File('${root.path}\\config.json');
+    final config = File('${root.parent.path}\\config.json');
+    final misplaced = File('${root.path}\\config.json');
+    if (misplaced.existsSync() && !config.existsSync()) {
+      await misplaced.rename(config.path);
+    }
     try {
       if (config.existsSync()) {
         final json = jsonDecode(await config.readAsString());
