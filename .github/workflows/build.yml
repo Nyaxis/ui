@@ -43,8 +43,10 @@ jobs:
           $expect = @(
             "build/windows/x64/runner/$buildDir/ui.exe"
             "build/windows/x64/runner/$buildDir/flutter_windows.dll"
-            "build/windows/x64/runner/$buildDir/data/app.so"
           )
+          if ($env:BUILD_TYPE -ne 'debug') {
+            $expect += "build/windows/x64/runner/$buildDir/data/app.so"
+          }
           $missing = $expect | Where-Object { -not (Test-Path $_) }
           if ($missing) {
             Write-Error "missing artifacts:`n$($missing -join "`n")"
