@@ -111,16 +111,28 @@ bool HostBackdropWindow::Create(HWND target) {
   }
   SetLayeredWindowAttributes(hwnd_, 0, 255, LWA_ALPHA);
   EnableHostBackdrop(hwnd_);
+  return true;
+}
 
+// a thread holds one dispatcher queue, and the webview plugin fails to start
+// when this one already took it, so the composition is only built once the
+// backdrop is switched on, and reuses a queue that exists by then
+bool HostBackdropWindow::EnsureComposition() {
+  if (impl_) {
+    return true;
+  }
   try {
     auto impl = std::make_unique<Impl>();
 
     // composition needs a dispatcher queue on this thread
-    DispatcherQueueOptions options{sizeof(options), DQTYPE_THREAD_CURRENT,
-                                   DQTAT_COM_NONE};
-    ABI::Windows::System::IDispatcherQueueController* controller = nullptr;
-    winrt::check_hresult(CreateDispatcherQueueController(options, &controller));
-    winrt::attach_abi(impl->queue_controller, controller);
+    if (!winrt::Windows::System::DispatcherQueue::GetForCurrentThread()) {
+      DispatcherQueueOptions options{sizeof(options), DQTYPE_THREAD_CURRENT,
+                                     DQTAT_COM_NONE};
+      ABI::Windows::System::IDispatcherQueueController* controller = nullptr;
+      winrt::check_hresult(
+          CreateDispatcherQueueController(options, &controller));
+      winrt::attach_abi(impl->queue_controller, controller);
+    }
 
     impl->compositor = composition::Compositor();
 
@@ -158,6 +170,9 @@ float HostBackdropWindow::ScaledRadius() const {
 void HostBackdropWindow::Configure(bool enabled, float radius) {
   enabled_ = enabled;
   radius_ = std::max(0.0f, radius);
+  if (enabled_) {
+    EnsureComposition();
+  }
   Sync();
 }
 

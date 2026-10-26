@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:webview_flutter_windows/webview_flutter_windows.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'native/window_effects.dart';
@@ -16,6 +17,10 @@ Future<void> main() async {
   // setTitleBarStyle is deliberately never called: it clears the frameless
   // flag the runner relies on
   await windowManager.center();
+
+  // the webview takes the ui thread's dispatcher queue, which the acrylic
+  // backdrop then shares, so it has to start first
+  await WebviewController.initializeEnvironment();
 
   void applyWindowEffect(AppTheme theme) => WindowEffects.apply(
     acrylic: theme.acrylic,

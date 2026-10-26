@@ -29,6 +29,7 @@ class HostBackdropWindow {
  private:
   struct Impl;
 
+  bool EnsureComposition();
   void UpdateTargetRegion(UINT width, UINT height);
   float ScaledRadius() const;
   void UpdateVisuals(UINT width, UINT height);
