@@ -15,10 +15,10 @@ class WindowEffects {
 
   // exported by the runner executable itself (shadow_window.cpp)
   static final void Function(double) _configureShadow =
-      DynamicLibrary.executable().lookupFunction<
-        Void Function(Double),
-        void Function(double)
-      >('NyaxisShadowConfigure');
+      DynamicLibrary.executable()
+          .lookupFunction<Void Function(Double), void Function(double)>(
+            'NyaxisShadowConfigure',
+          );
 
   /// [cornerRadius] is in logical pixels; the runner scales it per monitor
   static void apply({required bool acrylic, required double cornerRadius}) {
