@@ -32,8 +32,12 @@ class _WindowShellState extends State<WindowShell> {
           child: Container(
             decoration: ShapeDecoration(
               color: theme.backgroundColor,
-              shape: shape,
+              shape: SuperellipseBorder(
+                radius: theme.cornerRadius,
+                power: theme.roundingPower,
+              ),
             ),
+            foregroundDecoration: ShapeDecoration(shape: shape),
             child: Scaffold(
               backgroundColor: Colors.transparent,
               body: _titleBar(theme),
@@ -45,8 +49,14 @@ class _WindowShellState extends State<WindowShell> {
   }
 
   Widget _titleBar(AppTheme theme) {
-    return SizedBox(
+    return Container(
       height: 40,
+      decoration: BoxDecoration(
+        color: theme.background,
+        border: Border(
+          bottom: BorderSide(color: theme.border, width: theme.borderWidth),
+        ),
+      ),
       child: DragToMoveArea(
         child: Row(
           children: [
