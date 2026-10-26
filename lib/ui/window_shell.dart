@@ -27,20 +27,17 @@ class _WindowShellState extends State<WindowShell> {
           side: BorderSide(color: theme.border, width: theme.borderWidth),
         );
 
-        return ClipPath(
-          clipper: ShapeBorderClipper(shape: shape),
-          child: Container(
-            decoration: ShapeDecoration(
+        return DecoratedBox(
+          position: DecorationPosition.foreground,
+          decoration: ShapeDecoration(shape: shape),
+          child: ClipPath(
+            clipper: ShapeBorderClipper(shape: shape),
+            child: ColoredBox(
               color: theme.backgroundColor,
-              shape: SuperellipseBorder(
-                radius: theme.cornerRadius,
-                power: theme.roundingPower,
+              child: Scaffold(
+                backgroundColor: Colors.transparent,
+                body: _titleBar(theme),
               ),
-            ),
-            foregroundDecoration: ShapeDecoration(shape: shape),
-            child: Scaffold(
-              backgroundColor: Colors.transparent,
-              body: _titleBar(theme),
             ),
           ),
         );

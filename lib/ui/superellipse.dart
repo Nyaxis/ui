@@ -23,7 +23,8 @@ class SuperellipseBorder extends ShapeBorder {
   EdgeInsetsGeometry get dimensions => EdgeInsets.zero;
 
   @override
-  Path getInnerPath(Rect rect, {TextDirection? textDirection}) => _path(rect);
+  Path getInnerPath(Rect rect, {TextDirection? textDirection}) =>
+      _path(rect, inset: side.width);
 
   @override
   Path getOuterPath(Rect rect, {TextDirection? textDirection}) => _path(rect);
@@ -31,15 +32,16 @@ class SuperellipseBorder extends ShapeBorder {
   @override
   void paint(Canvas canvas, Rect rect, {TextDirection? textDirection}) {
     if (side == BorderSide.none) return;
-    canvas.drawPath(_path(rect), side.toPaint());
+    canvas.drawPath(_path(rect, inset: side.width / 2), side.toPaint());
   }
 
   @override
   ShapeBorder scale(double t) =>
       SuperellipseBorder(radius: radius * t, power: power, side: side.scale(t));
 
-  Path _path(Rect rect) {
-    final r = radius.clamp(0.0, min(rect.width, rect.height) / 2);
+  Path _path(Rect rect, {double inset = 0}) {
+    rect = rect.deflate(inset);
+    final r = (radius - inset).clamp(0.0, min(rect.width, rect.height) / 2);
     if (r == 0) return Path()..addRect(rect);
 
     final n = power.clamp(1.0, 10.0);
