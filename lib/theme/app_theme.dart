@@ -15,7 +15,7 @@ class AppTheme {
     this.fontSizeBody = 13,
     this.fontSizeCaption = 11,
     this.background = const Color(0xff1e1e2e),
-    this.titleBar = const Color(0xff181825),
+    this.titleBar = const Color(0xff11111b),
     this.backgroundOpacity = 1.0,
     this.acrylic = false,
     this.border = const Color(0xff45475a),
