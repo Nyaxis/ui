@@ -33,6 +33,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
       final theme = AppTheme.fromJson(
         jsonDecode(await file.readAsString()) as Map<String, dynamic>,
       );
+      await file.writeAsString(_serialize(theme), flush: true);
       return ThemeController(theme);
     } catch (e) {
       debugPrint(
@@ -48,6 +49,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
   static String _serialize(AppTheme t) {
     return const JsonEncoder.withIndent('  ').convert({
       'cornerRadius': _num(t.cornerRadius),
+      'roundingPower': _num(t.roundingPower),
       'borderWidth': _num(t.borderWidth),
       'fontFamily': t.fontFamily,
       'monospaceFontFamily': t.monospaceFontFamily,
