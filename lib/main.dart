@@ -13,8 +13,8 @@ Future<void> main() async {
 
   final themeController = await ThemeController.load();
 
-  // The runner creates a WS_POPUP window with DWM glass; there is no OS
-  // chrome and the rounded corners are painted by WindowShell alone.
+  // setTitleBarStyle is deliberately never called: it clears the frameless
+  // flag the runner relies on
   await windowManager.center();
 
   void applyWindowEffect(AppTheme theme) => WindowEffects.apply(
@@ -35,7 +35,6 @@ class NyaxisApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // rebuild on any theme change
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
@@ -53,7 +52,6 @@ class NyaxisApp extends StatelessWidget {
             ),
             // otherwise the scaffold paints square corners into the clip
             scaffoldBackgroundColor: Colors.transparent,
-            // base styles: primary font + type scale on the Material slots
             fontFamily: theme.fontFamily,
             textTheme: TextTheme(
               titleLarge: theme.titleStyle,

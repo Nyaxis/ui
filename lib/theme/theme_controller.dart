@@ -9,7 +9,7 @@ import 'app_theme.dart';
 class ThemeController extends ValueNotifier<AppTheme> {
   ThemeController(super.value);
 
-  /// null when APPDATA is unavailable; defaults are used then.
+  /// null when APPDATA is unavailable, in which case defaults are used
   static File? get _configFile {
     final appData = Platform.environment['APPDATA'];
     if (appData == null) {

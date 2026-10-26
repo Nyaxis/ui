@@ -121,12 +121,10 @@ class AppTheme {
 
   final Color background;
 
-  /// How opaque the window background paints over the desktop, 0..1.
-  /// Applied to [background] when it is painted; hex strings in the JSON
-  /// stay alpha-free.
+  /// applied to [background] when painted, so hex strings in the json stay
+  /// alpha-free
   final double backgroundOpacity;
 
-  /// [background] with its opacity applied; the thing the shell paints.
   Color get backgroundColor => background.withValues(alpha: backgroundOpacity);
 
   final bool acrylic;
@@ -209,7 +207,7 @@ class AppTheme {
     );
   }
 
-  /// Parses `#RRGGBB` or `RRGGBB`; anything else falls back to [fallback].
+  /// accepts `#RRGGBB` or `RRGGBB`; anything else yields [fallback]
   static Color _color(Object? hex, Color fallback) {
     if (hex is! String) {
       return fallback;

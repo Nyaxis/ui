@@ -22,9 +22,8 @@ constexpr const wchar_t kWindowClassName[] = L"NYAXIS_BACKDROP_WINDOW";
 
 HostBackdropWindow* g_active = nullptr;
 
-// Undocumented SetWindowCompositionAttribute plumbing. A host-backdrop brush
-// only samples what is behind the window once DWM has been told the window
-// uses a host backdrop; without it the brush renders black.
+// undocumented api: without the host backdrop accent, the host backdrop brush
+// renders black instead of sampling what is behind the window
 constexpr DWORD kWcaAccentPolicy = 19;
 constexpr int kAccentEnableHostBackdrop = 5;
 
@@ -75,7 +74,6 @@ extern "C" __declspec(dllexport) void NyaxisBlurConfigure(
   }
 }
 
-// static
 void HostBackdropWindow::SetActive(HostBackdropWindow* window) {
   g_active = window;
 }
@@ -86,7 +84,7 @@ HostBackdropWindow::~HostBackdropWindow() {
   if (g_active == this) {
     g_active = nullptr;
   }
-  // Drop the visual tree before the window it targets goes away.
+  // the visual tree must go before the window it targets
   impl_.reset();
   if (hwnd_) {
     DestroyWindow(hwnd_);
@@ -103,9 +101,8 @@ bool HostBackdropWindow::Create(HWND target) {
   window_class.lpfnWndProc = DefWindowProc;
   RegisterClass(&window_class);
 
-  // No redirection bitmap: the composition tree supplies every pixel. Layered
-  // + transparent is what makes a window truly click-through to other
-  // processes; non-activating so it never steals focus from Flutter.
+  // only a layered, transparent window passes clicks through to other
+  // processes; the composition tree draws every pixel, so no redirection bitmap
   hwnd_ = CreateWindowEx(
       WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE |
           WS_EX_LAYERED | WS_EX_TRANSPARENT,
@@ -120,8 +117,7 @@ bool HostBackdropWindow::Create(HWND target) {
   try {
     auto impl = std::make_unique<Impl>();
 
-    // Composition needs a dispatcher queue on this thread. The runner pumps
-    // messages, which is all the queue needs.
+    // composition needs a dispatcher queue on this thread
     DispatcherQueueOptions options{sizeof(options), DQTYPE_THREAD_CURRENT,
                                    DQTAT_COM_NONE};
     ABI::Windows::System::IDispatcherQueueController* controller = nullptr;
@@ -181,12 +177,12 @@ void HostBackdropWindow::UpdateTargetRegion(UINT width, UINT height) {
     SetWindowRgn(target_, nullptr, TRUE);
     return;
   }
-  // The ellipse arguments are diameters, and the lower-right edge of a region
-  // is exclusive, hence 2 * radius and the extra pixel.
+  // the ellipse arguments are diameters, and a region's lower-right edge is
+  // exclusive, hence 2 * radius and the extra pixel
   const int diameter = static_cast<int>(radius * 2.0f + 0.5f);
   HRGN region = CreateRoundRectRgn(0, 0, width + 1, height + 1, diameter,
                                    diameter);
-  // On success the system owns the region; on failure we do.
+  // the system owns the region after a successful call
   if (region && !SetWindowRgn(target_, region, TRUE)) {
     DeleteObject(region);
   }
@@ -227,8 +223,7 @@ void HostBackdropWindow::Sync() {
 
   UpdateVisuals(width, height);
 
-  // Inserting after the target parks this window directly beneath it, however
-  // the target is raised or lowered.
+  // inserting after the target keeps this window directly beneath it
   SetWindowPos(hwnd_, target_, rect.left, rect.top, width, height,
                SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
 }

@@ -5,11 +5,9 @@
 
 #include <memory>
 
-// A click-through window parked directly beneath the Flutter window whose
-// content is a Windows.UI.Composition host-backdrop brush, clipped to a
-// rounded rectangle at the theme radius. DWM samples and composes the
-// backdrop itself, so there is no capture: it stays in step with the window,
-// and screenshots and recordings see it like any other window.
+// click-through window kept directly beneath the flutter window, showing a
+// host backdrop brush clipped to the theme's rounded corners. dwm composes the
+// backdrop itself, so nothing is captured and the window stays screenshot-able.
 class HostBackdropWindow {
  public:
   HostBackdropWindow();
@@ -18,18 +16,14 @@ class HostBackdropWindow {
   HostBackdropWindow(const HostBackdropWindow&) = delete;
   HostBackdropWindow& operator=(const HostBackdropWindow&) = delete;
 
-  // Creates the window and visual tree for |target|, the Flutter window.
   bool Create(HWND target);
 
-  // Re-aligns position, size, visibility and z-order with the target and
-  // rebuilds the target's window region when size or DPI changed.
   void Sync();
 
-  // |radius| is the theme corner radius in logical pixels; it is scaled by
-  // the target's current DPI.
+  // radius is in logical pixels and scaled by the target's dpi
   void Configure(bool enabled, float radius);
 
-  // The instance reachable from the exported FFI entry points.
+  // the instance the exported ffi entry point talks to
   static void SetActive(HostBackdropWindow* window);
 
  private:
