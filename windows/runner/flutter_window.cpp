@@ -14,6 +14,13 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
 
+  shadow_window_ = std::make_unique<ShadowWindow>();
+  if (shadow_window_->Create(GetHandle())) {
+    ShadowWindow::SetActive(shadow_window_.get());
+  } else {
+    shadow_window_ = nullptr;
+  }
+
   backdrop_window_ = std::make_unique<HostBackdropWindow>();
   if (backdrop_window_->Create(GetHandle())) {
     HostBackdropWindow::SetActive(backdrop_window_.get());
@@ -45,6 +52,7 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   backdrop_window_ = nullptr;
+  shadow_window_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -66,11 +74,21 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
+    case WM_WINDOWPOSCHANGING:
+      if (shadow_window_) {
+        shadow_window_->Follow(*reinterpret_cast<WINDOWPOS*>(lparam));
+      }
+      break;
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
     case WM_WINDOWPOSCHANGED:
     case WM_SHOWWINDOW:
+      // the shadow goes first so the backdrop ends up directly beneath the
+      // target, above the shadow
+      if (shadow_window_) {
+        shadow_window_->Sync();
+      }
       if (backdrop_window_) {
         backdrop_window_->Sync();
       }

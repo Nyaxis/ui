@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "host_backdrop_window.h"
+#include "shadow_window.h"
 #include "win32_window.h"
 
 class FlutterWindow : public Win32Window {
@@ -25,6 +26,7 @@ class FlutterWindow : public Win32Window {
 
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
 
+  std::unique_ptr<ShadowWindow> shadow_window_;
   std::unique_ptr<HostBackdropWindow> backdrop_window_;
 };
 

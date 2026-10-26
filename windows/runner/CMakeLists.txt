@@ -7,6 +7,7 @@ add_executable(${BINARY_NAME} WIN32
   "host_backdrop_window.cpp"
   "flutter_window.cpp"
   "main.cpp"
+  "shadow_window.cpp"
   "utils.cpp"
   "win32_window.cpp"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
