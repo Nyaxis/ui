@@ -21,6 +21,7 @@ class AppTheme {
     this.textPrimary = const Color(0xffcdd6f4),
     this.textDim = const Color(0xffa6adc8),
     this.accent = const Color(0xffcba6f7),
+    this.iconSize = 16,
   });
 
   final double cornerRadius;
@@ -50,6 +51,8 @@ class AppTheme {
   final Color textPrimary;
   final Color textDim;
   final Color accent;
+
+  final double iconSize;
 
   TextStyle get titleStyle => TextStyle(
     fontFamily: fontFamily,
@@ -103,6 +106,7 @@ class AppTheme {
     Color? textPrimary,
     Color? textDim,
     Color? accent,
+    double? iconSize,
   }) {
     return AppTheme(
       cornerRadius: cornerRadius ?? this.cornerRadius,
@@ -121,6 +125,7 @@ class AppTheme {
       textPrimary: textPrimary ?? this.textPrimary,
       textDim: textDim ?? this.textDim,
       accent: accent ?? this.accent,
+      iconSize: iconSize ?? this.iconSize,
     );
   }
 
@@ -137,9 +142,17 @@ class AppTheme {
 
   static const _fallback = AppTheme();
 
-  factory AppTheme.fromJson(Map<String, dynamic> json) {
+  /// the colors come from [palette] when given, otherwise from [json] itself
+  factory AppTheme.fromJson(
+    Map<String, dynamic> json, {
+    Map<String, dynamic>? palette,
+  }) {
+    final colors = palette ?? json;
     final sizes = json['fontSize'] is Map<String, dynamic>
         ? json['fontSize'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+    final icons = json['icons'] is Map<String, dynamic>
+        ? json['icons'] as Map<String, dynamic>
         : const <String, dynamic>{};
     return AppTheme(
       cornerRadius:
@@ -172,11 +185,14 @@ class AppTheme {
                   _fallback.backgroundOpacity)
               .clamp(0.0, 1.0)
               .toDouble(),
-      background: _color(json['background'], _fallback.background),
-      border: _color(json['border'], _fallback.border),
-      textPrimary: _color(json['textPrimary'], _fallback.textPrimary),
-      textDim: _color(json['textDim'], _fallback.textDim),
-      accent: _color(json['accent'], _fallback.accent),
+      background: _color(colors['background'], _fallback.background),
+      border: _color(colors['border'], _fallback.border),
+      textPrimary: _color(colors['textPrimary'], _fallback.textPrimary),
+      textDim: _color(colors['textDim'], _fallback.textDim),
+      accent: _color(colors['accent'], _fallback.accent),
+      iconSize: ((icons['size'] as num?)?.toDouble() ?? _fallback.iconSize)
+          .clamp(8.0, 64.0)
+          .toDouble(),
     );
   }
 }
