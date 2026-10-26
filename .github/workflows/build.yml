@@ -34,7 +34,7 @@ jobs:
         run: flutter pub get
 
       - name: Build
-        run: flutter build windows --${{ env.BUILD_TYPE }}
+        run: flutter build windows --${{ env.BUILD_TYPE }}${{ env.BUILD_TYPE == 'release' && ' --obfuscate --split-debug-info=symbols' || '' }}
 
       - name: Verify artifacts
         shell: pwsh
