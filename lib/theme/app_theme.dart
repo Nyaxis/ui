@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 class AppTheme {
   const AppTheme({
     this.cornerRadius = 0,
+    this.roundingPower = 2.0,
     this.borderWidth = 1,
     this.fontFamily = 'Fredoka',
     this.monospaceFontFamily = 'JetBrainsMono',
@@ -23,6 +24,7 @@ class AppTheme {
   });
 
   final double cornerRadius;
+  final double roundingPower;
 
   final double borderWidth;
 
@@ -86,6 +88,7 @@ class AppTheme {
 
   AppTheme copyWith({
     double? cornerRadius,
+    double? roundingPower,
     double? borderWidth,
     String? fontFamily,
     String? monospaceFontFamily,
@@ -103,6 +106,7 @@ class AppTheme {
   }) {
     return AppTheme(
       cornerRadius: cornerRadius ?? this.cornerRadius,
+      roundingPower: roundingPower ?? this.roundingPower,
       borderWidth: borderWidth ?? this.borderWidth,
       fontFamily: fontFamily ?? this.fontFamily,
       monospaceFontFamily: monospaceFontFamily ?? this.monospaceFontFamily,
@@ -140,6 +144,9 @@ class AppTheme {
     return AppTheme(
       cornerRadius:
           (json['cornerRadius'] as num?)?.toDouble() ?? _fallback.cornerRadius,
+      roundingPower:
+          ((json['roundingPower'] as num?)?.toDouble() ?? _fallback.roundingPower)
+              .clamp(1.0, 10.0),
       borderWidth:
           (json['borderWidth'] as num?)?.toDouble() ?? _fallback.borderWidth,
       fontFamily: json['fontFamily'] is String

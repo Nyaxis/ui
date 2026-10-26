@@ -3,6 +3,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
+import 'superellipse.dart';
 
 class WindowShell extends StatefulWidget {
   const WindowShell({super.key, required this.controller});
@@ -20,15 +21,18 @@ class _WindowShellState extends State<WindowShell> {
       animation: widget.controller,
       builder: (context, _) {
         final theme = widget.controller.value;
-        final windowRadius = BorderRadius.circular(theme.cornerRadius);
+        final shape = SuperellipseBorder(
+          radius: theme.cornerRadius,
+          power: theme.roundingPower,
+          side: BorderSide(color: theme.border, width: theme.borderWidth),
+        );
 
-        return ClipRRect(
-          borderRadius: windowRadius,
+        return ClipPath(
+          clipper: ShapeBorderClipper(shape: shape),
           child: Container(
-            decoration: BoxDecoration(
+            decoration: ShapeDecoration(
               color: theme.backgroundColor,
-              borderRadius: windowRadius,
-              border: Border.all(color: theme.border, width: theme.borderWidth),
+              shape: shape,
             ),
             child: Scaffold(
               backgroundColor: Colors.transparent,
