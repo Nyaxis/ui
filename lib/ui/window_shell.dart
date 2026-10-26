@@ -26,7 +26,7 @@ class _WindowShellState extends State<WindowShell> {
           borderRadius: windowRadius,
           child: Container(
             decoration: BoxDecoration(
-              color: theme.acrylic ? Colors.transparent : theme.backgroundColor,
+              color: theme.backgroundColor,
               borderRadius: windowRadius,
               border: Border.all(color: theme.border, width: theme.borderWidth),
             ),
