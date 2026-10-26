@@ -1,0 +1,63 @@
+name: Build
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: Build type
+        default: release
+        type: choice
+        options: [release, debug]
+
+env:
+  FLUTTER_VERSION: '3.47.8'
+  CI: true
+  BUILD_TYPE: ${{ (github.event_name == 'workflow_dispatch' && inputs.build_type) || (contains(github.ref_name, '-rc') && 'debug') || 'release' }}
+
+jobs:
+  build-windows:
+    name: build (windows, ${{ (github.event_name == 'workflow_dispatch' && inputs.build_type) || (contains(github.ref_name, '-rc') && 'debug') || 'release' }})
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Restore
+        run: flutter pub get
+
+      - name: Build
+        run: flutter build windows --${{ env.BUILD_TYPE }}
+
+      - name: Verify artifacts
+        shell: pwsh
+        run: |
+          $buildDir = if ($env:BUILD_TYPE -eq 'debug') { 'Debug' } else { 'Release' }
+          $expect = @(
+            "build/windows/x64/runner/$buildDir/ui.exe"
+            "build/windows/x64/runner/$buildDir/flutter_windows.dll"
+            "build/windows/x64/runner/$buildDir/data/app.so"
+          )
+          $missing = $expect | Where-Object { -not (Test-Path $_) }
+          if ($missing) {
+            Write-Error "missing artifacts:`n$($missing -join "`n")"
+            exit 1
+          }
+          $expect | ForEach-Object {
+            $size = (Get-Item $_).Length
+            Write-Output ("{0,-55} {1,10:N0} bytes" -f $_, $size)
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nyaxis-ui-${{ github.ref_name }}-win-x64
+          path: build/windows/x64/runner/${{ env.BUILD_TYPE == 'debug' && 'Debug' || 'Release' }}/
+          retention-days: 14
