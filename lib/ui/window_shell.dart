@@ -49,9 +49,11 @@ class _WindowShellState extends State<WindowShell> {
     );
   }
 
+  static const _titleBarHeight = 40.0;
+
   Widget _titleBar(AppTheme theme) {
     return Container(
-      height: 40,
+      height: _titleBarHeight,
       decoration: BoxDecoration(
         color: theme.background,
         border: Border(
@@ -133,7 +135,7 @@ class _WindowButtonState extends State<_WindowButton> {
           color: _hovered ? theme.border : Colors.transparent,
           child: SkinnableIcon(
             name: widget.name,
-            size: theme.iconSize,
+            size: _WindowShellState._titleBarHeight * 0.4,
             color: theme.textPrimary,
           ),
         ),

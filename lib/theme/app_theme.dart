@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 @immutable
 class AppTheme {
   const AppTheme({
-    this.cornerRadius = 0,
+    this.cornerRadius = 8,
     this.roundingPower = 2.0,
-    this.borderWidth = 1,
+    this.borderWidth = 2,
     this.fontFamily = 'Fredoka',
     this.monospaceFontFamily = 'JetBrainsMono',
     this.fontSizeTitle = 22,
@@ -21,7 +21,6 @@ class AppTheme {
     this.textPrimary = const Color(0xffcdd6f4),
     this.textDim = const Color(0xffa6adc8),
     this.accent = const Color(0xffcba6f7),
-    this.iconSize = 16,
   });
 
   final double cornerRadius;
@@ -51,8 +50,6 @@ class AppTheme {
   final Color textPrimary;
   final Color textDim;
   final Color accent;
-
-  final double iconSize;
 
   TextStyle get titleStyle => TextStyle(
     fontFamily: fontFamily,
@@ -106,7 +103,6 @@ class AppTheme {
     Color? textPrimary,
     Color? textDim,
     Color? accent,
-    double? iconSize,
   }) {
     return AppTheme(
       cornerRadius: cornerRadius ?? this.cornerRadius,
@@ -125,7 +121,6 @@ class AppTheme {
       textPrimary: textPrimary ?? this.textPrimary,
       textDim: textDim ?? this.textDim,
       accent: accent ?? this.accent,
-      iconSize: iconSize ?? this.iconSize,
     );
   }
 
@@ -150,9 +145,6 @@ class AppTheme {
     final colors = palette ?? json;
     final sizes = json['fontSize'] is Map<String, dynamic>
         ? json['fontSize'] as Map<String, dynamic>
-        : const <String, dynamic>{};
-    final icons = json['icons'] is Map<String, dynamic>
-        ? json['icons'] as Map<String, dynamic>
         : const <String, dynamic>{};
     return AppTheme(
       cornerRadius:
@@ -190,9 +182,6 @@ class AppTheme {
       textPrimary: _color(colors['textPrimary'], _fallback.textPrimary),
       textDim: _color(colors['textDim'], _fallback.textDim),
       accent: _color(colors['accent'], _fallback.accent),
-      iconSize: ((icons['size'] as num?)?.toDouble() ?? _fallback.iconSize)
-          .clamp(8.0, 64.0)
-          .toDouble(),
     );
   }
 }
