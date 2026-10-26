@@ -19,7 +19,7 @@ env:
 jobs:
   build-windows:
     name: build (windows, ${{ (github.event_name == 'workflow_dispatch' && inputs.build_type) || (contains(github.ref_name, '-rc') && 'debug') || 'release' }})
-    runs-on: windows-latest
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
