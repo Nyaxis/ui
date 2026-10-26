@@ -3,6 +3,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
+import 'skinnable_icon.dart';
 import 'superellipse.dart';
 
 class WindowShell extends StatefulWidget {
@@ -34,9 +35,12 @@ class _WindowShellState extends State<WindowShell> {
             clipper: ShapeBorderClipper(shape: shape),
             child: ColoredBox(
               color: theme.backgroundColor,
-              child: Scaffold(
-                backgroundColor: Colors.transparent,
-                body: _titleBar(theme),
+              child: Padding(
+                padding: EdgeInsets.all(theme.borderWidth),
+                child: Scaffold(
+                  backgroundColor: Colors.transparent,
+                  body: _titleBar(theme),
+                ),
               ),
             ),
           ),
@@ -54,13 +58,84 @@ class _WindowShellState extends State<WindowShell> {
           bottom: BorderSide(color: theme.border, width: theme.borderWidth),
         ),
       ),
-      child: DragToMoveArea(
-        child: Row(
-          children: [
-            const SizedBox(width: 14),
-            Text('Nyaxis', style: theme.titleStyle),
-            const Spacer(),
-          ],
+      child: Row(
+        children: [
+          Expanded(
+            child: DragToMoveArea(
+              child: Row(
+                children: [
+                  const SizedBox(width: 14),
+                  Text('Nyaxis', style: theme.titleStyle),
+                  const Spacer(),
+                ],
+              ),
+            ),
+          ),
+          _WindowButton(
+            name: 'minimize',
+            theme: theme,
+            onPressed: windowManager.minimize,
+          ),
+          _WindowButton(
+            name: 'maximize',
+            theme: theme,
+            onPressed: _toggleMaximize,
+          ),
+          _WindowButton(
+            name: 'close',
+            theme: theme,
+            onPressed: windowManager.close,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleMaximize() async {
+    if (await windowManager.isMaximized()) {
+      await windowManager.unmaximize();
+    } else {
+      await windowManager.maximize();
+    }
+  }
+}
+
+class _WindowButton extends StatefulWidget {
+  const _WindowButton({
+    required this.name,
+    required this.theme,
+    required this.onPressed,
+  });
+
+  final String name;
+  final AppTheme theme;
+  final VoidCallback onPressed;
+
+  @override
+  State<_WindowButton> createState() => _WindowButtonState();
+}
+
+class _WindowButtonState extends State<_WindowButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onPressed,
+        child: Container(
+          width: 46,
+          alignment: Alignment.center,
+          color: _hovered ? theme.border : Colors.transparent,
+          child: SkinnableIcon(
+            name: widget.name,
+            size: theme.iconSize,
+            color: theme.textPrimary,
+          ),
         ),
       ),
     );
