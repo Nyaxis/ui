@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../theme/app_theme.dart';
@@ -16,6 +17,55 @@ class WindowShell extends StatefulWidget {
 }
 
 class _WindowShellState extends State<WindowShell> {
+  static const _monacoTheme = MonacoTheme('nyaxis');
+
+  MonacoController? _monaco;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_applyMonacoTheme);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_applyMonacoTheme);
+    super.dispose();
+  }
+
+  static String _hex(Color c) =>
+      '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
+
+  /// the editor is drawn by monaco, so the palette reaches it as a custom
+  /// monaco theme
+  Future<void> _applyMonacoTheme() async {
+    final monaco = _monaco;
+    if (monaco == null) {
+      return;
+    }
+    final theme = widget.controller.value;
+    final dark = theme.background.computeLuminance() < 0.5;
+    await monaco.defineTheme(
+      MonacoThemeDefinition(
+        id: _monacoTheme.id,
+        base: dark ? MonacoBaseTheme.vsDark : MonacoBaseTheme.vs,
+        colors: {
+          'editor.background': _hex(theme.background),
+          'editor.foreground': _hex(theme.textPrimary),
+          'editorGutter.background': _hex(theme.background),
+          'editorLineNumber.foreground': _hex(theme.textDim),
+          'editorLineNumber.activeForeground': _hex(theme.textPrimary),
+          'editorCursor.foreground': _hex(theme.accent),
+          'editor.selectionBackground': _hex(theme.border),
+          'editor.lineHighlightBackground': _hex(theme.titleBar),
+          'editorWidget.background': _hex(theme.titleBar),
+          'editorWidget.border': _hex(theme.border),
+        },
+      ),
+    );
+    await monaco.setTheme(_monacoTheme);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -42,7 +92,20 @@ class _WindowShellState extends State<WindowShell> {
                   body: Column(
                     children: [
                       _titleBar(theme),
-                      const Expanded(child: SizedBox.expand()),
+                      Expanded(
+                        child: MonacoEditor(
+                          backgroundColor: theme.background,
+                          onReady: (controller) {
+                            _monaco = controller;
+                            _applyMonacoTheme();
+                          },
+                          options: EditorOptions(
+                            theme: _monacoTheme,
+                            fontFamily: theme.monospaceFontFamily,
+                            fontSize: theme.fontSizeBody,
+                          ),
+                        ),
+                      ),
                       _bottomBar(theme),
                     ],
                   ),
