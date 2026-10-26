@@ -6,7 +6,9 @@ import 'package:ui/theme/app_theme.dart';
 import 'package:ui/theme/theme_controller.dart';
 
 void main() {
-  testWidgets('window corner radius follows the theme controller', (tester) async {
+  testWidgets('window corner radius follows the theme controller', (
+    tester,
+  ) async {
     final controller = ThemeController(const AppTheme(cornerRadius: 12));
     await tester.pumpWidget(NyaxisApp(controller: controller));
 
