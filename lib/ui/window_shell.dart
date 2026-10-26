@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../editor/editor_tabs.dart';
 import '../editor/luau_lsp.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
@@ -21,6 +22,7 @@ class _WindowShellState extends State<WindowShell> {
   static const _monacoTheme = MonacoTheme('nyaxis');
 
   MonacoController? _monaco;
+  final _tabs = EditorTabs();
 
   @override
   void initState() {
@@ -31,7 +33,14 @@ class _WindowShellState extends State<WindowShell> {
   @override
   void dispose() {
     widget.controller.removeListener(_applyMonacoTheme);
+    _tabs.dispose();
     super.dispose();
+  }
+
+  /// the documents have to exist before the server connects, so it sees them
+  Future<void> _attachEditor(MonacoController controller) async {
+    await _tabs.attach(controller);
+    await connectLuauLsp(controller);
   }
 
   static String _hex(Color c) =>
@@ -93,6 +102,7 @@ class _WindowShellState extends State<WindowShell> {
                   body: Column(
                     children: [
                       _titleBar(theme),
+                      _tabBar(theme),
                       Expanded(
                         child: MonacoEditor(
                           backgroundColor: theme.background,
@@ -105,7 +115,7 @@ class _WindowShellState extends State<WindowShell> {
                           onReady: (controller) {
                             _monaco = controller;
                             _applyMonacoTheme();
-                            attachLuauLsp(controller);
+                            _attachEditor(controller);
                           },
                           options: EditorOptions(
                             theme: _monacoTheme,
@@ -128,6 +138,60 @@ class _WindowShellState extends State<WindowShell> {
 
   static const _titleBarHeight = 40.0;
   static const _bottomBarHeight = 28.0;
+  static const _tabBarHeight = 34.0;
+
+  /// the selected tab shares the editor's color, so it reads as part of it
+  /// and breaks the line under the other tabs
+  Widget _tabBar(AppTheme theme) {
+    final line = BorderSide(color: theme.border, width: theme.borderWidth);
+    return ListenableBuilder(
+      listenable: _tabs,
+      builder: (context, _) => Container(
+        height: _tabBarHeight,
+        color: theme.titleBar,
+        child: Stack(
+          children: [
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: theme.borderWidth,
+              child: ColoredBox(color: theme.border),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    children: [
+                      for (var i = 0; i < _tabs.tabs.length; i++)
+                        _Tab(
+                          tab: _tabs.tabs[i],
+                          selected: i == _tabs.active,
+                          theme: theme,
+                          line: line,
+                          onSelect: () => _tabs.select(i),
+                          onClose: () => _tabs.close(i),
+                        ),
+                    ],
+                  ),
+                ),
+                _BarButton(
+                  name: 'add',
+                  extent: _tabBarHeight,
+                  size: _tabBarHeight * 0.5,
+                  hoverInset: 5,
+                  hoverRadius: 4,
+                  theme: theme,
+                  onPressed: _tabs.newTab,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _bottomBar(AppTheme theme) {
     return Container(
@@ -213,6 +277,91 @@ class _WindowShellState extends State<WindowShell> {
   }
 }
 
+class _Tab extends StatefulWidget {
+  const _Tab({
+    required this.tab,
+    required this.selected,
+    required this.theme,
+    required this.line,
+    required this.onSelect,
+    required this.onClose,
+  });
+
+  final EditorTab tab;
+  final bool selected;
+  final AppTheme theme;
+  final BorderSide line;
+  final VoidCallback onSelect;
+  final VoidCallback onClose;
+
+  @override
+  State<_Tab> createState() => _TabState();
+}
+
+class _TabState extends State<_Tab> {
+  static const _closeSize = 10.0;
+  static const _closeExtent = 20.0;
+
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    final color = widget.selected ? theme.textPrimary : theme.textDim;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onSelect,
+        child: Container(
+          padding: const EdgeInsets.only(left: 14, right: 8),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: widget.selected ? theme.background : null,
+            border: Border(right: widget.line),
+          ),
+          child: Row(
+            children: [
+              if (widget.tab.dirty)
+                Container(
+                  width: 6,
+                  height: 6,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: theme.accent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              Text(
+                widget.tab.name,
+                style: theme.bodyStyle.copyWith(color: color),
+              ),
+              // the slot is always there, so hovering never resizes the tab
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Opacity(
+                  opacity: _hovered ? 1 : 0,
+                  child: _BarButton(
+                    name: 'close',
+                    extent: _closeExtent,
+                    size: _closeSize,
+                    hoverInset: 1,
+                    hoverRadius: 4,
+                    theme: theme,
+                    onPressed: widget.onClose,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BarButton extends StatefulWidget {
   const _BarButton({
     required this.name,
@@ -268,16 +417,28 @@ class _BarButtonState extends State<_BarButton> {
   /// covers the whole button
   Widget _hoverFill(AppTheme theme) {
     final onRed = widget.destructive && (_hovered || _pressed);
-    final fill = Container(
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: _fillColor(theme),
-        borderRadius: BorderRadius.circular(widget.hoverRadius),
-      ),
-      child: SkinnableIcon(
-        name: widget.name,
-        size: widget.size,
-        color: onRed ? theme.background : theme.textPrimary,
+    // only the visible fill reacts, not the inset around it
+    final fill = MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTap: widget.onPressed,
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _fillColor(theme),
+            borderRadius: BorderRadius.circular(widget.hoverRadius),
+          ),
+          child: SkinnableIcon(
+            name: widget.name,
+            size: widget.size,
+            color: onRed ? theme.background : theme.textPrimary,
+          ),
+        ),
       ),
     );
     if (widget.hoverInset == 0) {
@@ -288,22 +449,10 @@ class _BarButtonState extends State<_BarButton> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = widget.theme;
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTap: widget.onPressed,
-        child: Container(
-          width: widget.extent,
-          padding: EdgeInsets.all(widget.hoverInset),
-          child: _hoverFill(theme),
-        ),
-      ),
+    return Container(
+      width: widget.extent,
+      padding: EdgeInsets.all(widget.hoverInset),
+      child: _hoverFill(widget.theme),
     );
   }
 }

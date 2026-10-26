@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 
-/// opens a scratch luau file and connects the bundled luau-lsp to it; failures
-/// are logged and leave a plain editor
-Future<void> attachLuauLsp(MonacoController controller) async {
+/// connects the bundled luau-lsp to the editor's documents; failures are
+/// logged and leave a plain editor
+Future<void> connectLuauLsp(MonacoController controller) async {
   final server = File(
     '${File(Platform.resolvedExecutable).parent.path}\\data\\flutter_assets'
     '\\assets\\luau-lsp\\luau-lsp.exe',
@@ -15,14 +15,6 @@ Future<void> attachLuauLsp(MonacoController controller) async {
     return;
   }
   try {
-    final scratch = await controller.openDocument(
-      text: '',
-      language: MonacoLanguage.lua,
-      // lowercase and drive-less: the bridge lowercases the uri in document
-      // notifications but not in requests, so any other casing never matches
-      uri: Uri.parse('file:///nyaxis/scratch.luau'),
-    );
-    await controller.activateDocument(scratch);
     final process = await LspServerProcess.start(server.path, [
       'lsp',
       '--definitions=@roblox=${server.parent.path}\\globalTypes.None.d.luau',
