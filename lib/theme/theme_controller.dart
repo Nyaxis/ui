@@ -3,8 +3,10 @@ import 'dart:io';
 import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show FontLoader, rootBundle;
 
 import 'app_theme.dart';
+import 'catppuccin.dart';
 
 class ThemeController extends ValueNotifier<AppTheme> {
   ThemeController(super.value);
@@ -73,7 +75,109 @@ class ThemeController extends ValueNotifier<AppTheme> {
     }
   }
 
+  /// the default theme ships every Catppuccin flavor; only missing ones are
+  /// written, so edits to them are kept
+  static Future<void> _seedPalettes(Directory dir) async {
+    for (final entry in catppuccinPalettes.entries) {
+      final file = File('${dir.path}\\palettes\\${entry.key}.json');
+      if (!file.existsSync()) {
+        await file.writeAsString(
+          const JsonEncoder.withIndent('  ').convert(entry.value),
+          flush: true,
+        );
+      }
+    }
+  }
+
+  /// the default theme ships the bundled icons as files, so they can be seen
+  /// and replaced; one is skipped when the folder already has any file by its
+  /// name
+  static Future<void> _seedIcons(Directory dir) async {
+    final icons = Directory('${dir.path}\\icons');
+    final existing = icons
+        .listSync()
+        .whereType<File>()
+        .map((f) => f.uri.pathSegments.last.split('.').first)
+        .toSet();
+    for (final name in const ['minimize', 'maximize', 'close']) {
+      if (!existing.contains(name)) {
+        await File('${icons.path}\\$name.svg').writeAsString(
+          await rootBundle.loadString('assets/icons/titlebar/$name-16.svg'),
+          flush: true,
+        );
+      }
+    }
+  }
+
+  static const _bundledFonts = {
+    'Fredoka': 'assets/fonts/Fredoka-VariableFont.ttf',
+    'JetBrainsMono': 'assets/fonts/JetBrainsMono-VariableFont.ttf',
+  };
+
+  static const _fontExtensions = ['ttf', 'otf'];
+
+  /// the default theme ships the bundled fonts as files, named after their
+  /// family, so they can be seen and replaced
+  static Future<void> _seedFonts(Directory dir) async {
+    final fonts = Directory('${dir.path}\\fonts');
+    final existing = fonts
+        .listSync()
+        .whereType<File>()
+        .map((f) => f.uri.pathSegments.last.split('.').first)
+        .toSet();
+    for (final entry in _bundledFonts.entries) {
+      if (!existing.contains(entry.key)) {
+        final data = await rootBundle.load(entry.value);
+        await File('${fonts.path}\\${entry.key}.ttf').writeAsBytes(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+          flush: true,
+        );
+      }
+    }
+  }
+
+  /// every font file in the theme's `fonts` folder is registered under its
+  /// file name; a bundled family the theme doesn't provide is loaded from the
+  /// app, so the defaults always resolve
+  static Future<void> _registerFonts(Directory? dir) async {
+    final loaded = <String>{};
+    final folder = dir == null ? null : Directory('${dir.path}\\fonts');
+    if (folder != null && folder.existsSync()) {
+      for (final file in folder.listSync().whereType<File>()) {
+        final name = file.uri.pathSegments.last;
+        final dot = name.lastIndexOf('.');
+        if (dot <= 0 ||
+            !_fontExtensions.contains(name.substring(dot + 1).toLowerCase())) {
+          continue;
+        }
+        final family = name.substring(0, dot);
+        try {
+          final bytes = await file.readAsBytes();
+          final loader = FontLoader(family)
+            ..addFont(Future.value(ByteData.sublistView(bytes)));
+          await loader.load();
+          loaded.add(family);
+        } catch (e) {
+          debugPrint('ThemeController: unreadable font ${file.path} ($e)');
+        }
+      }
+    }
+    for (final entry in _bundledFonts.entries) {
+      if (!loaded.contains(entry.key)) {
+        final loader = FontLoader(entry.key)
+          ..addFont(rootBundle.load(entry.value));
+        await loader.load();
+      }
+    }
+  }
+
   static Future<ThemeController> load() async {
+    final controller = await _loadTheme();
+    await _registerFonts(_themeDirectory);
+    return controller;
+  }
+
+  static Future<ThemeController> _loadTheme() async {
     final root = _root;
     if (root == null) {
       return ThemeController(const AppTheme());
@@ -87,13 +191,22 @@ class ThemeController extends ValueNotifier<AppTheme> {
       await _migrateLegacy(root, dir);
       await Directory('${dir.path}\\icons').create(recursive: true);
       await Directory('${dir.path}\\palettes').create(recursive: true);
+      await Directory('${dir.path}\\fonts').create(recursive: true);
+      if (name == _defaultName) {
+        await _seedPalettes(dir);
+        await _seedIcons(dir);
+        await _seedFonts(dir);
+      }
       _themeDirectory = dir;
 
       file = File('${dir.path}\\theme.json');
       final json = file.existsSync()
           ? jsonDecode(await file.readAsString()) as Map<String, dynamic>
           : <String, dynamic>{};
-      final paletteName = _safeName(json['palette']) ?? _defaultName;
+      // a theme from before palettes names none, and keeps its own colors
+      final paletteName =
+          _safeName(json['palette']) ??
+          (json.containsKey('background') ? _defaultName : defaultPaletteName);
 
       // a theme from before palettes carries its colors itself, so they seed
       // the palette file
@@ -144,7 +257,6 @@ class ThemeController extends ValueNotifier<AppTheme> {
       },
       'backgroundOpacity': _num(t.backgroundOpacity),
       'acrylic': t.acrylic,
-      'icons': {'size': _num(t.iconSize)},
     });
   }
 

@@ -29,11 +29,4 @@ flutter:
 
   assets:
     - assets/icons/titlebar/
-
-  fonts:
-    - family: Fredoka
-      fonts:
-        - asset: assets/fonts/Fredoka-VariableFont.ttf
-    - family: JetBrainsMono
-      fonts:
-        - asset: assets/fonts/JetBrainsMono-VariableFont.ttf
+    - assets/fonts/
