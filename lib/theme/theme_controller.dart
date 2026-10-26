@@ -260,6 +260,8 @@ class ThemeController extends ValueNotifier<AppTheme> {
       'textDim': _hex(t.textDim),
       'accent': _hex(t.accent),
       'red': _hex(t.red),
+      'lineNumber': _hex(t.lineNumber),
+      'selection': _hex(t.selection),
     });
   }
 

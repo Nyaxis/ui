@@ -18,11 +18,13 @@ class AppTheme {
     this.titleBar = const Color(0xff11111b),
     this.backgroundOpacity = 1.0,
     this.acrylic = false,
-    this.border = const Color(0xff45475a),
+    this.border = const Color(0xff313244),
     this.textPrimary = const Color(0xffcdd6f4),
     this.textDim = const Color(0xffa6adc8),
     this.accent = const Color(0xffcba6f7),
     this.red = const Color(0xfff38ba8),
+    this.lineNumber = const Color(0xff7f849c),
+    this.selection = const Color(0xff9399b2),
   });
 
   final double cornerRadius;
@@ -58,6 +60,12 @@ class AppTheme {
 
   /// destructive actions, such as hovering the close button
   final Color red;
+
+  /// editor line numbers
+  final Color lineNumber;
+
+  /// selected text; painted translucent
+  final Color selection;
 
   TextStyle get titleStyle => TextStyle(
     fontFamily: fontFamily,
@@ -113,6 +121,8 @@ class AppTheme {
     Color? textDim,
     Color? accent,
     Color? red,
+    Color? lineNumber,
+    Color? selection,
   }) {
     return AppTheme(
       cornerRadius: cornerRadius ?? this.cornerRadius,
@@ -133,6 +143,8 @@ class AppTheme {
       textDim: textDim ?? this.textDim,
       accent: accent ?? this.accent,
       red: red ?? this.red,
+      lineNumber: lineNumber ?? this.lineNumber,
+      selection: selection ?? this.selection,
     );
   }
 
@@ -196,6 +208,8 @@ class AppTheme {
       textDim: _color(colors['textDim'], _fallback.textDim),
       accent: _color(colors['accent'], _fallback.accent),
       red: _color(colors['red'], _fallback.red),
+      lineNumber: _color(colors['lineNumber'], _fallback.lineNumber),
+      selection: _color(colors['selection'], _fallback.selection),
     );
   }
 }
