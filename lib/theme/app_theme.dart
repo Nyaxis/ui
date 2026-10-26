@@ -145,7 +145,8 @@ class AppTheme {
       cornerRadius:
           (json['cornerRadius'] as num?)?.toDouble() ?? _fallback.cornerRadius,
       roundingPower:
-          ((json['roundingPower'] as num?)?.toDouble() ?? _fallback.roundingPower)
+          ((json['roundingPower'] as num?)?.toDouble() ??
+                  _fallback.roundingPower)
               .clamp(1.0, 10.0),
       borderWidth:
           (json['borderWidth'] as num?)?.toDouble() ?? _fallback.borderWidth,

@@ -1,4 +1,5 @@
 import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 /// [ShapeBorder] whose corners follow a superellipse (Lamé curve) rather than
@@ -34,11 +35,8 @@ class SuperellipseBorder extends ShapeBorder {
   }
 
   @override
-  ShapeBorder scale(double t) => SuperellipseBorder(
-    radius: radius * t,
-    power: power,
-    side: side.scale(t),
-  );
+  ShapeBorder scale(double t) =>
+      SuperellipseBorder(radius: radius * t, power: power, side: side.scale(t));
 
   Path _path(Rect rect) {
     final r = radius.clamp(0.0, min(rect.width, rect.height) / 2);
@@ -48,10 +46,10 @@ class SuperellipseBorder extends ShapeBorder {
     const steps = 24;
     double se(double t) => pow(t, 2.0 / n).toDouble();
 
-    final cxTl = rect.left + r,  cyTl = rect.top + r;
+    final cxTl = rect.left + r, cyTl = rect.top + r;
     final cxTr = rect.right - r, cyTr = rect.top + r;
     final cxBr = rect.right - r, cyBr = rect.bottom - r;
-    final cxBl = rect.left + r,  cyBl = rect.bottom - r;
+    final cxBl = rect.left + r, cyBl = rect.bottom - r;
 
     final path = Path()..moveTo(cxTl, rect.top);
 
