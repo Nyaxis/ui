@@ -65,10 +65,8 @@ struct HostBackdropWindow::Impl {
   composition::CompositionRoundedRectangleGeometry clip_geometry{nullptr};
 };
 
-extern "C" __declspec(dllexport) void NyaxisBlurConfigure(
-    int enabled, double radius, double /*size*/, int /*passes*/,
-    double /*strength*/, double /*noise*/, double /*contrast*/,
-    double /*brightness*/, double /*vibrancy*/) {
+extern "C" __declspec(dllexport) void NyaxisBlurConfigure(int enabled,
+                                                          double radius) {
   if (g_active) {
     g_active->Configure(enabled != 0, static_cast<float>(radius));
   }

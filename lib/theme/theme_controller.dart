@@ -60,7 +60,6 @@ class ThemeController extends ValueNotifier<AppTheme> {
       'background': _hex(t.background),
       'backgroundOpacity': _num(t.backgroundOpacity),
       'acrylic': t.acrylic,
-      'blur': t.blur.toJson(),
       'border': _hex(t.border),
       'textPrimary': _hex(t.textPrimary),
       'textDim': _hex(t.textDim),
