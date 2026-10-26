@@ -55,7 +55,7 @@ class _WindowShellState extends State<WindowShell> {
     return Container(
       height: _titleBarHeight,
       decoration: BoxDecoration(
-        color: theme.background,
+        color: theme.titleBar,
         border: Border(
           bottom: BorderSide(color: theme.border, width: theme.borderWidth),
         ),

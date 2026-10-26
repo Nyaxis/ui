@@ -75,14 +75,28 @@ class ThemeController extends ValueNotifier<AppTheme> {
     }
   }
 
-  /// the default theme ships every Catppuccin flavor; only missing ones are
-  /// written, so edits to them are kept
+  /// the default theme ships every Catppuccin flavor; missing files and
+  /// missing keys are filled in, so edited values are kept
   static Future<void> _seedPalettes(Directory dir) async {
     for (final entry in catppuccinPalettes.entries) {
       final file = File('${dir.path}\\palettes\\${entry.key}.json');
-      if (!file.existsSync()) {
+      var colors = <String, dynamic>{};
+      try {
+        if (file.existsSync()) {
+          colors =
+              jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+        }
+      } catch (e) {
+        debugPrint('ThemeController: unreadable ${file.path} ($e)');
+        continue;
+      }
+      final missing = entry.value.keys.where((k) => !colors.containsKey(k));
+      if (missing.isNotEmpty || !file.existsSync()) {
+        for (final key in missing) {
+          colors[key] = entry.value[key];
+        }
         await file.writeAsString(
-          const JsonEncoder.withIndent('  ').convert(entry.value),
+          const JsonEncoder.withIndent('  ').convert(colors),
           flush: true,
         );
       }
@@ -234,6 +248,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
   static String _serializePalette(AppTheme t) {
     return const JsonEncoder.withIndent('  ').convert({
       'background': _hex(t.background),
+      'titleBar': _hex(t.titleBar),
       'border': _hex(t.border),
       'textPrimary': _hex(t.textPrimary),
       'textDim': _hex(t.textDim),
