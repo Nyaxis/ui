@@ -1,10 +1,16 @@
-// Default key bindings, in the format of Zed's keymaps. To change one, add a
-// section to keymap.json in %APPDATA%\Nyaxis; it is applied after this file.
 [
   {
     "context": "Workspace",
     "bindings": {
       "ctrl-s": "workspace::Save",
-    },
-  },
+      "ctrl-alt-n": "workspace::Open",
+      "ctrl-alt-shift-t": "pane::CloseOtherItems",
+      "ctrl-k e": "pane::CloseItemsToTheLeft",
+      "ctrl-k t": "pane::CloseItemsToTheRight",
+      "ctrl-k w": "pane::CloseAllItems",
+      "ctrl-k p": "workspace::CopyPath",
+      "ctrl-k r": "workspace::RevealInFileManager",
+      "ctrl-k shift-enter": "pane::TogglePinTab"
+    }
+  }
 ]
