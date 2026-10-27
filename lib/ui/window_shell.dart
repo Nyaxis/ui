@@ -221,7 +221,7 @@ class _WindowShellState extends State<WindowShell> {
           _BarButton(
             name: _sidebarOpen ? 'sidebar-open' : 'sidebar-closed',
             extent: _bottomBarHeight,
-            size: _bottomBarHeight * 0.65,
+            size: _bottomBarHeight * 0.55,
             hoverInset: 2,
             hoverRadius: 4,
             theme: theme,
