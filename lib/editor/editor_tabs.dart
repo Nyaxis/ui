@@ -6,10 +6,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'text_encoding.dart';
+
 class EditorTab {
-  EditorTab(this.name, this.document, [this.file]);
+  EditorTab(this.name, this.document, this.encoding, [this.file]);
 
   String name;
+  TextEncoding encoding;
 
   /// null until an untitled tab is first saved
   File? file;
@@ -120,14 +123,17 @@ class EditorTabs extends ChangeNotifier with WindowListener {
     try {
       // the language server matches documents by exact uri, and it sees them
       // lowercased, so the uri is lowercase and independent of the file name
+      final bytes = file == null ? Uint8List(0) : await file.readAsBytes();
+      final encoding = TextEncoding.detect(bytes);
       final document = await controller.openDocument(
-        text: file == null ? '' : await file.readAsString(encoding: utf8),
+        text: encoding.decode(bytes),
         language: MonacoLanguage.lua,
         uri: Uri.parse('file:///nyaxis/script${_nextUri++}$_extension'),
       );
       final tab = EditorTab(
         file == null ? _untitledName() : file.uri.pathSegments.last,
         document,
+        encoding,
         file,
       );
       tabs.add(tab);
@@ -199,7 +205,9 @@ class EditorTabs extends ChangeNotifier with WindowListener {
   Future<void> _save(EditorTab tab) async {
     try {
       final file = tab.file ?? File('${_folder!.path}\\${tab.name}');
-      await file.writeAsString(await tab.document.getText(), flush: true);
+      final text = await tab.document.getText();
+      tab.encoding = tab.encoding.fit(text);
+      await file.writeAsBytes(tab.encoding.encode(text), flush: true);
       await tab.document.markSaved();
       tab.file = file;
       tab.name = file.uri.pathSegments.last;

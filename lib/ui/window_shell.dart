@@ -230,24 +230,29 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     );
   }
 
-  /// cursor position and language of the active document
+  /// cursor position, encoding and language of the active document
   Widget _status(AppTheme theme, MonacoController monaco) {
     return ValueListenableBuilder<MonacoLiveStats>(
       valueListenable: monaco.stats,
       builder: (context, stats, _) {
         final cursor = stats.cursorPosition;
         final language = stats.language;
-        return Row(
-          children: [
-            for (final text in [
-              if (cursor != null) 'Ln ${cursor.line}, Col ${cursor.column}',
-              if (language != null) language.label ?? language.id,
-            ])
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Text(text, style: theme.captionStyle),
-              ),
-          ],
+        return ListenableBuilder(
+          listenable: _tabs,
+          builder: (context, _) => Row(
+            children: [
+              for (final text in [
+                if (cursor != null) 'Ln ${cursor.line}, Col ${cursor.column}',
+                if (_tabs.active < _tabs.tabs.length)
+                  _tabs.tabs[_tabs.active].encoding.label,
+                if (language != null) language.label ?? language.id,
+              ])
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text(text, style: theme.captionStyle),
+                ),
+            ],
+          ),
         );
       },
     );
