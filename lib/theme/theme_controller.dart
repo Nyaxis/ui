@@ -262,6 +262,8 @@ class ThemeController extends ValueNotifier<AppTheme> {
       'red': _hex(t.red),
       'lineNumber': _hex(t.lineNumber),
       'selection': _hex(t.selection),
+      'hover': _hex(t.hover),
+      'active': _hex(t.active),
     });
   }
 

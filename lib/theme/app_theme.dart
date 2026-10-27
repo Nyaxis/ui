@@ -25,6 +25,8 @@ class AppTheme {
     this.red = const Color(0xfff38ba8),
     this.lineNumber = const Color(0xff7f849c),
     this.selection = const Color(0xff9399b2),
+    this.hover = const Color(0xff45475a),
+    this.active = const Color(0xff585b70),
   });
 
   final double cornerRadius;
@@ -66,6 +68,9 @@ class AppTheme {
 
   /// selected text; painted translucent
   final Color selection;
+
+  final Color hover;
+  final Color active;
 
   TextStyle get titleStyle => TextStyle(
     fontFamily: fontFamily,
@@ -123,6 +128,8 @@ class AppTheme {
     Color? red,
     Color? lineNumber,
     Color? selection,
+    Color? hover,
+    Color? active,
   }) {
     return AppTheme(
       cornerRadius: cornerRadius ?? this.cornerRadius,
@@ -145,6 +152,8 @@ class AppTheme {
       red: red ?? this.red,
       lineNumber: lineNumber ?? this.lineNumber,
       selection: selection ?? this.selection,
+      hover: hover ?? this.hover,
+      active: active ?? this.active,
     );
   }
 
@@ -210,6 +219,8 @@ class AppTheme {
       red: _color(colors['red'], _fallback.red),
       lineNumber: _color(colors['lineNumber'], _fallback.lineNumber),
       selection: _color(colors['selection'], _fallback.selection),
+      hover: _color(colors['hover'], _fallback.hover),
+      active: _color(colors['active'], _fallback.active),
     );
   }
 }

@@ -1,6 +1,6 @@
 /// the palettes shipped with the default theme; each flavor fills the roles
 /// the same way, as the Catppuccin theme for Zed does: Base, Crust, Surface 0,
-/// Text, Subtext 0, Mauve, Red, Overlay 1 and Overlay 2
+/// Text, Subtext 0, Mauve, Red, Overlay 1, Overlay 2, Surface 1 and Surface 2
 const catppuccinPalettes = <String, Map<String, String>>{
   'Catppuccin Latte': {
     'background': '#eff1f5',
@@ -12,6 +12,8 @@ const catppuccinPalettes = <String, Map<String, String>>{
     'red': '#d20f39',
     'lineNumber': '#8c8fa1',
     'selection': '#7c7f93',
+    'hover': '#bcc0cc',
+    'active': '#acb0be',
   },
   'Catppuccin Frappé': {
     'background': '#303446',
@@ -23,6 +25,8 @@ const catppuccinPalettes = <String, Map<String, String>>{
     'red': '#e78284',
     'lineNumber': '#838ba7',
     'selection': '#949cbb',
+    'hover': '#51576d',
+    'active': '#626880',
   },
   'Catppuccin Macchiato': {
     'background': '#24273a',
@@ -34,6 +38,8 @@ const catppuccinPalettes = <String, Map<String, String>>{
     'red': '#ed8796',
     'lineNumber': '#8087a2',
     'selection': '#939ab7',
+    'hover': '#494d64',
+    'active': '#5b6078',
   },
   'Catppuccin Mocha': {
     'background': '#1e1e2e',
@@ -45,6 +51,8 @@ const catppuccinPalettes = <String, Map<String, String>>{
     'red': '#f38ba8',
     'lineNumber': '#7f849c',
     'selection': '#9399b2',
+    'hover': '#45475a',
+    'active': '#585b70',
   },
 };
 
