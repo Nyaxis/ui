@@ -3,6 +3,8 @@
 
 #include <windows.h>
 
+#include <vector>
+
 // soft drop shadow drawn in its own window beneath the flutter window
 class ShadowWindow {
  public:
@@ -39,6 +41,10 @@ class ShadowWindow {
   float rendered_radius_ = -1.0f;
   HBITMAP bitmap_ = nullptr;
   void* bits_ = nullptr;
+  // a small shadow that windows of any size are made from
+  std::vector<UINT32> tile_;
+  UINT tile_dpi_ = 0;
+  float tile_radius_ = -1.0f;
 };
 
 #endif  // RUNNER_SHADOW_WINDOW_H_

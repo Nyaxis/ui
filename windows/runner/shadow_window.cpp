@@ -30,6 +30,43 @@ float RoundedRectDistance(float x, float y, float half_w, float half_h,
   return outside + std::min(std::max(qx, qy), 0.0f) - radius;
 }
 
+// draws the shadow of a window of [width] x [height] pixels into a buffer that
+// has [pad] pixels around it
+void FillShadow(UINT32* pixels, UINT width, UINT height, UINT pad, float radius,
+                float scale) {
+  const UINT full_width = width + 2 * pad;
+  const UINT full_height = height + 2 * pad;
+  const float blur = kBlur * scale;
+  const float offset_y = kOffsetY * scale;
+  const float half_w = width / 2.0f;
+  const float half_h = height / 2.0f;
+  const float r = std::min(radius, std::min(half_w, half_h));
+
+  for (UINT y = 0; y < full_height; ++y) {
+    for (UINT x = 0; x < full_width; ++x) {
+      const float px = x + 0.5f - pad - half_w;
+      const float py = y + 0.5f - pad - half_h;
+
+      // the shadow is the window's shape shifted down; the window's own area
+      // is cut out so a translucent window doesn't show it through, short of
+      // its edge, because the shadow trails the window while it is dragged
+      // and the desktop would show through the gap
+      const float shadow_d =
+          RoundedRectDistance(px, py - offset_y, half_w, half_h, r);
+      const float inside_d = RoundedRectDistance(px, py, half_w, half_h, r);
+
+      const float falloff = 1.0f - SmoothStep(-blur * 0.5f, blur, shadow_d);
+      const float alpha =
+          kMaxAlpha * falloff * falloff *
+          std::clamp(inside_d + kHoleInset * scale + 0.5f, 0.0f, 1.0f);
+
+      // premultiplied black, so only the alpha channel carries data
+      pixels[y * full_width + x] =
+          static_cast<UINT32>(alpha * 255.0f + 0.5f) << 24;
+    }
+  }
+}
+
 }  // namespace
 
 extern "C" __declspec(dllexport) void NyaxisShadowConfigure(double radius) {
@@ -105,35 +142,38 @@ void ShadowWindow::Render(UINT width, UINT height, UINT pad, float radius) {
   }
 
   const float scale = rendered_dpi_ / 96.0f;
-  const float blur = kBlur * scale;
-  const float offset_y = kOffsetY * scale;
-  const float half_w = width / 2.0f;
-  const float half_h = height / 2.0f;
-  const float r = std::min(radius, std::min(half_w, half_h));
-
   auto* pixels = static_cast<UINT32*>(bits_);
+
+  // further than this from the window's corners the shadow is the same all
+  // along an edge, so a small one is drawn once, and a window of any size
+  // takes its corners and repeats its edges; that is quick enough to keep up
+  // with a window that is being resized
+  const UINT zone =
+      pad + static_cast<UINT>(std::ceil(radius + kOffsetY * scale)) + 4;
+  const UINT tile = 2 * zone + 2;
+  if (full_width <= tile || full_height <= tile) {
+    FillShadow(pixels, width, height, pad, radius, scale);
+    return;
+  }
+
+  if (tile_.size() != static_cast<size_t>(tile) * tile ||
+      tile_dpi_ != rendered_dpi_ || tile_radius_ != radius) {
+    tile_.resize(static_cast<size_t>(tile) * tile);
+    FillShadow(tile_.data(), tile - 2 * pad, tile - 2 * pad, pad, radius,
+               scale);
+    tile_dpi_ = rendered_dpi_;
+    tile_radius_ = radius;
+  }
+
   for (UINT y = 0; y < full_height; ++y) {
-    for (UINT x = 0; x < full_width; ++x) {
-      const float px = x + 0.5f - pad - half_w;
-      const float py = y + 0.5f - pad - half_h;
-
-      // the shadow is the window's shape shifted down; the window's own area
-      // is cut out so a translucent window doesn't show it through, short of
-      // its edge, because the shadow trails the window while it is dragged
-      // and the desktop would show through the gap
-      const float shadow_d =
-          RoundedRectDistance(px, py - offset_y, half_w, half_h, r);
-      const float inside_d = RoundedRectDistance(px, py, half_w, half_h, r);
-
-      const float falloff = 1.0f - SmoothStep(-blur * 0.5f, blur, shadow_d);
-      const float alpha =
-          kMaxAlpha * falloff * falloff *
-          std::clamp(inside_d + kHoleInset * scale + 0.5f, 0.0f, 1.0f);
-
-      // premultiplied black, so only the alpha channel carries data
-      pixels[y * full_width + x] =
-          static_cast<UINT32>(alpha * 255.0f + 0.5f) << 24;
-    }
+    const UINT source_y =
+        y < zone ? y
+                 : (y >= full_height - zone ? y - (full_height - tile) : zone);
+    const UINT32* source = tile_.data() + static_cast<size_t>(source_y) * tile;
+    UINT32* row = pixels + static_cast<size_t>(y) * full_width;
+    std::copy(source, source + zone, row);
+    std::fill(row + zone, row + full_width - zone, source[zone]);
+    std::copy(source + tile - zone, source + tile, row + full_width - zone);
   }
 }
 
