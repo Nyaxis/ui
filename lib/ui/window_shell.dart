@@ -331,7 +331,7 @@ class _Tab extends StatefulWidget {
 }
 
 class _TabState extends State<_Tab> {
-  static const _closeSize = 10.0;
+  static const _closeSize = 14.0;
   static const _closeExtent = 20.0;
 
   bool _hovered = false;
