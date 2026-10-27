@@ -108,10 +108,14 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       animation: widget.controller,
       builder: (context, _) {
         final theme = widget.controller.value;
+        // a window that fills the screen has no corners or edge to draw
+        final borderWidth = _maximized ? 0.0 : theme.borderWidth;
         final shape = SuperellipseBorder(
-          radius: theme.cornerRadius,
+          radius: _maximized ? 0 : theme.cornerRadius,
           power: theme.roundingPower,
-          side: BorderSide(color: theme.border, width: theme.borderWidth),
+          side: _maximized
+              ? BorderSide.none
+              : BorderSide(color: theme.border, width: theme.borderWidth),
         );
 
         return DecoratedBox(
@@ -122,7 +126,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
             child: ColoredBox(
               color: theme.backgroundColor,
               child: Padding(
-                padding: EdgeInsets.all(theme.borderWidth),
+                padding: EdgeInsets.all(borderWidth),
                 child: Scaffold(
                   backgroundColor: Colors.transparent,
                   body: Column(
