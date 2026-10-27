@@ -258,6 +258,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
     return const JsonEncoder.withIndent('  ').convert({
       'background': _hex(t.background),
       'titleBar': _hex(t.titleBar),
+      'surface': _hex(t.surface),
       'border': _hex(t.border),
       'textPrimary': _hex(t.textPrimary),
       'textDim': _hex(t.textDim),
