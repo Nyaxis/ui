@@ -25,6 +25,7 @@ Future<void> main() async {
   void applyWindowEffect(AppTheme theme) => WindowEffects.apply(
     acrylic: theme.acrylic,
     cornerRadius: theme.cornerRadius,
+    roundingPower: theme.roundingPower,
   );
   applyWindowEffect(themeController.value);
   themeController.addListener(() => applyWindowEffect(themeController.value));
