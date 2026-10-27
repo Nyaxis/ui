@@ -189,14 +189,18 @@ class _WindowShellState extends State<WindowShell> {
                     ],
                   ),
                 ),
-                _BarButton(
-                  name: 'add',
-                  extent: _tabBarHeight,
-                  size: _tabBarHeight * 0.5,
-                  hoverInset: 5,
-                  hoverRadius: 4,
-                  theme: theme,
-                  onPressed: _tabs.newTab,
+                // the line along the bottom is not part of the space to center in
+                Padding(
+                  padding: EdgeInsets.only(bottom: theme.borderWidth),
+                  child: _BarButton(
+                    name: 'add',
+                    extent: _tabBarHeight,
+                    size: _tabBarHeight * 0.5,
+                    hoverInset: 5,
+                    hoverRadius: 4,
+                    theme: theme,
+                    onPressed: _tabs.newTab,
+                  ),
                 ),
               ],
             ),
