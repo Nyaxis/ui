@@ -18,13 +18,17 @@ import 'superellipse.dart';
 
 /// the buttons of the bottom bar
 enum _BottomButton {
-  cursor,
-  indentation,
-  encoding,
-  language,
-  sidebar(canHide: false);
+  cursor('Go to Line/Column'),
+  indentation('Indentation'),
+  encoding('Select Encoding'),
+  lineEnding('Select Line Ending'),
+  language('Select Language'),
+  sidebar('Toggle Sidebar', canHide: false);
 
-  const _BottomButton({this.canHide = true});
+  const _BottomButton(this.label, {this.canHide = true});
+
+  /// what the button does, as its menu entry and tooltip name it
+  final String label;
 
   /// whether its menu offers to hide it
   final bool canHide;
@@ -338,6 +342,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                   padding: EdgeInsets.only(bottom: theme.borderWidth),
                   child: Builder(
                     builder: (context) => _BarButton(
+                      label: 'New',
                       name: 'add',
                       extent: _tabBarHeight,
                       size: _tabBarHeight * 0.5,
@@ -482,11 +487,14 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                     _BottomButton.encoding,
                     _tabs.tabs[_tabs.active].encoding.label,
                   ),
+                if (_tabs.lineEnding.isNotEmpty)
+                  (_BottomButton.lineEnding, _tabs.lineEnding),
                 if (language != null)
                   (_BottomButton.language, language.label ?? language.id),
               ])
                 if (!_hiddenButtons.contains(button))
                   _StatusItem(
+                    label: button.label,
                     text: text,
                     theme: theme,
                     onMenu: (position) =>
@@ -546,11 +554,12 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     );
     // the icon is drawn for the left, and mirrored for the right
     final sidebarButton = GestureDetector(
-      onSecondaryTapDown: (details) =>
+      onSecondaryTapUp: (details) =>
           _showButtonMenu(theme, _BottomButton.sidebar, details.globalPosition),
       child: Transform.flip(
         flipX: dock == _Dock.right,
         child: _BarButton(
+          label: _BottomButton.sidebar.label,
           name: _sidebarOpen ? 'sidebar-open' : 'sidebar-closed',
           extent: _bottomBarHeight,
           // the icon's own grid, so its lines land on whole pixels
@@ -563,22 +572,51 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         ),
       ),
     );
-    return Container(
-      height: _bottomBarHeight,
-      decoration: BoxDecoration(
-        color: theme.titleBar,
-        border: Border(
-          top: BorderSide(color: theme.border, width: theme.borderWidth),
+    return GestureDetector(
+      onSecondaryTapUp: (details) =>
+          _showBarMenu(theme, details.globalPosition),
+      child: Container(
+        height: _bottomBarHeight,
+        decoration: BoxDecoration(
+          color: theme.titleBar,
+          border: Border(
+            top: BorderSide(color: theme.border, width: theme.borderWidth),
+          ),
+        ),
+        child: Row(
+          children: [
+            if (dock == _Dock.left) ...[sidebarButton, divider],
+            const Spacer(),
+            if (monaco != null) _status(theme, monaco),
+            if (dock == _Dock.right) ...[divider, sidebarButton],
+          ],
         ),
       ),
-      child: Row(
-        children: [
-          if (dock == _Dock.left) ...[sidebarButton, divider],
-          const Spacer(),
-          if (monaco != null) _status(theme, monaco),
-          if (dock == _Dock.right) ...[divider, sidebarButton],
-        ],
-      ),
+    );
+  }
+
+  /// the buttons that can be hidden, checked while they are shown
+  void _showBarMenu(AppTheme theme, Offset position) {
+    showContextMenu(
+      context,
+      position: position,
+      theme: theme,
+      entries: [
+        for (final button in _BottomButton.values)
+          if (button.canHide)
+            ContextMenuItem(
+              button.label,
+              checked: !_hiddenButtons.contains(button),
+              onPressed: () {
+                setState(() {
+                  if (!_hiddenButtons.remove(button)) {
+                    _hiddenButtons.add(button);
+                  }
+                });
+                _saveSettings();
+              },
+            ),
+      ],
     );
   }
 
@@ -605,6 +643,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
             ),
           ),
           _BarButton(
+            label: 'Minimize',
             name: 'minimize',
             extent: _titleBarHeight,
             size: _titleBarHeight * 0.4,
@@ -612,6 +651,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
             onPressed: windowManager.minimize,
           ),
           _BarButton(
+            label: _maximized ? 'Restore' : 'Maximize',
             name: _maximized ? 'restore' : 'maximize',
             extent: _titleBarHeight,
             size: _titleBarHeight * 0.4,
@@ -619,6 +659,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
             onPressed: _toggleMaximize,
           ),
           _BarButton(
+            label: 'Close',
             name: 'close',
             extent: _titleBarHeight,
             size: _titleBarHeight * 0.4,
@@ -691,7 +732,7 @@ class _TabState extends State<_Tab> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onSelect,
-        onSecondaryTapDown: (details) => widget.onMenu(details.globalPosition),
+        onSecondaryTapUp: (details) => widget.onMenu(details.globalPosition),
         child: CustomPaint(
           painter: widget.selected
               ? _ReplacePainter(theme.backgroundColor)
@@ -737,6 +778,7 @@ class _TabState extends State<_Tab> {
                   child: Opacity(
                     opacity: _hovered ? 1 : 0,
                     child: _BarButton(
+                      label: 'Close',
                       name: 'close',
                       extent: _closeExtent,
                       size: _closeSize,
@@ -782,11 +824,14 @@ class _ReplacePainter extends CustomPainter {
 /// the position for a menu
 class _StatusItem extends StatefulWidget {
   const _StatusItem({
+    required this.label,
     required this.text,
     required this.theme,
     required this.onMenu,
   });
 
+  /// what the item does, apart from the [text] it shows
+  final String label;
   final String text;
   final AppTheme theme;
   final ValueChanged<Offset> onMenu;
@@ -806,7 +851,7 @@ class _StatusItemState extends State<_StatusItem> {
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onSecondaryTapDown: (details) => widget.onMenu(details.globalPosition),
+        onSecondaryTapUp: (details) => widget.onMenu(details.globalPosition),
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
           padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -831,6 +876,7 @@ class _StatusItemState extends State<_StatusItem> {
 
 class _BarButton extends StatefulWidget {
   const _BarButton({
+    required this.label,
     required this.name,
     required this.extent,
     required this.size,
@@ -843,6 +889,10 @@ class _BarButton extends StatefulWidget {
     this.active = false,
   });
 
+  /// what the button does
+  final String label;
+
+  /// the icon's name
   final String name;
 
   /// the button is a square the height of its bar
