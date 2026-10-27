@@ -69,9 +69,10 @@ class _WindowShellState extends State<WindowShell> {
         id: _monacoTheme.id,
         base: dark ? MonacoBaseTheme.vsDark : MonacoBaseTheme.vs,
         colors: {
-          'editor.background': _hex(theme.background),
+          // the window paints the background, so its opacity applies
+          'editor.background': '#00000000',
           'editor.foreground': _hex(theme.textPrimary),
-          'editorGutter.background': _hex(theme.background),
+          'editorGutter.background': '#00000000',
           'editorLineNumber.foreground': _hex(theme.lineNumber),
           'editorLineNumber.activeForeground': _hex(theme.accent),
           'editorCursor.foreground': _hex(theme.accent),
@@ -118,13 +119,11 @@ class _WindowShellState extends State<WindowShell> {
                       _tabBar(theme),
                       Expanded(
                         child: MonacoEditor(
-                          backgroundColor: theme.background,
-                          page: MonacoPageConfig(
-                            customCss:
-                                'html, body { background: ${_hex(theme.background)} !important; }',
+                          backgroundColor: Colors.transparent,
+                          page: const MonacoPageConfig(
+                            customCss: 'html, body { background: transparent !important; }',
                           ),
-                          loadingBuilder: (_) =>
-                              ColoredBox(color: theme.background),
+                          loadingBuilder: (_) => const SizedBox.expand(),
                           onReady: (controller) {
                             _monaco = controller;
                             _applyMonacoTheme();
