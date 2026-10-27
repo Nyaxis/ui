@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../theme/app_theme.dart';
@@ -7,9 +8,12 @@ import 'skinnable_icon.dart';
 
 /// a line of a list picker
 class PickerItem {
-  const PickerItem(this.label, {this.checked = false});
+  const PickerItem(this.label, {this.checked = false, this.icon});
 
   final String label;
+
+  /// the svg asset drawn before the label
+  final String? icon;
 
   /// marks the current choice
   final bool checked;
@@ -341,6 +345,10 @@ class _Row extends StatelessWidget {
           ),
           child: Row(
             children: [
+              if (item.icon != null) ...[
+                SvgPicture.asset(item.icon!, width: 16, height: 16),
+                const SizedBox(width: 8),
+              ],
               Expanded(child: Text(item.label, style: theme.bodyStyle)),
               if (item.checked)
                 SkinnableIcon(

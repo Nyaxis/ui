@@ -58,8 +58,8 @@ class EditorTabs extends ChangeNotifier with WindowListener {
   var _autoSaveDelay = const Duration(seconds: 1);
   final _timers = <EditorTab, Timer>{};
 
-  /// tells flutter how the active document is indented and how its lines end,
-  /// which monaco detects from its content
+  /// tells flutter how the active document is indented, how its lines end and
+  /// what language it is in, which monaco detects from its content or is told
   static const _documentScript = '''
 const post = (name, data) => window.flutterChannel.postMessage(
     JSON.stringify({kind: 'event', name: 'nyaxis.' + name, data}));
@@ -84,13 +84,25 @@ const reportEol = () => {
 };
 editor.onDidChangeModel(() => { crlf = undefined; reportEol(); });
 editor.onDidChangeModelContent(reportEol);
-reportEol();''';
+reportEol();
+
+const reportLanguage = () => {
+  const model = editor.getModel();
+  if (model) post('language', {id: model.getLanguageId()});
+};
+editor.onDidChangeModel(reportLanguage);
+editor.onDidChangeModelLanguage(reportLanguage);
+reportLanguage();''';
 
   /// of the active document, like `Spaces: 4`; empty until monaco reports it
   String indentation = '';
 
   /// of the active document, `LF` or `CRLF`; empty until monaco reports it
   String lineEnding = '';
+
+  /// of the active document; the live stats of the editor only follow its
+  /// content and cursor, not a change of language
+  MonacoLanguage? language;
 
   /// the auto save options are read from `config.json`, and added to it with
   /// their defaults when missing so they can be found
@@ -336,6 +348,14 @@ reportEol();''';
 })();''');
   }
 
+  Future<void> setLanguage(MonacoLanguage language) async {
+    if (active >= tabs.length) {
+      return;
+    }
+    await tabs[active].document.setLanguage(language);
+    await _controller?.runJavaScript('editor.focus();');
+  }
+
   Future<void> setLineEnding({required bool crlf}) async {
     await _controller?.runJavaScript(
       'editor.getModel()?.setEOL(${crlf ? 1 : 0});editor.focus();',
@@ -413,6 +433,9 @@ reportEol();''';
           indentation =
               '${event.data['insertSpaces'] == true ? 'Spaces' : 'Tab Size'}: '
               '${event.data['tabSize']}';
+          notifyListeners();
+        case 'language':
+          language = MonacoLanguage(event.data['id'] as String);
           notifyListeners();
         case 'eol':
           lineEnding = event.data['crlf'] == true ? 'CRLF' : 'LF';
