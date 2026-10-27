@@ -116,6 +116,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
     for (final name in const [
       'minimize',
       'maximize',
+      'restore',
       'close',
       'sidebar-closed',
       'sidebar-open',

@@ -18,7 +18,7 @@ class WindowShell extends StatefulWidget {
   State<WindowShell> createState() => _WindowShellState();
 }
 
-class _WindowShellState extends State<WindowShell> {
+class _WindowShellState extends State<WindowShell> with WindowListener {
   static const _monacoTheme = MonacoTheme('nyaxis');
 
   MonacoController? _monaco;
@@ -27,18 +27,28 @@ class _WindowShellState extends State<WindowShell> {
   // only picks the icon for now, there is no sidebar to show yet
   bool _sidebarOpen = false;
 
+  bool _maximized = false;
+
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_applyMonacoTheme);
+    windowManager.addListener(this);
   }
 
   @override
   void dispose() {
+    windowManager.removeListener(this);
     widget.controller.removeListener(_applyMonacoTheme);
     _tabs.dispose();
     super.dispose();
   }
+
+  @override
+  void onWindowMaximize() => setState(() => _maximized = true);
+
+  @override
+  void onWindowUnmaximize() => setState(() => _maximized = false);
 
   /// the documents have to exist before the server connects, so it sees them
   Future<void> _attachEditor(MonacoController controller) async {
@@ -267,7 +277,7 @@ class _WindowShellState extends State<WindowShell> {
             onPressed: windowManager.minimize,
           ),
           _BarButton(
-            name: 'maximize',
+            name: _maximized ? 'restore' : 'maximize',
             extent: _titleBarHeight,
             size: _titleBarHeight * 0.4,
             theme: theme,
