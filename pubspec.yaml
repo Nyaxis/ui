@@ -31,7 +31,14 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/icons/
+    - assets/icons/add/
+    - assets/icons/checkmark/
+    - assets/icons/close/
+    - assets/icons/maximize/
+    - assets/icons/minimize/
+    - assets/icons/restore/
+    - assets/icons/sidebar-closed/
+    - assets/icons/sidebar-open/
     - assets/keymaps/
     - assets/fonts/
     - assets/luau-lsp/

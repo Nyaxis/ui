@@ -121,10 +121,11 @@ class ThemeController extends ValueNotifier<AppTheme> {
       'sidebar-closed',
       'sidebar-open',
       'add',
+      'checkmark',
     ]) {
       if (!existing.contains(name)) {
         await File('${icons.path}\\$name.svg').writeAsString(
-          await rootBundle.loadString('assets/icons/$name-16.svg'),
+          await rootBundle.loadString('assets/icons/$name/$name-16.svg'),
           flush: true,
         );
       }
