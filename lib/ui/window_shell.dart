@@ -16,6 +16,7 @@ import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import 'context_menu.dart';
 import 'deferred_size.dart';
+import 'dialog.dart';
 import 'picker.dart';
 import 'skinnable_icon.dart';
 import 'superellipse.dart';
@@ -231,6 +232,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   void initState() {
     super.initState();
     _loadSettings();
+    _tabs.confirmClose = _confirmClose;
     widget.controller.addListener(_applyMonacoTheme);
     windowManager.addListener(this);
   }
@@ -674,6 +676,32 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         size: _indentSizes[i % _indentSizes.length],
       ),
     );
+  }
+
+  Future<CloseChoice> _confirmClose(
+    List<EditorTab> unsaved, {
+    required bool single,
+  }) async {
+    final many = unsaved.length > 1;
+    final tab = unsaved.first;
+    final choice = await showConfirmDialog(
+      context,
+      theme: widget.controller.value,
+      message: many
+          ? 'Do you want to save changes to the following files?'
+          : single && tab.file == null
+          ? 'This buffer contains unsaved edits. Do you want to save it?'
+          : '`${tab.file?.path ?? tab.name}` contains unsaved edits. Do you want to save it?',
+      details: many ? [for (final tab in unsaved) tab.name] : const [],
+      buttons: many
+          ? const ['Save all', 'Discard all', 'Cancel']
+          : const ['Save', "Don't Save", 'Cancel'],
+    );
+    return switch (choice) {
+      0 => CloseChoice.save,
+      1 => CloseChoice.discard,
+      _ => CloseChoice.cancel,
+    };
   }
 
   Future<void> _openLanguagePicker() async {

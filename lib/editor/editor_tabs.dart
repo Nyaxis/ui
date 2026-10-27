@@ -21,6 +21,9 @@ class EditorTab {
   bool dirty = false;
 }
 
+/// what to do with tabs that have unsaved changes when they are closed
+enum CloseChoice { save, discard, cancel }
+
 /// when a tab with unsaved changes is saved without asking; the names are the
 /// values of `autoSave` in `config.json`, and untitled tabs are never saved
 enum AutoSave { off, afterDelay, onFocusChange, onWindowChange }
@@ -237,9 +240,56 @@ reportLanguage();''';
     await _controller?.activateDocument(tabs[index].document);
   }
 
-  /// unsaved changes are lost, since there is no prompt to ask; the editor
-  /// always keeps one tab
-  Future<void> close(int index) async {
+  /// asks what to do with the tabs to close that have unsaved changes, and
+  /// whether it is only one tab that is closed; without
+  /// it they are discarded
+  Future<CloseChoice> Function(List<EditorTab> unsaved, {required bool single})?
+  confirmClose;
+
+  /// the editor always keeps one tab
+  Future<void> close(int index) => _closeAll([index], single: true);
+
+  /// closing goes from the end, so the indexes still to close do not move
+  Future<void> closeOthers(int index) => _closeAll([
+    for (var i = tabs.length - 1; i >= 0; i--)
+      if (i != index) i,
+  ]);
+
+  Future<void> closeLeft(int index) =>
+      _closeAll([for (var i = index - 1; i >= 0; i--) i]);
+
+  Future<void> closeRight(int index) =>
+      _closeAll([for (var i = tabs.length - 1; i > index; i--) i]);
+
+  Future<void> closeAll() =>
+      _closeAll([for (var i = tabs.length - 1; i >= 0; i--) i]);
+
+  /// closes the tabs at [indexes], highest first, after asking about the ones
+  /// with unsaved changes; cancelling closes none
+  Future<void> _closeAll(List<int> indexes, {bool single = false}) async {
+    final unsaved = [
+      for (final i in indexes)
+        if (i >= 0 && i < tabs.length && tabs[i].dirty) tabs[i],
+    ];
+    if (unsaved.isNotEmpty) {
+      final choice =
+          await confirmClose?.call(unsaved, single: single) ??
+          CloseChoice.discard;
+      if (choice == CloseChoice.cancel) {
+        return;
+      }
+      if (choice == CloseChoice.save) {
+        for (final tab in unsaved) {
+          await _save(tab);
+        }
+      }
+    }
+    for (final i in indexes) {
+      await _remove(i);
+    }
+  }
+
+  Future<void> _remove(int index) async {
     if (index < 0 || index >= tabs.length) {
       return;
     }
@@ -255,33 +305,6 @@ reportLanguage();''';
       await newTab();
     } else {
       await select(active);
-    }
-  }
-
-  /// closing goes from the end, so the indexes still to close do not move
-  Future<void> closeOthers(int index) async {
-    for (var i = tabs.length - 1; i >= 0; i--) {
-      if (i != index) {
-        await close(i);
-      }
-    }
-  }
-
-  Future<void> closeLeft(int index) async {
-    for (var i = index - 1; i >= 0; i--) {
-      await close(i);
-    }
-  }
-
-  Future<void> closeRight(int index) async {
-    for (var i = tabs.length - 1; i > index; i--) {
-      await close(i);
-    }
-  }
-
-  Future<void> closeAll() async {
-    for (var i = tabs.length - 1; i >= 0; i--) {
-      await close(i);
     }
   }
 
