@@ -2,6 +2,7 @@
 
 #include <dwmapi.h>
 #include <flutter_windows.h>
+#include <windowsx.h>
 
 #include "resource.h"
 
@@ -25,6 +26,48 @@ using EnableNonClientDpiScaling = BOOL __stdcall(HWND hwnd);
 
 int Scale(int source, double scale_factor) {
   return static_cast<int>(source * scale_factor);
+}
+
+// logical pixels along the window's edges that resize it
+constexpr int kResizeBorder = 6;
+
+// the hit test code of the window's edge under a screen point, or HTCLIENT
+// when the point is not on one; a maximized window has none
+LRESULT ResizeHitTest(HWND hwnd, LPARAM lparam) {
+  if (IsZoomed(hwnd)) {
+    return HTCLIENT;
+  }
+  RECT rect;
+  GetWindowRect(hwnd, &rect);
+  const int border = MulDiv(kResizeBorder, GetDpiForWindow(hwnd), 96);
+  const int x = GET_X_LPARAM(lparam);
+  const int y = GET_Y_LPARAM(lparam);
+  const bool left = x < rect.left + border;
+  const bool right = x >= rect.right - border;
+  const bool top = y < rect.top + border;
+  const bool bottom = y >= rect.bottom - border;
+  if (top && left) return HTTOPLEFT;
+  if (top && right) return HTTOPRIGHT;
+  if (bottom && left) return HTBOTTOMLEFT;
+  if (bottom && right) return HTBOTTOMRIGHT;
+  if (left) return HTLEFT;
+  if (right) return HTRIGHT;
+  if (top) return HTTOP;
+  if (bottom) return HTBOTTOM;
+  return HTCLIENT;
+}
+
+WNDPROC g_child_proc = nullptr;
+
+// the flutter view covers the whole window, so it lets the edges through to
+// the window, which owns resizing
+LRESULT CALLBACK ChildProc(HWND hwnd, UINT message, WPARAM wparam,
+                           LPARAM lparam) {
+  if (message == WM_NCHITTEST &&
+      ResizeHitTest(GetParent(hwnd), lparam) != HTCLIENT) {
+    return HTTRANSPARENT;
+  }
+  return CallWindowProc(g_child_proc, hwnd, message, wparam, lparam);
 }
 
 // only needed for per-monitor v1 dpi awareness
@@ -120,7 +163,10 @@ bool Win32Window::Create(const std::wstring& title,
   double scale_factor = dpi / 96.0;
 
   HWND window = CreateWindow(
-      window_class, title.c_str(), WS_POPUP,
+      window_class, title.c_str(),
+      // the frame and the boxes are what let windows resize and snap it; the
+      // frame is removed again in WM_NCCALCSIZE
+      WS_POPUP | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX,
       Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
       Scale(size.width, scale_factor), Scale(size.height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this);
@@ -132,9 +178,24 @@ bool Win32Window::Create(const std::wstring& title,
   MARGINS sheet_of_glass{-1, -1, -1, -1};
   DwmExtendFrameIntoClientArea(window, &sheet_of_glass);
 
+  // with a frame, the pixels the window leaves transparent are filled in
+  // white, unless the blur region is empty
+  DWM_BLURBEHIND blur{};
+  blur.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+  blur.fEnable = TRUE;
+  blur.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+  DwmEnableBlurBehindWindow(window, &blur);
+  DeleteObject(blur.hRgnBlur);
+
   const int corner_preference = DWMWCP_DONOTROUND;
   DwmSetWindowAttribute(window, DWMWA_WINDOW_CORNER_PREFERENCE,
                         &corner_preference, sizeof(corner_preference));
+
+  // the frame that lets windows resize it also gets a system border, and the
+  // window draws its own
+  const DWORD kBorderColor = 34;  // DWMWA_BORDER_COLOR
+  const COLORREF kNoBorder = 0xFFFFFFFE;  // DWMWA_COLOR_NONE
+  DwmSetWindowAttribute(window, kBorderColor, &kNoBorder, sizeof(kNoBorder));
 
   UpdateTheme(window);
 
@@ -188,6 +249,32 @@ Win32Window::MessageHandler(HWND hwnd,
 
       return 0;
     }
+    case WM_NCCALCSIZE: {
+      if (!wparam) {
+        break;
+      }
+      // the client area is the whole window, except that a maximized one
+      // reaches past the screen by the width of the frame, so it takes the
+      // monitor's work area instead
+      if (IsZoomed(hwnd)) {
+        MONITORINFO monitor{sizeof(monitor)};
+        if (GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST),
+                           &monitor)) {
+          reinterpret_cast<NCCALCSIZE_PARAMS*>(lparam)->rgrc[0] =
+              monitor.rcWork;
+        }
+      }
+      return 0;
+    }
+
+    case WM_NCHITTEST: {
+      const LRESULT hit = ResizeHitTest(hwnd, lparam);
+      if (hit != HTCLIENT) {
+        return hit;
+      }
+      break;
+    }
+
     case WM_SIZE: {
       RECT rect = GetClientArea();
       if (child_content_ != nullptr) {
@@ -231,6 +318,8 @@ Win32Window* Win32Window::GetThisFromHandle(HWND const window) noexcept {
 void Win32Window::SetChildContent(HWND content) {
   child_content_ = content;
   SetParent(content, window_handle_);
+  g_child_proc = reinterpret_cast<WNDPROC>(SetWindowLongPtr(
+      content, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ChildProc)));
   RECT frame = GetClientArea();
 
   MoveWindow(content, frame.left, frame.top, frame.right - frame.left,
