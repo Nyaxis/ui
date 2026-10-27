@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'session_file.dart';
 import 'text_encoding.dart';
 
 class EditorTab {
@@ -60,6 +61,11 @@ class EditorTabs extends ChangeNotifier with WindowListener {
   var _autoSave = AutoSave.off;
   var _autoSaveDelay = const Duration(seconds: 1);
   final _timers = <EditorTab, Timer>{};
+
+  /// the tabs with unsaved changes are kept for the next start, since the
+  /// window can close at any moment
+  SessionFile? _session;
+  Timer? _sessionTimer;
 
   /// tells flutter how the active document is indented, how its lines end and
   /// what language it is in, which monaco detects from its content or is told
@@ -160,11 +166,64 @@ reportLanguage();''';
     for (final file in files) {
       await _open(file);
     }
+    _session = SessionFile(File('$appData\\Nyaxis\\session.json'));
+    await _restoreSession(await _session!.read());
     if (tabs.isEmpty) {
       await newTab();
     } else {
       await select(0);
     }
+  }
+
+  /// puts the text of each saved tab back in its tab, which is opened when it
+  /// is not already; a tab whose file is gone comes back untitled
+  Future<void> _restoreSession(List<SavedTab> saved) async {
+    for (final entry in saved) {
+      final path = entry.file?.toLowerCase();
+      var tab = tabs
+          .where((t) => path != null && t.file?.path.toLowerCase() == path)
+          .firstOrNull;
+      if (tab == null) {
+        final file = entry.file == null ? null : File(entry.file!);
+        tab = await _open(file != null && file.existsSync() ? file : null);
+        if (tab == null) {
+          continue;
+        }
+        if (tab.file == null && !tabs.any((t) => t.name == entry.name)) {
+          tab.name = entry.name;
+        }
+      }
+      tab.encoding = entry.encoding;
+      await tab.document.setText(entry.text);
+      tab.dirty = await tab.document.isDirty();
+    }
+    notifyListeners();
+  }
+
+  /// the session is written a moment after the last change, not at each key
+  void _scheduleSession() {
+    _sessionTimer?.cancel();
+    _sessionTimer = Timer(const Duration(milliseconds: 500), _writeSession);
+  }
+
+  Future<void> _writeSession() async {
+    final session = _session;
+    if (session == null) {
+      return;
+    }
+    final unsaved = [
+      for (final tab in tabs)
+        if (tab.dirty) tab,
+    ];
+    await session.write([
+      for (final tab in unsaved)
+        SavedTab(
+          name: tab.name,
+          file: tab.file?.path,
+          encoding: tab.encoding,
+          text: await tab.document.getText(),
+        ),
+    ]);
   }
 
   /// opens [file], or an empty untitled document when it is null
@@ -301,6 +360,7 @@ reportLanguage();''';
     }
     active = active.clamp(0, tabs.isNotEmpty ? tabs.length - 1 : 0);
     await tab.document.close();
+    _scheduleSession();
     if (tabs.isEmpty) {
       await newTab();
     } else {
@@ -405,6 +465,7 @@ reportLanguage();''';
       tab.encoding = encoding;
       tab.dirty = false;
       notifyListeners();
+      _scheduleSession();
       await _controller?.runJavaScript('editor.focus();');
     } catch (e) {
       debugPrint(
@@ -431,6 +492,7 @@ reportLanguage();''';
       tab.name = file.uri.pathSegments.last;
       tab.dirty = false;
       notifyListeners();
+      _scheduleSession();
     } catch (e) {
       debugPrint('EditorTabs: cannot save ${tab.name} ($e)');
     }
@@ -476,6 +538,7 @@ reportLanguage();''';
             tab.dirty = dirty;
             notifyListeners();
           }
+          _scheduleSession();
           _timers.remove(tab)?.cancel();
           if (dirty && _autoSave == AutoSave.afterDelay) {
             _timers[tab] = Timer(
@@ -501,6 +564,7 @@ reportLanguage();''';
     for (final timer in _timers.values) {
       timer.cancel();
     }
+    _sessionTimer?.cancel();
     _events?.cancel();
     super.dispose();
   }
