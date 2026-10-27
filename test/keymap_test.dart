@@ -2,27 +2,17 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ui/editor/key_context.dart';
 import 'package:ui/editor/keymap.dart';
 
 void main() {
-  const ctrlS = 'monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS';
-
-  test('keys become a monaco expression', () {
-    expect(Keymap.toMonaco('ctrl-s'), ctrlS);
-    expect(
-      Keymap.toMonaco('Ctrl-Shift-F5'),
-      'monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.F5',
-    );
-    expect(
-      Keymap.toMonaco('ctrl--'),
-      'monaco.KeyMod.CtrlCmd | monaco.KeyCode.Minus',
-    );
-    expect(Keymap.toMonaco('escape'), 'monaco.KeyCode.Escape');
-    expect(
-      Keymap.toMonaco('ctrl-k ctrl-o'),
-      'monaco.KeyMod.chord(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, '
-      'monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyO)',
-    );
+  test('keys are written with their modifiers in order', () {
+    expect(Keymap.toKeys('ctrl-s'), 'ctrl-s');
+    expect(Keymap.toKeys('Shift-Ctrl-F5'), 'ctrl-shift-f5');
+    expect(Keymap.toKeys('secondary-cmd-alt-p'), 'ctrl-alt-win-p');
+    expect(Keymap.toKeys('ctrl--'), 'ctrl--');
+    expect(Keymap.toKeys('escape'), 'escape');
+    expect(Keymap.toKeys('ctrl-k  Ctrl-O'), 'ctrl-k ctrl-o');
   });
 
   test('keys that are not understood are refused', () {
@@ -36,21 +26,22 @@ void main() {
       'a b c',
       "a');x('",
     ]) {
-      expect(Keymap.toMonaco(keys), isNull, reason: keys);
+      expect(Keymap.toKeys(keys), isNull, reason: keys);
     }
   });
 
+  String show(Iterable<Binding> bindings) =>
+      [for (final b in bindings) '${b.keys}=${b.action}'].join(' ');
+
   test('the bundled defaults bind save', () {
     final defaults = File('assets/keymaps/default.json').readAsStringSync();
-    expect(Keymap.resolve([defaults]), {ctrlS: 'workspace::Save'});
+    expect(show(Keymap.resolve([defaults])), 'ctrl-s=workspace::Save');
   });
 
-  test('a later keymap rebinds and unbinds, with comments and commas', () {
-    const defaults = '[{"bindings": {"ctrl-s": "workspace::Save"}}]';
-    expect(
-      Keymap.resolve([
-        defaults,
-        '''
+  test('keymaps apply in order, with comments and trailing commas', () {
+    final bindings = Keymap.resolve([
+      '[{"bindings": {"ctrl-s": "workspace::Save"}}]',
+      '''
 // mine
 [
   {
@@ -61,20 +52,55 @@ void main() {
       "ctrl-,": "zed::OpenSettingsFile", // a comma in a string
     },
   },
-  {"context": "Picker", "bindings": {"ctrl-p": "menu::SelectPrevious"}},
+  {"context": "a ||", "bindings": {"ctrl-p": "menu::SelectPrevious"}},
 ]
 ''',
-      ]),
-      {
-        'monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyS':
-            'workspace::Save',
-        'monaco.KeyMod.CtrlCmd | monaco.KeyCode.Comma': 'zed::OpenSettingsFile',
-      },
+    ]);
+    expect(
+      show(bindings),
+      'ctrl-s=workspace::Save ctrl-shift-s=workspace::Save ctrl-s=null '
+      'ctrl-,=zed::OpenSettingsFile',
     );
   });
 
   test('a keymap that is not a list is refused', () {
     expect(() => Keymap.resolve(['{}']), throwsFormatException);
     expect(() => Keymap.resolve(['[{']), throwsFormatException);
+  });
+
+  group('context expressions', () {
+    const editor = KeyContext({'Workspace', 'Editor'}, {'mode': 'full'});
+    const workspace = KeyContext({'Workspace'});
+
+    bool matches(String source, KeyContext context) =>
+        ContextExpression.parse(source).matches(context);
+
+    test('names, negation and comparisons', () {
+      expect(matches('Editor', editor), isTrue);
+      expect(matches('Editor', workspace), isFalse);
+      expect(matches('!Editor', workspace), isTrue);
+      expect(matches('mode == full', editor), isTrue);
+      expect(matches('mode == compact', editor), isFalse);
+      expect(matches('mode != compact', editor), isTrue);
+      expect(matches('mode != full', workspace), isTrue);
+    });
+
+    test('combinations, with and binding tighter than or', () {
+      expect(matches('Picker || Editor && mode == full', editor), isTrue);
+      expect(matches('Picker || Editor && mode == full', workspace), isFalse);
+      expect(matches('(Picker || Editor) && Workspace', editor), isTrue);
+      expect(matches('Workspace > Editor', editor), isTrue);
+      expect(matches('Workspace > Editor', workspace), isFalse);
+    });
+
+    test('what is not an expression is refused', () {
+      for (final source in ['', 'a &&', '(a', 'a b', '== a', 'a ==']) {
+        expect(
+          () => ContextExpression.parse(source),
+          throwsFormatException,
+          reason: source,
+        );
+      }
+    });
   });
 }
