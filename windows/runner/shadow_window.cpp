@@ -11,6 +11,7 @@ constexpr const wchar_t kWindowClassName[] = L"NYAXIS_SHADOW_WINDOW";
 constexpr float kBlur = 24.0f;
 constexpr float kOffsetY = 4.0f;
 constexpr float kMaxAlpha = 0.45f;
+constexpr float kHoleInset = 10.0f;
 
 ShadowWindow* g_active = nullptr;
 
@@ -117,14 +118,17 @@ void ShadowWindow::Render(UINT width, UINT height, UINT pad, float radius) {
       const float py = y + 0.5f - pad - half_h;
 
       // the shadow is the window's shape shifted down; the window's own area
-      // is cut out so a translucent window doesn't show it through
+      // is cut out so a translucent window doesn't show it through, short of
+      // its edge, because the shadow trails the window while it is dragged
+      // and the desktop would show through the gap
       const float shadow_d =
           RoundedRectDistance(px, py - offset_y, half_w, half_h, r);
       const float inside_d = RoundedRectDistance(px, py, half_w, half_h, r);
 
       const float falloff = 1.0f - SmoothStep(-blur * 0.5f, blur, shadow_d);
-      const float alpha = kMaxAlpha * falloff * falloff *
-                          std::clamp(inside_d + 0.5f, 0.0f, 1.0f);
+      const float alpha =
+          kMaxAlpha * falloff * falloff *
+          std::clamp(inside_d + kHoleInset * scale + 0.5f, 0.0f, 1.0f);
 
       // premultiplied black, so only the alpha channel carries data
       pixels[y * full_width + x] =
