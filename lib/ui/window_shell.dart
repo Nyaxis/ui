@@ -337,51 +337,84 @@ class _TabState extends State<_Tab> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onSelect,
-        child: Container(
-          padding: const EdgeInsets.only(left: 14, right: 8),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: widget.selected ? theme.background : _inactive(theme),
-            border: Border(right: widget.line),
-          ),
-          child: Row(
-            children: [
-              if (widget.tab.dirty)
-                Container(
-                  width: 6,
-                  height: 6,
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: BoxDecoration(
-                    color: theme.accent,
-                    shape: BoxShape.circle,
+        child: CustomPaint(
+          painter: widget.selected
+              ? _ReplacePainter(theme.backgroundColor)
+              : null,
+          child: Container(
+            padding: const EdgeInsets.only(left: 14, right: 8),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: widget.selected ? null : _inactive(theme),
+              border: Border(
+                right: widget.line,
+                // the selected tab keeps the space, so the text doesn't shift
+                bottom: widget.selected
+                    ? widget.line.copyWith(color: Colors.transparent)
+                    : widget.line,
+              ),
+            ),
+            child: Row(
+              children: [
+                if (widget.tab.dirty)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: theme.accent,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                Text(
+                  widget.tab.name,
+                  style: theme.bodyStyle.copyWith(color: color),
+                ),
+                // the slot is always there, so hovering never resizes the tab
+                Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Opacity(
+                    opacity: _hovered ? 1 : 0,
+                    child: _BarButton(
+                      name: 'close',
+                      extent: _closeExtent,
+                      size: _closeSize,
+                      hoverInset: 1,
+                      hoverRadius: 4,
+                      theme: theme,
+                      onPressed: widget.onClose,
+                    ),
                   ),
                 ),
-              Text(
-                widget.tab.name,
-                style: theme.bodyStyle.copyWith(color: color),
-              ),
-              // the slot is always there, so hovering never resizes the tab
-              Padding(
-                padding: const EdgeInsets.only(left: 4),
-                child: Opacity(
-                  opacity: _hovered ? 1 : 0,
-                  child: _BarButton(
-                    name: 'close',
-                    extent: _closeExtent,
-                    size: _closeSize,
-                    hoverInset: 1,
-                    hoverRadius: 4,
-                    theme: theme,
-                    onPressed: widget.onClose,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+/// replaces what is under it instead of blending, so the tab bar's opaque
+/// fill doesn't show through the selected tab when the background is
+/// translucent
+class _ReplacePainter extends CustomPainter {
+  const _ReplacePainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()
+        ..color = color
+        ..blendMode = BlendMode.src,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ReplacePainter oldDelegate) => oldDelegate.color != color;
 }
 
 class _BarButton extends StatefulWidget {
