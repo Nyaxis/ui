@@ -81,6 +81,8 @@ class _WindowShellState extends State<WindowShell> {
             dark ? 0.25 : 0.3,
           ),
           'editor.lineHighlightBackground': _hex(theme.textPrimary, 0.07),
+          // the focused line is outlined in this color
+          'focusBorder': '#00000000',
           'editorIndentGuide.background1': _hex(theme.border, 0.6),
           'editorWidget.background': _hex(theme.titleBar),
           'editorWidget.border': _hex(theme.border),
