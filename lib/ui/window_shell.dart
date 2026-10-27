@@ -18,16 +18,19 @@ import 'picker.dart';
 import 'skinnable_icon.dart';
 import 'superellipse.dart';
 
-/// the buttons of the bottom bar
-enum _BottomButton {
-  cursor('Go to Line/Column', action: 'go_to_line::Toggle'),
-  indentation('Select Indentation', action: 'indentation_selector::Toggle'),
-  encoding('Reopen with Encoding', action: 'encoding_selector::Toggle'),
-  lineEnding('Select Line Ending', action: 'line_ending_selector::Toggle'),
-  language('Select Language', action: 'language_selector::Toggle'),
-  sidebar('Toggle Sidebar', canHide: false);
+/// a button of the bottom bar, with the state that `config.json` keeps
+class _BottomButton {
+  _BottomButton(
+    this.id,
+    this.label, {
+    this.action,
+    this.onPressed,
+    this.canHide = true,
+    this.dock,
+  });
 
-  const _BottomButton(this.label, {this.action, this.canHide = true});
+  /// the key of its settings in `config.json`
+  final String id;
 
   /// what the button does, as its menu entry and tooltip name it
   final String label;
@@ -35,8 +38,16 @@ enum _BottomButton {
   /// the keymap action that does the same, whose keys the tooltip shows
   final String? action;
 
+  /// what left clicking it does, nothing when null
+  final VoidCallback? onPressed;
+
   /// whether its menu offers to hide it
   final bool canHide;
+
+  /// the side it is docked to, null when it cannot be docked
+  _Dock? dock;
+
+  bool hidden = false;
 }
 
 /// the side of the window that something is docked to
@@ -93,13 +104,53 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   // only picks the icon and its side for now, there is no sidebar to show yet
   bool _sidebarOpen = false;
 
-  /// where each button that can be docked is
-  final _docks = {_BottomButton.sidebar: _Dock.left};
-
   bool _maximized = false;
   bool _newMenuOpen = false;
 
-  final _hiddenButtons = <_BottomButton>{};
+  late final _cursor = _BottomButton(
+    'cursor',
+    'Go to Line/Column',
+    action: 'go_to_line::Toggle',
+    onPressed: _openGoToLine,
+  );
+  late final _indentation = _BottomButton(
+    'indentation',
+    'Select Indentation',
+    action: 'indentation_selector::Toggle',
+    onPressed: _openIndentationPicker,
+  );
+  late final _encoding = _BottomButton(
+    'encoding',
+    'Reopen with Encoding',
+    action: 'encoding_selector::Toggle',
+    onPressed: _openEncodingPicker,
+  );
+  late final _lineEnding = _BottomButton(
+    'lineEnding',
+    'Select Line Ending',
+    action: 'line_ending_selector::Toggle',
+    onPressed: _openLineEndingPicker,
+  );
+  late final _language = _BottomButton(
+    'language',
+    'Select Language',
+    action: 'language_selector::Toggle',
+  );
+  late final _sidebar = _BottomButton(
+    'sidebar',
+    'Toggle Sidebar',
+    onPressed: () => setState(() => _sidebarOpen = !_sidebarOpen),
+    canHide: false,
+    dock: _Dock.left,
+  );
+  late final _buttons = [
+    _cursor,
+    _indentation,
+    _encoding,
+    _lineEnding,
+    _language,
+    _sidebar,
+  ];
 
   File? get _settingsFile {
     final appData = Platform.environment['APPDATA'];
@@ -118,17 +169,17 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       final json =
           jsonDecode(await file.readAsString()) as Map<String, dynamic>;
       setState(() {
-        for (final button in _BottomButton.values) {
-          final settings = json[button.name];
+        for (final button in _buttons) {
+          final settings = json[button.id];
           if (settings is! Map) {
             continue;
           }
           final dock = _Dock.values.asNameMap()[settings['dock']];
-          if (dock != null && _docks.containsKey(button)) {
-            _docks[button] = dock;
+          if (dock != null && button.dock != null) {
+            button.dock = dock;
           }
           if (button.canHide && settings['hidden'] == true) {
-            _hiddenButtons.add(button);
+            button.hidden = true;
           }
         }
       });
@@ -147,20 +198,20 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       final json = file.existsSync()
           ? jsonDecode(await file.readAsString()) as Map<String, dynamic>
           : <String, dynamic>{};
-      for (final button in _BottomButton.values) {
-        final existing = json[button.name];
+      for (final button in _buttons) {
+        final existing = json[button.id];
         final settings = existing is Map<String, dynamic>
             ? existing
             : <String, dynamic>{};
-        final dock = _docks[button];
+        final dock = button.dock;
         if (dock != null) {
           settings['dock'] = dock.name;
         }
         if (button.canHide) {
-          settings['hidden'] = _hiddenButtons.contains(button);
+          settings['hidden'] = button.hidden;
         }
         if (settings.isNotEmpty) {
-          json[button.name] = settings;
+          json[button.id] = settings;
         }
       }
       await file.parent.create(recursive: true);
@@ -517,27 +568,21 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
             children: [
               for (final (button, text) in [
                 if (cursor != null)
-                  (
-                    _BottomButton.cursor,
-                    'Ln ${cursor.line}, Col ${cursor.column}',
-                  ),
+                  (_cursor, 'Ln ${cursor.line}, Col ${cursor.column}'),
                 if (_tabs.indentation.isNotEmpty)
-                  (_BottomButton.indentation, _tabs.indentation),
+                  (_indentation, _tabs.indentation),
                 if (_tabs.active < _tabs.tabs.length)
-                  (
-                    _BottomButton.encoding,
-                    _tabs.tabs[_tabs.active].encoding.label,
-                  ),
+                  (_encoding, _tabs.tabs[_tabs.active].encoding.label),
                 if (_tabs.lineEnding.isNotEmpty)
-                  (_BottomButton.lineEnding, _tabs.lineEnding),
+                  (_lineEnding, _tabs.lineEnding),
                 if (language != null)
-                  (_BottomButton.language, language.label ?? language.id),
+                  (_language, language.label ?? language.id),
               ])
-                if (!_hiddenButtons.contains(button))
+                if (!button.hidden)
                   _StatusItem(
                     label: button.label,
                     keys: _keysOf(button),
-                    onPressed: _pressOf(button),
+                    onPressed: button.onPressed,
                     text: text,
                     theme: theme,
                     onMenu: (position) =>
@@ -549,15 +594,6 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       },
     );
   }
-
-  /// what left clicking a bottom bar item does, nothing when null
-  VoidCallback? _pressOf(_BottomButton button) => switch (button) {
-    _BottomButton.cursor => _openGoToLine,
-    _BottomButton.indentation => _openIndentationPicker,
-    _BottomButton.encoding => _openEncodingPicker,
-    _BottomButton.lineEnding => _openLineEndingPicker,
-    _ => null,
-  };
 
   /// pickers open under the title bar
   static const _pickerTop = _titleBarHeight + 8;
@@ -677,7 +713,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   /// the menu of a bottom bar button: the side it can be docked to, and hiding
   /// it when it can be hidden
   void _showButtonMenu(AppTheme theme, _BottomButton button, Offset position) {
-    final dock = _docks[button];
+    final dock = button.dock;
     showContextMenu(
       context,
       position: position,
@@ -689,7 +725,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
               side.name[0].toUpperCase() + side.name.substring(1),
               checked: side == dock,
               onPressed: () {
-                setState(() => _docks[button] = side);
+                setState(() => button.dock = side);
                 _saveSettings();
               },
             ),
@@ -698,7 +734,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           ContextMenuItem(
             'Hide Button',
             onPressed: () {
-              setState(() => _hiddenButtons.add(button));
+              setState(() => button.hidden = true);
               _saveSettings();
             },
           ),
@@ -708,7 +744,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   Widget _bottomBar(AppTheme theme) {
     final monaco = _monaco;
-    final dock = _docks[_BottomButton.sidebar]!;
+    final dock = _sidebar.dock!;
     // the button's own space is already between it and the divider
     final divider = Container(
       width: theme.borderWidth,
@@ -722,12 +758,12 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     // the icon is drawn for the left, and mirrored for the right
     final sidebarButton = GestureDetector(
       onSecondaryTapUp: (details) =>
-          _showButtonMenu(theme, _BottomButton.sidebar, details.globalPosition),
+          _showButtonMenu(theme, _sidebar, details.globalPosition),
       child: Transform.flip(
         flipX: dock == _Dock.right,
         child: _BarButton(
-          label: _BottomButton.sidebar.label,
-          keys: _keysOf(_BottomButton.sidebar),
+          label: _sidebar.label,
+          keys: _keysOf(_sidebar),
           tipBelow: false,
           name: _sidebarOpen ? 'sidebar-open' : 'sidebar-closed',
           extent: _bottomBarHeight,
@@ -737,7 +773,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           hoverRadius: 4,
           dim: true,
           theme: theme,
-          onPressed: () => setState(() => _sidebarOpen = !_sidebarOpen),
+          onPressed: _sidebar.onPressed!,
         ),
       ),
     );
@@ -771,17 +807,13 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       position: position,
       theme: theme,
       entries: [
-        for (final button in _BottomButton.values)
+        for (final button in _buttons)
           if (button.canHide)
             ContextMenuItem(
               button.label,
-              checked: !_hiddenButtons.contains(button),
+              checked: !button.hidden,
               onPressed: () {
-                setState(() {
-                  if (!_hiddenButtons.remove(button)) {
-                    _hiddenButtons.add(button);
-                  }
-                });
+                setState(() => button.hidden = !button.hidden);
                 _saveSettings();
               },
             ),
