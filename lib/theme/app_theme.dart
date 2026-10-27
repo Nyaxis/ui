@@ -16,6 +16,7 @@ class AppTheme {
     this.fontSizeCaption = 11,
     this.background = const Color(0xff1e1e2e),
     this.titleBar = const Color(0xff11111b),
+    this.surface = const Color(0xff181825),
     this.backgroundOpacity = 1.0,
     this.acrylic = false,
     this.border = const Color(0xff313244),
@@ -47,6 +48,9 @@ class AppTheme {
 
   /// stays opaque when [backgroundOpacity] makes the window translucent
   final Color titleBar;
+
+  /// what is raised above the window, such as menus
+  final Color surface;
 
   /// applied to [background] when painted, so hex strings in the json stay
   /// alpha-free
@@ -119,6 +123,7 @@ class AppTheme {
     double? fontSizeCaption,
     Color? background,
     Color? titleBar,
+    Color? surface,
     double? backgroundOpacity,
     bool? acrylic,
     Color? border,
@@ -143,6 +148,7 @@ class AppTheme {
       fontSizeCaption: fontSizeCaption ?? this.fontSizeCaption,
       background: background ?? this.background,
       titleBar: titleBar ?? this.titleBar,
+      surface: surface ?? this.surface,
       backgroundOpacity: backgroundOpacity ?? this.backgroundOpacity,
       acrylic: acrylic ?? this.acrylic,
       border: border ?? this.border,
@@ -212,6 +218,7 @@ class AppTheme {
               .toDouble(),
       background: _color(colors['background'], _fallback.background),
       titleBar: _color(colors['titleBar'], _fallback.titleBar),
+      surface: _color(colors['surface'], _fallback.surface),
       border: _color(colors['border'], _fallback.border),
       textPrimary: _color(colors['textPrimary'], _fallback.textPrimary),
       textDim: _color(colors['textDim'], _fallback.textDim),
