@@ -9,19 +9,21 @@ import 'package:window_manager/window_manager.dart';
 import '../editor/editor_tabs.dart';
 import '../editor/keymap.dart';
 import '../editor/luau_lsp.dart';
+import '../editor/text_encoding.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import 'context_menu.dart';
 import 'deferred_size.dart';
+import 'picker.dart';
 import 'skinnable_icon.dart';
 import 'superellipse.dart';
 
 /// the buttons of the bottom bar
 enum _BottomButton {
   cursor('Go to Line/Column', action: 'go_to_line::Toggle'),
-  indentation('Indentation'),
-  encoding('Select Encoding'),
-  lineEnding('Select Line Ending'),
+  indentation('Select Indentation', action: 'indentation_selector::Toggle'),
+  encoding('Reopen with Encoding', action: 'encoding_selector::Toggle'),
+  lineEnding('Select Line Ending', action: 'line_ending_selector::Toggle'),
   language('Select Language', action: 'language_selector::Toggle'),
   sidebar('Toggle Sidebar', canHide: false);
 
@@ -198,6 +200,10 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   Future<void> _attachEditor(MonacoController controller) async {
     _keymap.on('workspace::Save', _tabs.save);
     _keymap.on('workspace::Open', _openFile);
+    _keymap.on('go_to_line::Toggle', _openGoToLine);
+    _keymap.on('indentation_selector::Toggle', _openIndentationPicker);
+    _keymap.on('encoding_selector::Toggle', _openEncodingPicker);
+    _keymap.on('line_ending_selector::Toggle', _openLineEndingPicker);
     _keymap.on('pane::CloseOtherItems', () => _tabs.closeOthers(_tabs.active));
     _keymap.on(
       'pane::CloseItemsToTheLeft',
@@ -531,6 +537,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                   _StatusItem(
                     label: button.label,
                     keys: _keysOf(button),
+                    onPressed: _pressOf(button),
                     text: text,
                     theme: theme,
                     onMenu: (position) =>
@@ -540,6 +547,125 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           ),
         );
       },
+    );
+  }
+
+  /// what left clicking a bottom bar item does, nothing when null
+  VoidCallback? _pressOf(_BottomButton button) => switch (button) {
+    _BottomButton.cursor => _openGoToLine,
+    _BottomButton.indentation => _openIndentationPicker,
+    _BottomButton.encoding => _openEncodingPicker,
+    _BottomButton.lineEnding => _openLineEndingPicker,
+    _ => null,
+  };
+
+  /// pickers open under the title bar
+  static const _pickerTop = _titleBarHeight + 8;
+
+  /// `line` or `line:column`
+  static (int, int?)? _parseGoTo(String text) {
+    final match = RegExp(r'^\s*(\d+)?(?::(\d+))?\s*$').firstMatch(text);
+    final line = int.tryParse(match?.group(1) ?? '');
+    if (line == null) {
+      return null;
+    }
+    return (line, int.tryParse(match!.group(2) ?? ''));
+  }
+
+  Future<void> _openGoToLine() async {
+    final stats = _monaco?.stats.value;
+    if (stats == null || _tabs.tabs.isEmpty) {
+      return;
+    }
+    final cursor = stats.cursorPosition;
+    final lines = stats.lineCount;
+    showInputPicker(
+      context,
+      theme: widget.controller.value,
+      top: _pickerTop,
+      hint: cursor == null ? 'Line:Column' : '${cursor.line}:${cursor.column}',
+      describe: (text) {
+        final target = _parseGoTo(text);
+        if (text.trim().isEmpty) {
+          return cursor == null
+              ? 'Lines: $lines'
+              : 'Current Line: ${cursor.line} of $lines (column ${cursor.column})';
+        }
+        if (target == null) {
+          return 'Enter a line, or line:column';
+        }
+        final (line, column) = target;
+        return 'Go to line ${line.clamp(1, lines)}'
+            '${column == null ? '' : ', column $column'}';
+      },
+      onSubmitted: (text) {
+        final target = _parseGoTo(text);
+        if (target != null) {
+          _tabs.goTo(target.$1.clamp(1, lines), target.$2 ?? 1);
+        }
+      },
+    );
+  }
+
+  static const _indentSizes = [2, 4, 8];
+
+  /// each size with spaces, then with tabs, named as the bottom bar names them
+  Future<void> _openIndentationPicker() async {
+    if (_tabs.indentation.isEmpty) {
+      return;
+    }
+    final names = [
+      for (final spaces in [true, false])
+        for (final size in _indentSizes)
+          '${spaces ? 'Spaces' : 'Tab Size'}: $size',
+    ];
+    showListPicker(
+      context,
+      theme: widget.controller.value,
+      top: _pickerTop,
+      items: [
+        for (final name in names)
+          PickerItem(name, checked: name == _tabs.indentation),
+      ],
+      onSelected: (i) => _tabs.setIndentation(
+        spaces: i < _indentSizes.length,
+        size: _indentSizes[i % _indentSizes.length],
+      ),
+    );
+  }
+
+  Future<void> _openEncodingPicker() async {
+    if (_tabs.tabs.isEmpty) {
+      return;
+    }
+    final current = _tabs.tabs[_tabs.active].encoding;
+    showListPicker(
+      context,
+      theme: widget.controller.value,
+      top: _pickerTop,
+      hint: 'Reopen with encoding...',
+      items: [
+        for (final encoding in TextEncoding.values)
+          PickerItem(encoding.label, checked: encoding == current),
+      ],
+      onSelected: (i) => _tabs.reopenWithEncoding(TextEncoding.values[i]),
+    );
+  }
+
+  Future<void> _openLineEndingPicker() async {
+    if (_tabs.lineEnding.isEmpty) {
+      return;
+    }
+    final crlf = _tabs.lineEnding == 'CRLF';
+    showListPicker(
+      context,
+      theme: widget.controller.value,
+      top: _pickerTop,
+      items: [
+        PickerItem('LF', checked: !crlf),
+        PickerItem('CRLF', checked: crlf),
+      ],
+      onSelected: (i) => _tabs.setLineEnding(crlf: i == 1),
     );
   }
 
@@ -872,7 +998,11 @@ class _StatusItem extends StatefulWidget {
     required this.text,
     required this.theme,
     required this.onMenu,
+    this.onPressed,
   });
+
+  /// what left clicking does, nothing when null
+  final VoidCallback? onPressed;
 
   /// what the item does, apart from the [text] it shows
   final String label;
@@ -898,6 +1028,7 @@ class _StatusItemState extends State<_StatusItem> {
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
+        onTap: widget.onPressed,
         onSecondaryTapUp: (details) => widget.onMenu(details.globalPosition),
         child: _tip(
           theme: theme,
