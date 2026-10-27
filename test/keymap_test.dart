@@ -15,6 +15,14 @@ void main() {
     expect(Keymap.toKeys('ctrl-k  Ctrl-O'), 'ctrl-k ctrl-o');
   });
 
+  test('keys are shown the way a menu writes them', () {
+    expect(Keymap.formatKeys('ctrl-alt-shift-t'), 'Ctrl-Alt-Shift-T');
+    expect(Keymap.formatKeys('ctrl-k shift-enter'), 'Ctrl-K Shift-Enter');
+    expect(Keymap.formatKeys('ctrl--'), 'Ctrl--');
+    expect(Keymap.formatKeys('alt-pagedown'), 'Alt-PageDown');
+    expect(Keymap.formatKeys('f5'), 'F5');
+  });
+
   test('keys that are not understood are refused', () {
     for (final keys in [
       '',

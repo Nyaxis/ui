@@ -149,7 +149,7 @@ class Keymap {
   ///
   /// shortcut: a binding in a deeper context does not beat a later one in a
   /// wider context, as it does in zed; add that when contexts nest
-  Map<String, String> _active(KeyContext context) {
+  Map<String, String> _active(KeyContext context, {bool onlyHandled = true}) {
     final seen = <String>{};
     final actions = <String, String>{};
     for (final binding in _bindings.reversed) {
@@ -158,11 +158,49 @@ class Keymap {
         continue;
       }
       final action = binding.action;
-      if (action != null && _handlers.containsKey(action)) {
+      if (action != null && (!onlyHandled || _handlers.containsKey(action))) {
         actions[binding.keys] = action;
       }
     }
     return actions;
+  }
+
+  /// the keys that run [action] while the editor is focused, in [toKeys] form,
+  /// or null when none do; the last binding of the action counts
+  String? keysFor(String action) {
+    for (final binding in _active(_editor, onlyHandled: false).entries) {
+      if (binding.value == action) {
+        return binding.key;
+      }
+    }
+    return null;
+  }
+
+  /// [keys] as they are shown to the user, like `Ctrl-K Shift-Enter`
+  static String formatKeys(String keys) {
+    String capitalize(String name) => switch (name) {
+      'pageup' => 'PageUp',
+      'pagedown' => 'PageDown',
+      _ => name[0].toUpperCase() + name.substring(1),
+    };
+    return [
+      for (final stroke in keys.split(' '))
+        _splitStroke(stroke).map(capitalize).join('-'),
+    ].join(' ');
+  }
+
+  /// a stroke's modifiers followed by its key
+  static List<String> _splitStroke(String stroke) {
+    final parts = <String>[];
+    var key = stroke;
+    for (var dash = key.indexOf('-'); dash > 0; dash = key.indexOf('-')) {
+      if (!_modifierOrder.contains(key.substring(0, dash))) {
+        break;
+      }
+      parts.add(key.substring(0, dash));
+      key = key.substring(dash + 1);
+    }
+    return [...parts, key];
   }
 
   /// whether the stroke was used, which is when its keys are bound or the
