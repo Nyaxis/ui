@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -28,6 +29,22 @@ enum AutoSave { off, afterDelay, onFocusChange, onWindowChange }
 /// in the folder gets a tab
 class EditorTabs extends ChangeNotifier with WindowListener {
   static const _extension = '.luau';
+
+  /// the language of each known extension; other files open as plain text
+  static const _languages = {
+    '.lua': MonacoLanguage.lua,
+    '.luau': MonacoLanguage.lua,
+    '.json': MonacoLanguage.json,
+    '.js': MonacoLanguage.javascript,
+    '.ts': MonacoLanguage.typescript,
+    '.md': MonacoLanguage.markdown,
+    '.html': MonacoLanguage.html,
+    '.css': MonacoLanguage.css,
+    '.xml': MonacoLanguage.xml,
+    '.yaml': MonacoLanguage.yaml,
+    '.yml': MonacoLanguage.yaml,
+    '.py': MonacoLanguage.python,
+  };
 
   final tabs = <EditorTab>[];
   int active = 0;
@@ -129,17 +146,15 @@ reportIndent();''';
       // lowercased, so the uri is lowercase and independent of the file name
       final bytes = file == null ? Uint8List(0) : await file.readAsBytes();
       final encoding = TextEncoding.detect(bytes);
+      final name = file == null ? _untitledName() : file.uri.pathSegments.last;
+      final dot = name.lastIndexOf('.');
+      final extension = dot < 0 ? '' : name.substring(dot).toLowerCase();
       final document = await controller.openDocument(
         text: encoding.decode(bytes),
-        language: MonacoLanguage.lua,
-        uri: Uri.parse('file:///nyaxis/script${_nextUri++}$_extension'),
+        language: _languages[extension] ?? MonacoLanguage.plaintext,
+        uri: Uri.parse('file:///nyaxis/script${_nextUri++}$extension'),
       );
-      final tab = EditorTab(
-        file == null ? _untitledName() : file.uri.pathSegments.last,
-        document,
-        encoding,
-        file,
-      );
+      final tab = EditorTab(name, document, encoding, file);
       tabs.add(tab);
       return tab;
     } catch (e) {
@@ -157,6 +172,20 @@ reportIndent();''';
         return name;
       }
     }
+  }
+
+  /// opens [file] in a tab, or selects its tab when it is open already
+  Future<void> openFile(File file) async {
+    final path = file.path.toLowerCase();
+    var index = tabs.indexWhere((t) => t.file?.path.toLowerCase() == path);
+    if (index < 0) {
+      final tab = await _open(file);
+      if (tab == null) {
+        return;
+      }
+      index = tabs.indexOf(tab);
+    }
+    await select(index);
   }
 
   /// an untitled tab has no file until it is saved
@@ -197,6 +226,52 @@ reportIndent();''';
       await newTab();
     } else {
       await select(active);
+    }
+  }
+
+  /// closing goes from the end, so the indexes still to close do not move
+  Future<void> closeOthers(int index) async {
+    for (var i = tabs.length - 1; i >= 0; i--) {
+      if (i != index) {
+        await close(i);
+      }
+    }
+  }
+
+  Future<void> closeLeft(int index) async {
+    for (var i = index - 1; i >= 0; i--) {
+      await close(i);
+    }
+  }
+
+  Future<void> closeRight(int index) async {
+    for (var i = tabs.length - 1; i > index; i--) {
+      await close(i);
+    }
+  }
+
+  Future<void> closeAll() async {
+    for (var i = tabs.length - 1; i >= 0; i--) {
+      await close(i);
+    }
+  }
+
+  /// the file's path, or its name when [relative], since scripts are all in
+  /// one folder; untitled tabs have no file, so nothing is copied
+  Future<void> copyPath(int index, {bool relative = false}) async {
+    final file = tabs[index].file;
+    if (file != null) {
+      await Clipboard.setData(
+        ClipboardData(text: relative ? tabs[index].name : file.path),
+      );
+    }
+  }
+
+  Future<void> reveal(int index) async {
+    final file = tabs[index].file;
+    if (file != null) {
+      // explorer fails to parse the path when it is quoted along with /select,
+      await Process.run('explorer', ['/select,', file.path]);
     }
   }
 

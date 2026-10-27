@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:window_manager/window_manager.dart';
@@ -7,9 +11,27 @@ import '../editor/keymap.dart';
 import '../editor/luau_lsp.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
+import 'context_menu.dart';
 import 'deferred_size.dart';
 import 'skinnable_icon.dart';
 import 'superellipse.dart';
+
+/// the buttons of the bottom bar
+enum _BottomButton {
+  cursor,
+  indentation,
+  encoding,
+  language,
+  sidebar(canHide: false);
+
+  const _BottomButton({this.canHide = true});
+
+  /// whether its menu offers to hide it
+  final bool canHide;
+}
+
+/// the side of the window that something is docked to
+enum _Dock { left, right }
 
 class WindowShell extends StatefulWidget {
   const WindowShell({super.key, required this.controller});
@@ -27,14 +49,93 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   final _tabs = EditorTabs();
   final _keymap = Keymap();
 
-  // only picks the icon for now, there is no sidebar to show yet
+  // only picks the icon and its side for now, there is no sidebar to show yet
   bool _sidebarOpen = false;
 
+  /// where each button that can be docked is
+  final _docks = {_BottomButton.sidebar: _Dock.left};
+
   bool _maximized = false;
+  bool _newMenuOpen = false;
+
+  final _hiddenButtons = <_BottomButton>{};
+
+  File? get _settingsFile {
+    final appData = Platform.environment['APPDATA'];
+    return appData == null ? null : File('$appData\\Nyaxis\\config.json');
+  }
+
+  /// the settings of each bottom bar button in `config.json`, like
+  /// `"sidebar": {"dock": "left"}` or `"language": {"hidden": true}`; unknown
+  /// or malformed values are ignored
+  Future<void> _loadSettings() async {
+    final file = _settingsFile;
+    if (file == null || !file.existsSync()) {
+      return;
+    }
+    try {
+      final json =
+          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      setState(() {
+        for (final button in _BottomButton.values) {
+          final settings = json[button.name];
+          if (settings is! Map) {
+            continue;
+          }
+          final dock = _Dock.values.asNameMap()[settings['dock']];
+          if (dock != null && _docks.containsKey(button)) {
+            _docks[button] = dock;
+          }
+          if (button.canHide && settings['hidden'] == true) {
+            _hiddenButtons.add(button);
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('WindowShell: unreadable ${file.path} ($e)');
+    }
+  }
+
+  /// the rest of `config.json` is kept as it is
+  Future<void> _saveSettings() async {
+    final file = _settingsFile;
+    if (file == null) {
+      return;
+    }
+    try {
+      final json = file.existsSync()
+          ? jsonDecode(await file.readAsString()) as Map<String, dynamic>
+          : <String, dynamic>{};
+      for (final button in _BottomButton.values) {
+        final existing = json[button.name];
+        final settings = existing is Map<String, dynamic>
+            ? existing
+            : <String, dynamic>{};
+        final dock = _docks[button];
+        if (dock != null) {
+          settings['dock'] = dock.name;
+        }
+        if (button.canHide) {
+          settings['hidden'] = _hiddenButtons.contains(button);
+        }
+        if (settings.isNotEmpty) {
+          json[button.name] = settings;
+        }
+      }
+      await file.parent.create(recursive: true);
+      await file.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(json),
+        flush: true,
+      );
+    } catch (e) {
+      debugPrint('WindowShell: cannot save ${file.path} ($e)');
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    _loadSettings();
     widget.controller.addListener(_applyMonacoTheme);
     windowManager.addListener(this);
   }
@@ -57,6 +158,22 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   /// the documents have to exist before the server connects, so it sees them
   Future<void> _attachEditor(MonacoController controller) async {
     _keymap.on('workspace::Save', _tabs.save);
+    _keymap.on('workspace::Open', _openFile);
+    _keymap.on('pane::CloseOtherItems', () => _tabs.closeOthers(_tabs.active));
+    _keymap.on(
+      'pane::CloseItemsToTheLeft',
+      () => _tabs.closeLeft(_tabs.active),
+    );
+    _keymap.on(
+      'pane::CloseItemsToTheRight',
+      () => _tabs.closeRight(_tabs.active),
+    );
+    _keymap.on('pane::CloseAllItems', _tabs.closeAll);
+    _keymap.on('workspace::CopyPath', () => _tabs.copyPath(_tabs.active));
+    _keymap.on(
+      'workspace::RevealInFileManager',
+      () => _tabs.reveal(_tabs.active),
+    );
     await _keymap.attach(controller);
     await _tabs.attach(controller);
     await connectLuauLsp(controller);
@@ -210,6 +327,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                           line: line,
                           onSelect: () => _tabs.select(i),
                           onClose: () => _tabs.close(i),
+                          onMenu: (position) =>
+                              _showTabMenu(context, theme, i, position),
                         ),
                     ],
                   ),
@@ -217,14 +336,17 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                 // the line along the bottom is not part of the space to center in
                 Padding(
                   padding: EdgeInsets.only(bottom: theme.borderWidth),
-                  child: _BarButton(
-                    name: 'add',
-                    extent: _tabBarHeight,
-                    size: _tabBarHeight * 0.5,
-                    hoverInset: 5,
-                    hoverRadius: 4,
-                    theme: theme,
-                    onPressed: _tabs.newTab,
+                  child: Builder(
+                    builder: (context) => _BarButton(
+                      name: 'add',
+                      extent: _tabBarHeight,
+                      size: _tabBarHeight * 0.5,
+                      hoverInset: 5,
+                      hoverRadius: 4,
+                      active: _newMenuOpen,
+                      theme: theme,
+                      onPressed: () => _showNewMenu(context, theme),
+                    ),
                   ),
                 ),
               ],
@@ -232,6 +354,107 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _openFile() async {
+    final file = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'Luau', extensions: ['lua', 'luau']),
+        XTypeGroup(label: 'All files'),
+      ],
+    );
+    if (file != null) {
+      await _tabs.openFile(File(file.path));
+    }
+  }
+
+  /// opens under the button
+  void _showNewMenu(BuildContext button, AppTheme theme) {
+    final box = button.findRenderObject() as RenderBox;
+    setState(() => _newMenuOpen = true);
+    showContextMenu(
+      button,
+      position: box.localToGlobal(Offset(0, box.size.height)),
+      theme: theme,
+      keysFor: _keymap.keysFor,
+      onClosed: () => setState(() => _newMenuOpen = false),
+      entries: [
+        ContextMenuItem('New File', onPressed: _tabs.newTab),
+        ContextMenuItem(
+          'Open File',
+          action: 'workspace::Open',
+          onPressed: _openFile,
+        ),
+      ],
+    );
+  }
+
+  void _showTabMenu(
+    BuildContext context,
+    AppTheme theme,
+    int index,
+    Offset position,
+  ) {
+    final hasFile = _tabs.tabs[index].file != null;
+    showContextMenu(
+      context,
+      position: position,
+      theme: theme,
+      keysFor: _keymap.keysFor,
+      entries: [
+        ContextMenuItem('Close', onPressed: () => _tabs.close(index)),
+        ContextMenuItem(
+          'Close Others',
+          action: 'pane::CloseOtherItems',
+          onPressed: _tabs.tabs.length > 1
+              ? () => _tabs.closeOthers(index)
+              : null,
+        ),
+        const ContextMenuSeparator(),
+        ContextMenuItem(
+          'Close Left',
+          action: 'pane::CloseItemsToTheLeft',
+          onPressed: index > 0 ? () => _tabs.closeLeft(index) : null,
+        ),
+        ContextMenuItem(
+          'Close Right',
+          action: 'pane::CloseItemsToTheRight',
+          onPressed: index < _tabs.tabs.length - 1
+              ? () => _tabs.closeRight(index)
+              : null,
+        ),
+        const ContextMenuSeparator(),
+        ContextMenuItem(
+          'Close All',
+          action: 'pane::CloseAllItems',
+          onPressed: _tabs.closeAll,
+        ),
+        const ContextMenuSeparator(),
+        ContextMenuItem(
+          'Copy Path',
+          action: 'workspace::CopyPath',
+          onPressed: hasFile ? () => _tabs.copyPath(index) : null,
+        ),
+        ContextMenuItem(
+          'Copy Relative Path',
+          onPressed: hasFile
+              ? () => _tabs.copyPath(index, relative: true)
+              : null,
+        ),
+        const ContextMenuSeparator(),
+        ContextMenuItem(
+          'Reveal in File Explorer',
+          action: 'workspace::RevealInFileManager',
+          onPressed: hasFile ? () => _tabs.reveal(index) : null,
+        ),
+        const ContextMenuSeparator(),
+        ContextMenuItem(
+          'Pin Tab',
+          action: 'pane::TogglePinTab',
+          onPressed: () {},
+        ),
+      ],
     );
   }
 
@@ -246,17 +469,29 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           listenable: _tabs,
           builder: (context, _) => Row(
             children: [
-              for (final text in [
-                if (cursor != null) 'Ln ${cursor.line}, Col ${cursor.column}',
-                if (_tabs.indentation.isNotEmpty) _tabs.indentation,
+              for (final (button, text) in [
+                if (cursor != null)
+                  (
+                    _BottomButton.cursor,
+                    'Ln ${cursor.line}, Col ${cursor.column}',
+                  ),
+                if (_tabs.indentation.isNotEmpty)
+                  (_BottomButton.indentation, _tabs.indentation),
                 if (_tabs.active < _tabs.tabs.length)
-                  _tabs.tabs[_tabs.active].encoding.label,
-                if (language != null) language.label ?? language.id,
+                  (
+                    _BottomButton.encoding,
+                    _tabs.tabs[_tabs.active].encoding.label,
+                  ),
+                if (language != null)
+                  (_BottomButton.language, language.label ?? language.id),
               ])
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(text, style: theme.captionStyle),
-                ),
+                if (!_hiddenButtons.contains(button))
+                  _StatusItem(
+                    text: text,
+                    theme: theme,
+                    onMenu: (position) =>
+                        _showButtonMenu(theme, button, position),
+                  ),
             ],
           ),
         );
@@ -264,8 +499,70 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     );
   }
 
+  /// the menu of a bottom bar button: the side it can be docked to, and hiding
+  /// it when it can be hidden
+  void _showButtonMenu(AppTheme theme, _BottomButton button, Offset position) {
+    final dock = _docks[button];
+    showContextMenu(
+      context,
+      position: position,
+      theme: theme,
+      entries: [
+        if (dock != null)
+          for (final side in _Dock.values)
+            ContextMenuItem(
+              side.name[0].toUpperCase() + side.name.substring(1),
+              checked: side == dock,
+              onPressed: () {
+                setState(() => _docks[button] = side);
+                _saveSettings();
+              },
+            ),
+        if (dock != null && button.canHide) const ContextMenuSeparator(),
+        if (button.canHide)
+          ContextMenuItem(
+            'Hide Button',
+            onPressed: () {
+              setState(() => _hiddenButtons.add(button));
+              _saveSettings();
+            },
+          ),
+      ],
+    );
+  }
+
   Widget _bottomBar(AppTheme theme) {
     final monaco = _monaco;
+    final dock = _docks[_BottomButton.sidebar]!;
+    // the button's own space is already between it and the divider
+    final divider = Container(
+      width: theme.borderWidth,
+      height: 14,
+      margin: EdgeInsets.only(
+        left: dock == _Dock.right ? 4 : 0,
+        right: dock == _Dock.left ? 4 : 0,
+      ),
+      color: theme.border,
+    );
+    // the icon is drawn for the left, and mirrored for the right
+    final sidebarButton = GestureDetector(
+      onSecondaryTapDown: (details) =>
+          _showButtonMenu(theme, _BottomButton.sidebar, details.globalPosition),
+      child: Transform.flip(
+        flipX: dock == _Dock.right,
+        child: _BarButton(
+          name: _sidebarOpen ? 'sidebar-open' : 'sidebar-closed',
+          extent: _bottomBarHeight,
+          // the icon's own grid, so its lines land on whole pixels
+          size: 16,
+          hoverInset: 2,
+          hoverRadius: 4,
+          dim: true,
+          theme: theme,
+          onPressed: () => setState(() => _sidebarOpen = !_sidebarOpen),
+        ),
+      ),
+    );
     return Container(
       height: _bottomBarHeight,
       decoration: BoxDecoration(
@@ -276,25 +573,10 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       ),
       child: Row(
         children: [
+          if (dock == _Dock.left) ...[sidebarButton, divider],
           const Spacer(),
           if (monaco != null) _status(theme, monaco),
-          Container(
-            width: theme.borderWidth,
-            height: 14,
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            color: theme.border,
-          ),
-          _BarButton(
-            name: _sidebarOpen ? 'sidebar-open' : 'sidebar-closed',
-            extent: _bottomBarHeight,
-            // the icon's own grid, so its lines land on whole pixels
-            size: 16,
-            hoverInset: 2,
-            hoverRadius: 4,
-            dim: true,
-            theme: theme,
-            onPressed: () => setState(() => _sidebarOpen = !_sidebarOpen),
-          ),
+          if (dock == _Dock.right) ...[divider, sidebarButton],
         ],
       ),
     );
@@ -366,6 +648,7 @@ class _Tab extends StatefulWidget {
     required this.line,
     required this.onSelect,
     required this.onClose,
+    required this.onMenu,
   });
 
   final EditorTab tab;
@@ -375,6 +658,9 @@ class _Tab extends StatefulWidget {
   final VoidCallback onSelect;
   final VoidCallback onClose;
 
+  /// gets where the tab was right clicked
+  final ValueChanged<Offset> onMenu;
+
   @override
   State<_Tab> createState() => _TabState();
 }
@@ -382,6 +668,9 @@ class _Tab extends StatefulWidget {
 class _TabState extends State<_Tab> {
   static const _closeSize = 14.0;
   static const _closeExtent = 20.0;
+  static const _dotSize = 6.0;
+  // mirrors the close slot, 4 gap and 8 padding on the right
+  static const _margin = _closeExtent + 12;
 
   bool _hovered = false;
 
@@ -402,12 +691,17 @@ class _TabState extends State<_Tab> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: widget.onSelect,
+        onSecondaryTapDown: (details) => widget.onMenu(details.globalPosition),
         child: CustomPaint(
           painter: widget.selected
               ? _ReplacePainter(theme.backgroundColor)
               : null,
           child: Container(
-            padding: const EdgeInsets.only(left: 14, right: 8),
+            // the dot fills the left margin, so it never moves the name
+            padding: EdgeInsets.only(
+              left: widget.tab.dirty ? 0 : _margin,
+              right: 8,
+            ),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: widget.selected ? null : _inactive(theme),
@@ -423,9 +717,11 @@ class _TabState extends State<_Tab> {
               children: [
                 if (widget.tab.dirty)
                   Container(
-                    width: 6,
-                    height: 6,
-                    margin: const EdgeInsets.only(right: 8),
+                    width: _dotSize,
+                    height: _dotSize,
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: (_margin - _dotSize) / 2,
+                    ),
                     decoration: BoxDecoration(
                       color: theme.accent,
                       shape: BoxShape.circle,
@@ -482,6 +778,57 @@ class _ReplacePainter extends CustomPainter {
   bool shouldRepaint(_ReplacePainter oldDelegate) => oldDelegate.color != color;
 }
 
+/// text in the bottom bar, filled while hovered; right clicking it gets
+/// the position for a menu
+class _StatusItem extends StatefulWidget {
+  const _StatusItem({
+    required this.text,
+    required this.theme,
+    required this.onMenu,
+  });
+
+  final String text;
+  final AppTheme theme;
+  final ValueChanged<Offset> onMenu;
+
+  @override
+  State<_StatusItem> createState() => _StatusItemState();
+}
+
+class _StatusItemState extends State<_StatusItem> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onSecondaryTapDown: (details) => widget.onMenu(details.globalPosition),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _hovered
+                ? theme.hover.withValues(alpha: 0.3)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            widget.text,
+            style: theme.captionStyle.copyWith(
+              color: _hovered ? theme.textPrimary : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BarButton extends StatefulWidget {
   const _BarButton({
     required this.name,
@@ -493,6 +840,7 @@ class _BarButton extends StatefulWidget {
     this.hoverRadius = 0,
     this.destructive = false,
     this.dim = false,
+    this.active = false,
   });
 
   final String name;
@@ -511,6 +859,10 @@ class _BarButton extends StatefulWidget {
 
   /// draws the icon in the dim text color until the button is hovered
   final bool dim;
+
+  /// draws the icon in the accent color, while a menu opened from the button
+  /// is showing
+  final bool active;
   final AppTheme theme;
   final VoidCallback onPressed;
 
@@ -561,6 +913,8 @@ class _BarButtonState extends State<_BarButton> {
             size: widget.size,
             color: onRed
                 ? theme.background
+                : widget.active
+                ? theme.accent
                 : (widget.dim && !_hovered && !_pressed
                       ? theme.textDim
                       : theme.textPrimary),

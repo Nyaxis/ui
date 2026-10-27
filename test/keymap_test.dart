@@ -41,9 +41,20 @@ void main() {
   String show(Iterable<Binding> bindings) =>
       [for (final b in bindings) '${b.keys}=${b.action}'].join(' ');
 
-  test('the bundled defaults bind save', () {
+  test('the bundled defaults bind save and the tab menu', () {
     final defaults = File('assets/keymaps/default.json').readAsStringSync();
-    expect(show(Keymap.resolve([defaults])), 'ctrl-s=workspace::Save');
+    expect(
+      show(Keymap.resolve([defaults])),
+      'ctrl-s=workspace::Save '
+      'ctrl-alt-n=workspace::Open '
+      'ctrl-alt-shift-t=pane::CloseOtherItems '
+      'ctrl-k e=pane::CloseItemsToTheLeft '
+      'ctrl-k t=pane::CloseItemsToTheRight '
+      'ctrl-k w=pane::CloseAllItems '
+      'ctrl-k p=workspace::CopyPath '
+      'ctrl-k r=workspace::RevealInFileManager '
+      'ctrl-k shift-enter=pane::TogglePinTab',
+    );
   });
 
   test('keymaps apply in order, with comments and trailing commas', () {
