@@ -6,6 +6,7 @@ import '../editor/editor_tabs.dart';
 import '../editor/luau_lsp.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
+import 'deferred_size.dart';
 import 'skinnable_icon.dart';
 import 'superellipse.dart';
 
@@ -134,21 +135,25 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                       _titleBar(theme),
                       _tabBar(theme),
                       Expanded(
-                        child: MonacoEditor(
-                          backgroundColor: Colors.transparent,
-                          page: const MonacoPageConfig(
-                            customCss: 'html, body { background: transparent !important; }',
-                          ),
-                          loadingBuilder: (_) => const SizedBox.expand(),
-                          onReady: (controller) {
-                            _monaco = controller;
-                            _applyMonacoTheme();
-                            _attachEditor(controller);
-                          },
-                          options: EditorOptions(
-                            theme: _monacoTheme,
-                            fontFamily: theme.monospaceFontFamily,
-                            fontSize: theme.fontSizeBody,
+                        // the webview is slow to resize, so it waits for the
+                        // window to stop being dragged
+                        child: DeferredSize(
+                          child: MonacoEditor(
+                            backgroundColor: Colors.transparent,
+                            page: const MonacoPageConfig(
+                              customCss: 'html, body { background: transparent !important; }',
+                            ),
+                            loadingBuilder: (_) => const SizedBox.expand(),
+                            onReady: (controller) {
+                              _monaco = controller;
+                              _applyMonacoTheme();
+                              _attachEditor(controller);
+                            },
+                            options: EditorOptions(
+                              theme: _monacoTheme,
+                              fontFamily: theme.monospaceFontFamily,
+                              fontSize: theme.fontSizeBody,
+                            ),
                           ),
                         ),
                       ),
