@@ -18,17 +18,20 @@ import 'superellipse.dart';
 
 /// the buttons of the bottom bar
 enum _BottomButton {
-  cursor('Go to Line/Column'),
+  cursor('Go to Line/Column', action: 'go_to_line::Toggle'),
   indentation('Indentation'),
   encoding('Select Encoding'),
   lineEnding('Select Line Ending'),
-  language('Select Language'),
+  language('Select Language', action: 'language_selector::Toggle'),
   sidebar('Toggle Sidebar', canHide: false);
 
-  const _BottomButton(this.label, {this.canHide = true});
+  const _BottomButton(this.label, {this.action, this.canHide = true});
 
   /// what the button does, as its menu entry and tooltip name it
   final String label;
+
+  /// the keymap action that does the same, whose keys the tooltip shows
+  final String? action;
 
   /// whether its menu offers to hide it
   final bool canHide;
@@ -36,6 +39,38 @@ enum _BottomButton {
 
 /// the side of the window that something is docked to
 enum _Dock { left, right }
+
+/// names a button on hover, with the [keys] of its action beside the label
+Widget _tip({
+  required AppTheme theme,
+  required String label,
+  required String? keys,
+  required bool below,
+  required Widget child,
+}) {
+  return Tooltip(
+    richMessage: TextSpan(
+      text: label,
+      style: theme.bodyStyle,
+      children: [
+        if (keys != null)
+          TextSpan(
+            text: '   ${Keymap.formatKeys(keys)}',
+            style: theme.bodyStyle.copyWith(color: theme.textDim),
+          ),
+      ],
+    ),
+    preferBelow: below,
+    waitDuration: const Duration(milliseconds: 500),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    decoration: BoxDecoration(
+      color: theme.surface,
+      borderRadius: BorderRadius.circular(theme.cornerRadius),
+      border: Border.all(color: theme.border, width: theme.borderWidth),
+    ),
+    child: child,
+  );
+}
 
 class WindowShell extends StatefulWidget {
   const WindowShell({super.key, required this.controller});
@@ -495,6 +530,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                 if (!_hiddenButtons.contains(button))
                   _StatusItem(
                     label: button.label,
+                    keys: _keysOf(button),
                     text: text,
                     theme: theme,
                     onMenu: (position) =>
@@ -505,6 +541,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         );
       },
     );
+  }
+
+  String? _keysOf(_BottomButton button) {
+    final action = button.action;
+    return action == null ? null : _keymap.keysFor(action);
   }
 
   /// the menu of a bottom bar button: the side it can be docked to, and hiding
@@ -560,6 +601,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         flipX: dock == _Dock.right,
         child: _BarButton(
           label: _BottomButton.sidebar.label,
+          keys: _keysOf(_BottomButton.sidebar),
+          tipBelow: false,
           name: _sidebarOpen ? 'sidebar-open' : 'sidebar-closed',
           extent: _bottomBarHeight,
           // the icon's own grid, so its lines land on whole pixels
@@ -825,6 +868,7 @@ class _ReplacePainter extends CustomPainter {
 class _StatusItem extends StatefulWidget {
   const _StatusItem({
     required this.label,
+    required this.keys,
     required this.text,
     required this.theme,
     required this.onMenu,
@@ -832,6 +876,9 @@ class _StatusItem extends StatefulWidget {
 
   /// what the item does, apart from the [text] it shows
   final String label;
+
+  /// of its action, null when none are bound
+  final String? keys;
   final String text;
   final AppTheme theme;
   final ValueChanged<Offset> onMenu;
@@ -852,20 +899,26 @@ class _StatusItemState extends State<_StatusItem> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onSecondaryTapUp: (details) => widget.onMenu(details.globalPosition),
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-          padding: const EdgeInsets.symmetric(horizontal: 6),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: _hovered
-                ? theme.hover.withValues(alpha: 0.3)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Text(
-            widget.text,
-            style: theme.captionStyle.copyWith(
-              color: _hovered ? theme.textPrimary : null,
+        child: _tip(
+          theme: theme,
+          label: widget.label,
+          keys: widget.keys,
+          below: false,
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _hovered
+                  ? theme.hover.withValues(alpha: 0.3)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              widget.text,
+              style: theme.captionStyle.copyWith(
+                color: _hovered ? theme.textPrimary : null,
+              ),
             ),
           ),
         ),
@@ -887,10 +940,18 @@ class _BarButton extends StatefulWidget {
     this.destructive = false,
     this.dim = false,
     this.active = false,
+    this.keys,
+    this.tipBelow = true,
   });
 
   /// what the button does
   final String label;
+
+  /// of its action, when some are bound
+  final String? keys;
+
+  /// whether its tooltip opens under the button, or above it
+  final bool tipBelow;
 
   /// the icon's name
   final String name;
@@ -972,10 +1033,17 @@ class _BarButtonState extends State<_BarButton> {
         ),
       ),
     );
+    final tipped = _tip(
+      theme: theme,
+      label: widget.label,
+      keys: widget.keys,
+      below: widget.tipBelow,
+      child: fill,
+    );
     if (widget.hoverInset == 0) {
-      return fill;
+      return tipped;
     }
-    return Center(child: AspectRatio(aspectRatio: 1, child: fill));
+    return Center(child: AspectRatio(aspectRatio: 1, child: tipped));
   }
 
   @override
