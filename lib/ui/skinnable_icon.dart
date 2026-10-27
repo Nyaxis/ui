@@ -6,7 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../theme/theme_controller.dart';
 
 /// draws `icons\<name>.<ext>` from the active theme's folder when it exists,
-/// otherwise the bundled `assets/icons/<name>-<size>.svg` closest to
+/// otherwise the bundled `assets/icons/<name>/<name>-<size>.svg` closest to
 /// [size]; svgs are tinted through `currentColor`, raster images are drawn as
 /// they are
 class SkinnableIcon extends StatelessWidget {
@@ -54,7 +54,7 @@ class SkinnableIcon extends StatelessWidget {
     final theme = SvgTheme(currentColor: color);
     final bundledSize = size >= 32 ? 32 : (size >= 22 ? 22 : 16);
     final bundled = SvgPicture.asset(
-      'assets/icons/$name-$bundledSize.svg',
+      'assets/icons/$name/$name-$bundledSize.svg',
       width: size,
       height: size,
       theme: theme,
