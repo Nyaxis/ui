@@ -18,6 +18,7 @@ import 'context_menu.dart';
 import 'deferred_size.dart';
 import 'dialog.dart';
 import 'picker.dart';
+import 'sidebar.dart';
 import 'skinnable_icon.dart';
 import 'superellipse.dart';
 
@@ -104,8 +105,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   final _tabs = EditorTabs();
   final _keymap = Keymap();
 
-  // only picks the icon and its side for now, there is no sidebar to show yet
   bool _sidebarOpen = false;
+  double _sidebarWidth = 240;
 
   bool _maximized = false;
   bool _newMenuOpen = false;
@@ -162,7 +163,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   }
 
   /// the settings of each bottom bar button in `config.json`, like
-  /// `"sidebar": {"dock": "left"}` or `"language": {"hidden": true}`; unknown
+  /// `"sidebar": {"dock": "left", "width": 240}` or `"language": {"hidden":
+  /// true}`; unknown
   /// or malformed values are ignored
   Future<void> _loadSettings() async {
     final file = _settingsFile;
@@ -184,6 +186,13 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           }
           if (button.canHide && settings['hidden'] == true) {
             button.hidden = true;
+          }
+          final width = settings['width'];
+          if (button == _sidebar && width is num) {
+            _sidebarWidth = width.toDouble().clamp(
+              SidebarPanel.minWidth,
+              SidebarPanel.maxWidth,
+            );
           }
         }
       });
@@ -213,6 +222,9 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         }
         if (button.canHide) {
           settings['hidden'] = button.hidden;
+        }
+        if (button == _sidebar) {
+          settings['width'] = _sidebarWidth;
         }
         if (settings.isNotEmpty) {
           json[button.id] = settings;
@@ -357,28 +369,22 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                   body: Column(
                     children: [
                       _titleBar(theme),
-                      _tabBar(theme),
                       Expanded(
-                        // the webview is slow to resize, so it waits for the
-                        // window to stop being dragged
-                        child: DeferredSize(
-                          child: MonacoEditor(
-                            backgroundColor: Colors.transparent,
-                            page: const MonacoPageConfig(
-                              customCss: 'html, body { background: transparent !important; }',
+                        child: Row(
+                          children: [
+                            if (_sidebarOpen && _sidebar.dock == _Dock.left)
+                              _sidebarPanel(theme),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  _tabBar(theme),
+                                  Expanded(child: _editor(theme)),
+                                ],
+                              ),
                             ),
-                            loadingBuilder: (_) => const SizedBox.expand(),
-                            onReady: (controller) {
-                              setState(() => _monaco = controller);
-                              _applyMonacoTheme();
-                              _attachEditor(controller);
-                            },
-                            options: EditorOptions(
-                              theme: _monacoTheme,
-                              fontFamily: theme.monospaceFontFamily,
-                              fontSize: theme.fontSizeBody,
-                            ),
-                          ),
+                            if (_sidebarOpen && _sidebar.dock == _Dock.right)
+                              _sidebarPanel(theme),
+                          ],
                         ),
                       ),
                       _bottomBar(theme),
@@ -390,6 +396,46 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           ),
         );
       },
+    );
+  }
+
+  Widget _sidebarPanel(AppTheme theme) {
+    return SidebarPanel(
+      theme: theme,
+      width: _sidebarWidth,
+      onLeft: _sidebar.dock == _Dock.left,
+      onResize: (width) => setState(
+        () => _sidebarWidth = width.clamp(
+          SidebarPanel.minWidth,
+          SidebarPanel.maxWidth,
+        ),
+      ),
+      onResizeEnd: _saveSettings,
+    );
+  }
+
+  Widget _editor(AppTheme theme) {
+    return
+    // the webview is slow to resize, so it waits for the
+    // window to stop being dragged
+    DeferredSize(
+      child: MonacoEditor(
+        backgroundColor: Colors.transparent,
+        page: const MonacoPageConfig(
+          customCss: 'html, body { background: transparent !important; }',
+        ),
+        loadingBuilder: (_) => const SizedBox.expand(),
+        onReady: (controller) {
+          setState(() => _monaco = controller);
+          _applyMonacoTheme();
+          _attachEditor(controller);
+        },
+        options: EditorOptions(
+          theme: _monacoTheme,
+          fontFamily: theme.monospaceFontFamily,
+          fontSize: theme.fontSizeBody,
+        ),
+      ),
     );
   }
 
