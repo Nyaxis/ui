@@ -7,7 +7,9 @@ import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../editor/editor_tabs.dart';
+import '../editor/file_icon_theme.dart';
 import '../editor/keymap.dart';
+import '../editor/language_extensions.dart';
 import '../editor/luau_lsp.dart';
 import '../editor/text_encoding.dart';
 import '../theme/app_theme.dart';
@@ -135,6 +137,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     'language',
     'Select Language',
     action: 'language_selector::Toggle',
+    onPressed: _openLanguagePicker,
   );
   late final _sidebar = _BottomButton(
     'sidebar',
@@ -254,6 +257,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     _keymap.on('go_to_line::Toggle', _openGoToLine);
     _keymap.on('indentation_selector::Toggle', _openIndentationPicker);
     _keymap.on('encoding_selector::Toggle', _openEncodingPicker);
+    _keymap.on('language_selector::Toggle', _openLanguagePicker);
     _keymap.on('line_ending_selector::Toggle', _openLineEndingPicker);
     _keymap.on('pane::CloseOtherItems', () => _tabs.closeOthers(_tabs.active));
     _keymap.on(
@@ -561,35 +565,37 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       valueListenable: monaco.stats,
       builder: (context, stats, _) {
         final cursor = stats.cursorPosition;
-        final language = stats.language;
         return ListenableBuilder(
           listenable: _tabs,
-          builder: (context, _) => Row(
-            children: [
-              for (final (button, text) in [
-                if (cursor != null)
-                  (_cursor, 'Ln ${cursor.line}, Col ${cursor.column}'),
-                if (_tabs.indentation.isNotEmpty)
-                  (_indentation, _tabs.indentation),
-                if (_tabs.active < _tabs.tabs.length)
-                  (_encoding, _tabs.tabs[_tabs.active].encoding.label),
-                if (_tabs.lineEnding.isNotEmpty)
-                  (_lineEnding, _tabs.lineEnding),
-                if (language != null)
-                  (_language, language.label ?? language.id),
-              ])
-                if (!button.hidden)
-                  _StatusItem(
-                    label: button.label,
-                    keys: _keysOf(button),
-                    onPressed: button.onPressed,
-                    text: text,
-                    theme: theme,
-                    onMenu: (position) =>
-                        _showButtonMenu(theme, button, position),
-                  ),
-            ],
-          ),
+          builder: (context, _) {
+            final language = _tabs.language ?? stats.language;
+            return Row(
+              children: [
+                for (final (button, text) in [
+                  if (cursor != null)
+                    (_cursor, 'Ln ${cursor.line}, Col ${cursor.column}'),
+                  if (_tabs.indentation.isNotEmpty)
+                    (_indentation, _tabs.indentation),
+                  if (_tabs.active < _tabs.tabs.length)
+                    (_encoding, _tabs.tabs[_tabs.active].encoding.label),
+                  if (_tabs.lineEnding.isNotEmpty)
+                    (_lineEnding, _tabs.lineEnding),
+                  if (language != null)
+                    (_language, language.label ?? language.id),
+                ])
+                  if (!button.hidden)
+                    _StatusItem(
+                      label: button.label,
+                      keys: _keysOf(button),
+                      onPressed: button.onPressed,
+                      text: text,
+                      theme: theme,
+                      onMenu: (position) =>
+                          _showButtonMenu(theme, button, position),
+                    ),
+              ],
+            );
+          },
         );
       },
     );
@@ -667,6 +673,36 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         spaces: i < _indentSizes.length,
         size: _indentSizes[i % _indentSizes.length],
       ),
+    );
+  }
+
+  Future<void> _openLanguagePicker() async {
+    final monaco = _monaco;
+    if (monaco == null || _tabs.tabs.isEmpty) {
+      return;
+    }
+    final current = _tabs.language ?? monaco.stats.value.language;
+    final icons = await FileIconTheme.load(widget.controller.palette);
+    if (!mounted) {
+      return;
+    }
+    final languages = MonacoLanguage.builtIn;
+    showListPicker(
+      context,
+      theme: widget.controller.value,
+      top: _pickerTop,
+      hint: 'Select a language...',
+      items: [
+        for (final language in languages)
+          PickerItem(
+            language.label ?? language.id,
+            checked: language == current,
+            icon: icons?.assetFor(
+              languageExtensions[language.id] ?? language.id,
+            ),
+          ),
+      ],
+      onSelected: (i) => _tabs.setLanguage(languages[i]),
     );
   }
 

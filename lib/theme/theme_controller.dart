@@ -9,7 +9,11 @@ import 'app_theme.dart';
 import 'catppuccin.dart';
 
 class ThemeController extends ValueNotifier<AppTheme> {
-  ThemeController(super.value);
+  ThemeController(super.value, {this.palette = defaultPaletteName});
+
+  /// the name of the palette the colors come from, which also picks the icon
+  /// theme
+  final String palette;
 
   static const _defaultName = 'default';
 
@@ -241,7 +245,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
       final theme = AppTheme.fromJson(json, palette: palette);
       await file.writeAsString(_serialize(theme, paletteName), flush: true);
       await paletteFile.writeAsString(_serializePalette(theme), flush: true);
-      return ThemeController(theme);
+      return ThemeController(theme, palette: paletteName);
     } catch (e) {
       debugPrint(
         'ThemeController.load: unreadable ${file?.path ?? root.path}, '
