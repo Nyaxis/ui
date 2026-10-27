@@ -58,22 +58,39 @@ class EditorTabs extends ChangeNotifier with WindowListener {
   var _autoSaveDelay = const Duration(seconds: 1);
   final _timers = <EditorTab, Timer>{};
 
-  /// tells flutter how the active document is indented, which monaco detects
-  /// from its content
-  static const _indentScript = '''
+  /// tells flutter how the active document is indented and how its lines end,
+  /// which monaco detects from its content
+  static const _documentScript = '''
+const post = (name, data) => window.flutterChannel.postMessage(
+    JSON.stringify({kind: 'event', name: 'nyaxis.' + name, data}));
 const reportIndent = () => {
   const model = editor.getModel();
   if (!model) return;
   const {insertSpaces, tabSize} = model.getOptions();
-  window.flutterChannel.postMessage(JSON.stringify(
-      {kind: 'event', name: 'nyaxis.indent', data: {insertSpaces, tabSize}}));
+  post('indent', {insertSpaces, tabSize});
 };
 editor.onDidChangeModel(reportIndent);
 editor.onDidChangeModelOptions(reportIndent);
-reportIndent();''';
+reportIndent();
+
+let crlf;
+const reportEol = () => {
+  const model = editor.getModel();
+  if (!model) return;
+  const now = model.getEOL().length === 2;
+  if (now === crlf) return;
+  crlf = now;
+  post('eol', {crlf});
+};
+editor.onDidChangeModel(() => { crlf = undefined; reportEol(); });
+editor.onDidChangeModelContent(reportEol);
+reportEol();''';
 
   /// of the active document, like `Spaces: 4`; empty until monaco reports it
   String indentation = '';
+
+  /// of the active document, `LF` or `CRLF`; empty until monaco reports it
+  String lineEnding = '';
 
   /// the auto save options are read from `config.json`, and added to it with
   /// their defaults when missing so they can be found
@@ -116,7 +133,7 @@ reportIndent();''';
 
     windowManager.addListener(this);
     _events = controller.events.listen(_onEvent);
-    await controller.runJavaScript(_indentScript);
+    await controller.runJavaScript(_documentScript);
 
     final files =
         folder
@@ -317,6 +334,9 @@ reportIndent();''';
           indentation =
               '${event.data['insertSpaces'] == true ? 'Spaces' : 'Tab Size'}: '
               '${event.data['tabSize']}';
+          notifyListeners();
+        case 'eol':
+          lineEnding = event.data['crlf'] == true ? 'CRLF' : 'LF';
           notifyListeners();
       }
     } else if (event is MonacoFocusChanged) {
