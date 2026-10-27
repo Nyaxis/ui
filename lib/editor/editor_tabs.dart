@@ -58,22 +58,39 @@ class EditorTabs extends ChangeNotifier with WindowListener {
   var _autoSaveDelay = const Duration(seconds: 1);
   final _timers = <EditorTab, Timer>{};
 
-  /// tells flutter how the active document is indented, which monaco detects
-  /// from its content
-  static const _indentScript = '''
+  /// tells flutter how the active document is indented and how its lines end,
+  /// which monaco detects from its content
+  static const _documentScript = '''
+const post = (name, data) => window.flutterChannel.postMessage(
+    JSON.stringify({kind: 'event', name: 'nyaxis.' + name, data}));
 const reportIndent = () => {
   const model = editor.getModel();
   if (!model) return;
   const {insertSpaces, tabSize} = model.getOptions();
-  window.flutterChannel.postMessage(JSON.stringify(
-      {kind: 'event', name: 'nyaxis.indent', data: {insertSpaces, tabSize}}));
+  post('indent', {insertSpaces, tabSize});
 };
 editor.onDidChangeModel(reportIndent);
 editor.onDidChangeModelOptions(reportIndent);
-reportIndent();''';
+reportIndent();
+
+let crlf;
+const reportEol = () => {
+  const model = editor.getModel();
+  if (!model) return;
+  const now = model.getEOL().length === 2;
+  if (now === crlf) return;
+  crlf = now;
+  post('eol', {crlf});
+};
+editor.onDidChangeModel(() => { crlf = undefined; reportEol(); });
+editor.onDidChangeModelContent(reportEol);
+reportEol();''';
 
   /// of the active document, like `Spaces: 4`; empty until monaco reports it
   String indentation = '';
+
+  /// of the active document, `LF` or `CRLF`; empty until monaco reports it
+  String lineEnding = '';
 
   /// the auto save options are read from `config.json`, and added to it with
   /// their defaults when missing so they can be found
@@ -116,7 +133,7 @@ reportIndent();''';
 
     windowManager.addListener(this);
     _events = controller.events.listen(_onEvent);
-    await controller.runJavaScript(_indentScript);
+    await controller.runJavaScript(_documentScript);
 
     final files =
         folder
@@ -275,6 +292,85 @@ reportIndent();''';
     }
   }
 
+  /// puts the cursor at [line], and [column] when given, and focuses the editor
+  Future<void> goTo(int line, [int column = 1]) async {
+    final position = '{lineNumber: $line, column: $column}';
+    await _controller?.runJavaScript(
+      'editor.setPosition($position);'
+      'editor.revealPositionInCenter($position);'
+      'editor.focus();',
+    );
+  }
+
+  /// indents the active document with [spaces] or tabs, [size] wide. the
+  /// indentation it already has keeps its levels, each as wide as the old
+  /// size, and a remainder that is not a whole level stays as spaces
+  Future<void> setIndentation({required bool spaces, required int size}) async {
+    await _controller?.runJavaScript('''
+(() => {
+  const model = editor.getModel();
+  if (!model) return;
+  const old = model.getOptions().tabSize;
+  const edits = [];
+  for (let line = 1; line <= model.getLineCount(); line++) {
+    const lead = /^[ \\t]*/.exec(model.getLineContent(line))[0];
+    if (!lead) continue;
+    let columns = 0;
+    for (const c of lead) columns += c === '\\t' ? old - columns % old : 1;
+    const levels = Math.floor(columns / old);
+    const text = ($spaces ? ' '.repeat(levels * $size) : '\\t'.repeat(levels))
+        + ' '.repeat(columns % old);
+    if (text !== lead) {
+      edits.push({
+        range: {startLineNumber: line, startColumn: 1,
+                endLineNumber: line, endColumn: lead.length + 1},
+        text,
+      });
+    }
+  }
+  model.updateOptions({insertSpaces: $spaces, tabSize: $size});
+  editor.pushUndoStop();
+  editor.executeEdits('nyaxis.indentation', edits);
+  editor.pushUndoStop();
+  editor.focus();
+})();''');
+  }
+
+  Future<void> setLineEnding({required bool crlf}) async {
+    await _controller?.runJavaScript(
+      'editor.getModel()?.setEOL(${crlf ? 1 : 0});editor.focus();',
+    );
+  }
+
+  /// reads the active tab's file again with [encoding], so changes that are
+  /// not saved are lost; an untitled tab has no file to read, and is saved
+  /// with [encoding] instead
+  Future<void> reopenWithEncoding(TextEncoding encoding) async {
+    if (active >= tabs.length) {
+      return;
+    }
+    final tab = tabs[active];
+    final file = tab.file;
+    if (file == null) {
+      tab.encoding = encoding;
+      notifyListeners();
+      return;
+    }
+    try {
+      await tab.document.setText(encoding.decode(await file.readAsBytes()));
+      await tab.document.markSaved();
+      tab.encoding = encoding;
+      tab.dirty = false;
+      notifyListeners();
+      await _controller?.runJavaScript('editor.focus();');
+    } catch (e) {
+      debugPrint(
+        'EditorTabs: cannot reopen ${file.path} as ${encoding.label} '
+        '($e)',
+      );
+    }
+  }
+
   Future<void> save() async {
     if (active < tabs.length) {
       await _save(tabs[active]);
@@ -317,6 +413,9 @@ reportIndent();''';
           indentation =
               '${event.data['insertSpaces'] == true ? 'Spaces' : 'Tab Size'}: '
               '${event.data['tabSize']}';
+          notifyListeners();
+        case 'eol':
+          lineEnding = event.data['crlf'] == true ? 'CRLF' : 'LF';
           notifyListeners();
       }
     } else if (event is MonacoFocusChanged) {

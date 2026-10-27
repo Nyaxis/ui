@@ -47,6 +47,9 @@ void main() {
       show(Keymap.resolve([defaults])),
       'ctrl-s=workspace::Save '
       'ctrl-alt-n=workspace::Open '
+      'ctrl-g=go_to_line::Toggle '
+      'ctrl-k m=language_selector::Toggle '
+      'ctrl-k n=encoding_selector::Toggle '
       'ctrl-alt-shift-t=pane::CloseOtherItems '
       'ctrl-k e=pane::CloseItemsToTheLeft '
       'ctrl-k t=pane::CloseItemsToTheRight '

@@ -39,15 +39,19 @@ enum TextEncoding {
 
   static const utf8Codec = Utf8Codec();
 
+  /// the byte order mark is skipped when there is one, since a file can be
+  /// read with an encoding other than the one [detect] found
   String decode(Uint8List bytes) {
     switch (this) {
       case utf8:
         return utf8Codec.decode(bytes);
       case utf8Bom:
-        return utf8Codec.decode(bytes.sublist(3));
+        final bom = bytes.length >= 3 && detect(bytes) == utf8Bom;
+        return utf8Codec.decode(bom ? bytes.sublist(3) : bytes);
       case utf16le:
       case utf16be:
-        final data = ByteData.sublistView(bytes, 2);
+        final bom = bytes.length >= 2 && detect(bytes) == this;
+        final data = ByteData.sublistView(bytes, bom ? 2 : 0);
         final endian = this == utf16le ? Endian.little : Endian.big;
         return String.fromCharCodes([
           for (var i = 0; i + 1 < data.lengthInBytes; i += 2)
