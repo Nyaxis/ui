@@ -418,14 +418,13 @@ class _BarButtonState extends State<_BarButton> {
     if (!_hovered && !_pressed) {
       return Colors.transparent;
     }
-    final base = widget.destructive ? theme.red : theme.border;
-    if (!_pressed) {
-      return base;
+    if (widget.destructive) {
+      return _pressed
+          ? Color.alphaBlend(theme.background.withValues(alpha: 0.2), theme.red)
+          : theme.red;
     }
-    final shift = widget.destructive ? theme.background : theme.textPrimary;
-    return Color.alphaBlend(
-      shift.withValues(alpha: widget.destructive ? 0.2 : 0.1),
-      base,
+    return (_pressed ? theme.active : theme.hover).withValues(
+      alpha: _pressed ? 0.6 : 0.3,
     );
   }
 
