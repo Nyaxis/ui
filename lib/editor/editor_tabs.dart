@@ -54,6 +54,23 @@ class EditorTabs extends ChangeNotifier with WindowListener {
           "{kind: 'event', name: 'nyaxis.${binding.key}', data: {}})));",
   ].join('\n');
 
+  /// tells flutter how the active document is indented, which monaco detects
+  /// from its content
+  static const _indentScript = '''
+const reportIndent = () => {
+  const model = editor.getModel();
+  if (!model) return;
+  const {insertSpaces, tabSize} = model.getOptions();
+  window.flutterChannel.postMessage(JSON.stringify(
+      {kind: 'event', name: 'nyaxis.indent', data: {insertSpaces, tabSize}}));
+};
+editor.onDidChangeModel(reportIndent);
+editor.onDidChangeModelOptions(reportIndent);
+reportIndent();''';
+
+  /// of the active document, like `Spaces: 4`; empty until monaco reports it
+  String indentation = '';
+
   /// the auto save options are read from `config.json`, and added to it with
   /// their defaults when missing so they can be found
   Future<void> _loadConfig(String appData) async {
@@ -96,6 +113,7 @@ class EditorTabs extends ChangeNotifier with WindowListener {
     windowManager.addListener(this);
     _events = controller.events.listen(_onEvent);
     await controller.runJavaScript(_keybindingScript);
+    await controller.runJavaScript(_indentScript);
 
     final files =
         folder
@@ -236,6 +254,11 @@ class EditorTabs extends ChangeNotifier with WindowListener {
       switch (event.name.substring('nyaxis.'.length)) {
         case 'save':
           await save();
+        case 'indent':
+          indentation =
+              '${event.data['insertSpaces'] == true ? 'Spaces' : 'Tab Size'}: '
+              '${event.data['tabSize']}';
+          notifyListeners();
       }
     } else if (event is MonacoFocusChanged) {
       if (!event.focused && _autoSave == AutoSave.onFocusChange) {

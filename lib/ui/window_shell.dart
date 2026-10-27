@@ -243,6 +243,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
             children: [
               for (final text in [
                 if (cursor != null) 'Ln ${cursor.line}, Col ${cursor.column}',
+                if (_tabs.indentation.isNotEmpty) _tabs.indentation,
                 if (_tabs.active < _tabs.tabs.length)
                   _tabs.tabs[_tabs.active].encoding.label,
                 if (language != null) language.label ?? language.id,
