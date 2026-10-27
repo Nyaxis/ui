@@ -145,7 +145,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                             ),
                             loadingBuilder: (_) => const SizedBox.expand(),
                             onReady: (controller) {
-                              _monaco = controller;
+                              setState(() => _monaco = controller);
                               _applyMonacoTheme();
                               _attachEditor(controller);
                             },
@@ -230,7 +230,31 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     );
   }
 
+  /// cursor position and language of the active document
+  Widget _status(AppTheme theme, MonacoController monaco) {
+    return ValueListenableBuilder<MonacoLiveStats>(
+      valueListenable: monaco.stats,
+      builder: (context, stats, _) {
+        final cursor = stats.cursorPosition;
+        final language = stats.language;
+        return Row(
+          children: [
+            for (final text in [
+              if (cursor != null) 'Ln ${cursor.line}, Col ${cursor.column}',
+              if (language != null) language.label ?? language.id,
+            ])
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(text, style: theme.captionStyle),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _bottomBar(AppTheme theme) {
+    final monaco = _monaco;
     return Container(
       height: _bottomBarHeight,
       decoration: BoxDecoration(
@@ -242,6 +266,13 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       child: Row(
         children: [
           const Spacer(),
+          if (monaco != null) _status(theme, monaco),
+          Container(
+            width: theme.borderWidth,
+            height: 14,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            color: theme.border,
+          ),
           _BarButton(
             name: _sidebarOpen ? 'sidebar-open' : 'sidebar-closed',
             extent: _bottomBarHeight,
