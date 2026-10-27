@@ -195,7 +195,8 @@ void ShadowWindow::Sync() {
   if (!GetWindowRect(target_, &rect)) {
     return;
   }
-  if (!IsWindowVisible(target_) || IsIconic(target_) || IsZoomed(target_)) {
+  if (suspended_ || !IsWindowVisible(target_) || IsIconic(target_) ||
+      IsZoomed(target_)) {
     ShowWindow(hwnd_, SW_HIDE);
     return;
   }

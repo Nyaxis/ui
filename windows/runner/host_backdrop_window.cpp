@@ -202,7 +202,8 @@ void HostBackdropWindow::Sync() {
   const UINT height =
       static_cast<UINT>(std::max<LONG>(1, rect.bottom - rect.top));
 
-  if (!enabled_ || !IsWindowVisible(target_) || IsIconic(target_)) {
+  if (!enabled_ || suspended_ || !IsWindowVisible(target_) ||
+      IsIconic(target_)) {
     ShowWindow(hwnd_, SW_HIDE);
     return;
   }

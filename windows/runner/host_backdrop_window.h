@@ -23,6 +23,8 @@ class HostBackdropWindow {
   // radius is in logical pixels and scaled by the target's dpi
   void Configure(bool enabled, float radius);
 
+  // keeps the backdrop hidden while the target changes state
+  void SetSuspended(bool suspended) { suspended_ = suspended; }
   // the instance the exported ffi entry point talks to
   static void SetActive(HostBackdropWindow* window);
 
@@ -37,6 +39,7 @@ class HostBackdropWindow {
   HWND target_ = nullptr;
   HWND hwnd_ = nullptr;
   bool enabled_ = false;
+  bool suspended_ = false;
   float radius_ = 0.0f;  // logical pixels
 };
 

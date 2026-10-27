@@ -4,6 +4,14 @@
 
 #include "flutter/generated_plugin_registrant.h"
 
+namespace {
+
+constexpr UINT_PTR kTransitionTimer = 1;
+constexpr UINT kTransitionMs = 350;
+constexpr UINT kRestoreMs = 100;
+
+}  // namespace
+
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
@@ -84,6 +92,25 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       break;
     case WM_WINDOWPOSCHANGED:
     case WM_SHOWWINDOW:
+      // windows animates the window when it maximizes, minimizes or restores,
+      // and the shadow and the backdrop are windows of their own that would
+      // jump to the end of it, so they stay away until it is over
+      if ((IsZoomed(hwnd) != FALSE) != zoomed_ ||
+          (IsIconic(hwnd) != FALSE) != iconic_) {
+        const bool zoomed = IsZoomed(hwnd) != FALSE;
+        // a window that comes back from the taskbar keeps its place, so only
+        // a short wait keeps the backdrop from showing while it still grows
+        const UINT delay = zoomed != zoomed_ ? kTransitionMs : kRestoreMs;
+        zoomed_ = zoomed;
+        iconic_ = IsIconic(hwnd) != FALSE;
+        if (shadow_window_) {
+          shadow_window_->SetSuspended(true);
+        }
+        if (backdrop_window_) {
+          backdrop_window_->SetSuspended(true);
+        }
+        SetTimer(hwnd, kTransitionTimer, delay, nullptr);
+      }
       // the shadow goes first so the backdrop ends up directly beneath the
       // target, above the shadow
       if (shadow_window_) {
@@ -91,6 +118,20 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       }
       if (backdrop_window_) {
         backdrop_window_->Sync();
+      }
+      break;
+    case WM_TIMER:
+      if (wparam == kTransitionTimer) {
+        KillTimer(hwnd, kTransitionTimer);
+        if (shadow_window_) {
+          shadow_window_->SetSuspended(false);
+          shadow_window_->Sync();
+        }
+        if (backdrop_window_) {
+          backdrop_window_->SetSuspended(false);
+          backdrop_window_->Sync();
+        }
+        return 0;
       }
       break;
   }

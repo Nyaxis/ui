@@ -28,6 +28,9 @@ class FlutterWindow : public Win32Window {
 
   std::unique_ptr<ShadowWindow> shadow_window_;
   std::unique_ptr<HostBackdropWindow> backdrop_window_;
+
+  bool zoomed_ = false;
+  bool iconic_ = false;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_
