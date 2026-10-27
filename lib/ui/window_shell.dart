@@ -3,6 +3,7 @@ import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../editor/editor_tabs.dart';
+import '../editor/keymap.dart';
 import '../editor/luau_lsp.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
@@ -24,6 +25,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   MonacoController? _monaco;
   final _tabs = EditorTabs();
+  final _keymap = Keymap();
 
   // only picks the icon for now, there is no sidebar to show yet
   bool _sidebarOpen = false;
@@ -42,6 +44,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     windowManager.removeListener(this);
     widget.controller.removeListener(_applyMonacoTheme);
     _tabs.dispose();
+    _keymap.dispose();
     super.dispose();
   }
 
@@ -53,6 +56,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   /// the documents have to exist before the server connects, so it sees them
   Future<void> _attachEditor(MonacoController controller) async {
+    _keymap.on('workspace::Save', _tabs.save);
+    await _keymap.attach(controller);
     await _tabs.attach(controller);
     await connectLuauLsp(controller);
   }

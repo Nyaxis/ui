@@ -41,19 +41,6 @@ class EditorTabs extends ChangeNotifier with WindowListener {
   var _autoSaveDelay = const Duration(seconds: 1);
   final _timers = <EditorTab, Timer>{};
 
-  /// action to monaco key; the page posts `nyaxis.<action>` when the key is
-  /// pressed in the editor, where flutter never sees it
-  static const _keybindings = {
-    'save': 'monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS',
-  };
-
-  static String get _keybindingScript => [
-    for (final binding in _keybindings.entries)
-      'editor.addCommand(${binding.value}, () => '
-          'window.flutterChannel.postMessage(JSON.stringify('
-          "{kind: 'event', name: 'nyaxis.${binding.key}', data: {}})));",
-  ].join('\n');
-
   /// tells flutter how the active document is indented, which monaco detects
   /// from its content
   static const _indentScript = '''
@@ -112,7 +99,6 @@ reportIndent();''';
 
     windowManager.addListener(this);
     _events = controller.events.listen(_onEvent);
-    await controller.runJavaScript(_keybindingScript);
     await controller.runJavaScript(_indentScript);
 
     final files =
@@ -252,8 +238,6 @@ reportIndent();''';
   Future<void> _onEvent(MonacoEvent event) async {
     if (event is MonacoUnknownEvent && event.name.startsWith('nyaxis.')) {
       switch (event.name.substring('nyaxis.'.length)) {
-        case 'save':
-          await save();
         case 'indent':
           indentation =
               '${event.data['insertSpaces'] == true ? 'Spaces' : 'Tab Size'}: '

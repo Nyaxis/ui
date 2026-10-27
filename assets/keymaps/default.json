@@ -1,0 +1,10 @@
+// Default key bindings, in the format of Zed's keymaps. To change one, add a
+// section to keymap.json in %APPDATA%\Nyaxis; it is applied after this file.
+[
+  {
+    "context": "Workspace",
+    "bindings": {
+      "ctrl-s": "workspace::Save",
+    },
+  },
+]
