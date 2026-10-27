@@ -164,9 +164,11 @@ bool Win32Window::Create(const std::wstring& title,
 
   HWND window = CreateWindow(
       window_class, title.c_str(),
-      // the frame and the boxes are what let windows resize and snap it; the
-      // frame is removed again in WM_NCCALCSIZE
-      WS_POPUP | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX,
+      // the frame and the boxes are what let windows resize and snap it, and
+      // the caption is what it animates; they are removed again in
+      // WM_NCCALCSIZE
+      WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX |
+          WS_MAXIMIZEBOX,
       Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
       Scale(size.width, scale_factor), Scale(size.height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this);
@@ -174,6 +176,12 @@ bool Win32Window::Create(const std::wstring& title,
   if (!window) {
     return false;
   }
+
+  // the client area was sized with the caption and frame, which
+  // WM_NCCALCSIZE removes, and the flutter view takes its size from it
+  SetWindowPos(window, nullptr, 0, 0, 0, 0,
+               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                   SWP_FRAMECHANGED);
 
   MARGINS sheet_of_glass{-1, -1, -1, -1};
   DwmExtendFrameIntoClientArea(window, &sheet_of_glass);
@@ -266,6 +274,17 @@ Win32Window::MessageHandler(HWND hwnd,
       }
       return 0;
     }
+
+    // the caption in the style is for the animations, and the window draws
+    // its own, so nothing may paint the system's; the last two are
+    // undocumented messages that draw the caption and the frame
+    case WM_NCPAINT:
+    case 0xAE:
+    case 0xAF:
+      return 0;
+
+    case WM_NCACTIVATE:
+      return TRUE;
 
     case WM_NCHITTEST: {
       const LRESULT hit = ResizeHitTest(hwnd, lparam);
