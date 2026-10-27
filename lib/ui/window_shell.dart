@@ -249,6 +249,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
             size: 16,
             hoverInset: 2,
             hoverRadius: 4,
+            dim: true,
             theme: theme,
             onPressed: () => setState(() => _sidebarOpen = !_sidebarOpen),
           ),
@@ -449,6 +450,7 @@ class _BarButton extends StatefulWidget {
     this.hoverInset = 0,
     this.hoverRadius = 0,
     this.destructive = false,
+    this.dim = false,
   });
 
   final String name;
@@ -464,6 +466,9 @@ class _BarButton extends StatefulWidget {
 
   /// hovers in the theme's red instead of the border color
   final bool destructive;
+
+  /// draws the icon in the dim text color until the button is hovered
+  final bool dim;
   final AppTheme theme;
   final VoidCallback onPressed;
 
@@ -512,7 +517,11 @@ class _BarButtonState extends State<_BarButton> {
           child: SkinnableIcon(
             name: widget.name,
             size: widget.size,
-            color: onRed ? theme.background : theme.textPrimary,
+            color: onRed
+                ? theme.background
+                : (widget.dim && !_hovered && !_pressed
+                      ? theme.textDim
+                      : theme.textPrimary),
           ),
         ),
       ),
