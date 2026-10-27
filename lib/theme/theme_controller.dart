@@ -117,7 +117,8 @@ class ThemeController extends ValueNotifier<AppTheme> {
       'minimize',
       'maximize',
       'close',
-      'sidebar',
+      'sidebar-closed',
+      'sidebar-open',
       'add',
     ]) {
       if (!existing.contains(name)) {

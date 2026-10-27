@@ -24,6 +24,9 @@ class _WindowShellState extends State<WindowShell> {
   MonacoController? _monaco;
   final _tabs = EditorTabs();
 
+  // only picks the icon for now, there is no sidebar to show yet
+  bool _sidebarOpen = false;
+
   @override
   void initState() {
     super.initState();
@@ -216,13 +219,13 @@ class _WindowShellState extends State<WindowShell> {
         children: [
           const Spacer(),
           _BarButton(
-            name: 'sidebar',
+            name: _sidebarOpen ? 'sidebar-open' : 'sidebar-closed',
             extent: _bottomBarHeight,
             size: _bottomBarHeight * 0.65,
             hoverInset: 2,
             hoverRadius: 4,
             theme: theme,
-            onPressed: () {},
+            onPressed: () => setState(() => _sidebarOpen = !_sidebarOpen),
           ),
         ],
       ),
