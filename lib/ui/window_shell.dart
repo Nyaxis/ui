@@ -245,7 +245,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           _BarButton(
             name: _sidebarOpen ? 'sidebar-open' : 'sidebar-closed',
             extent: _bottomBarHeight,
-            size: _bottomBarHeight * 0.55,
+            // the icon's own grid, so its lines land on whole pixels
+            size: 16,
             hoverInset: 2,
             hoverRadius: 4,
             theme: theme,
