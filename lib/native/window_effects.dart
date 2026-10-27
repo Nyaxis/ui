@@ -1,8 +1,8 @@
 import 'dart:ffi';
 import 'dart:io';
 
-/// the runner owns the acrylic backdrop and the window region that crops the
-/// flutter window to the same rounded shape; this only switches it on and off
+/// the runner owns the acrylic backdrop and the drop shadow; this only
+/// switches them on and off
 class WindowEffects {
   WindowEffects._();
 

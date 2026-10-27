@@ -176,31 +176,6 @@ void HostBackdropWindow::Configure(bool enabled, float radius) {
   Sync();
 }
 
-void HostBackdropWindow::UpdateTargetRegion(UINT width, UINT height) {
-  const float radius = ScaledRadius();
-  if (width == region_width_ && height == region_height_ &&
-      radius == region_radius_) {
-    return;
-  }
-  region_width_ = width;
-  region_height_ = height;
-  region_radius_ = radius;
-
-  if (radius <= 0.0f) {
-    SetWindowRgn(target_, nullptr, TRUE);
-    return;
-  }
-  // the ellipse arguments are diameters, and a region's lower-right edge is
-  // exclusive, hence 2 * radius and the extra pixel
-  const int diameter = static_cast<int>(radius * 2.0f + 0.5f);
-  HRGN region = CreateRoundRectRgn(0, 0, width + 1, height + 1, diameter,
-                                   diameter);
-  // the system owns the region after a successful call
-  if (region && !SetWindowRgn(target_, region, TRUE)) {
-    DeleteObject(region);
-  }
-}
-
 void HostBackdropWindow::UpdateVisuals(UINT width, UINT height) {
   if (!impl_) {
     return;
@@ -226,8 +201,6 @@ void HostBackdropWindow::Sync() {
       static_cast<UINT>(std::max<LONG>(1, rect.right - rect.left));
   const UINT height =
       static_cast<UINT>(std::max<LONG>(1, rect.bottom - rect.top));
-
-  UpdateTargetRegion(width, height);
 
   if (!enabled_ || !IsWindowVisible(target_) || IsIconic(target_)) {
     ShowWindow(hwnd_, SW_HIDE);

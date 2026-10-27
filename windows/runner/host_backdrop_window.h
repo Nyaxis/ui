@@ -30,7 +30,6 @@ class HostBackdropWindow {
   struct Impl;
 
   bool EnsureComposition();
-  void UpdateTargetRegion(UINT width, UINT height);
   float ScaledRadius() const;
   void UpdateVisuals(UINT width, UINT height);
 
@@ -39,9 +38,6 @@ class HostBackdropWindow {
   HWND hwnd_ = nullptr;
   bool enabled_ = false;
   float radius_ = 0.0f;  // logical pixels
-  UINT region_width_ = 0;
-  UINT region_height_ = 0;
-  float region_radius_ = -1.0f;
 };
 
 #endif  // RUNNER_HOST_BACKDROP_WINDOW_H_
