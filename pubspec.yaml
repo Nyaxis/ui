@@ -31,6 +31,11 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/file_icons/
+    - assets/file_icons/icons/latte/
+    - assets/file_icons/icons/frappe/
+    - assets/file_icons/icons/macchiato/
+    - assets/file_icons/icons/mocha/
     - assets/icons/add/
     - assets/icons/checkmark/
     - assets/icons/close/
