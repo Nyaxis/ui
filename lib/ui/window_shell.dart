@@ -102,6 +102,10 @@ class WindowShell extends StatefulWidget {
 class _WindowShellState extends State<WindowShell> with WindowListener {
   static const _monacoTheme = MonacoTheme('nyaxis');
 
+  /// keeps the editor alive when the sidebar docks to the other side, which
+  /// moves it among the row's children
+  final _editorKey = GlobalKey();
+
   MonacoController? _monaco;
   final _tabs = EditorTabs();
   final _keymap = Keymap();
@@ -420,6 +424,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     // the webview is slow to resize, so it waits for the
     // window to stop being dragged
     DeferredSize(
+      key: _editorKey,
       child: MonacoEditor(
         backgroundColor: Colors.transparent,
         page: const MonacoPageConfig(
