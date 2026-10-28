@@ -427,8 +427,12 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       key: _editorKey,
       child: MonacoEditor(
         backgroundColor: Colors.transparent,
+        // the editor background is transparent, so the caret of monaco's
+        // hidden input element, which sits behind the text, shows through
         page: const MonacoPageConfig(
-          customCss: 'html, body { background: transparent !important; }',
+          customCss:
+              'html, body { background: transparent !important; }'
+              '.monaco-editor .native-edit-context { caret-color: transparent; }',
         ),
         loadingBuilder: (_) => const SizedBox.expand(),
         onReady: (controller) {
