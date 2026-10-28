@@ -944,12 +944,17 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         children: [
           Expanded(
             child: DragToMoveArea(
-              child: Row(
-                children: [
-                  const SizedBox(width: 14),
-                  Text('Nyaxis', style: theme.titleStyle),
-                  const Spacer(),
-                ],
+              // the row is only as tall as the text, so without this the
+              // strips above and below it would not drag
+              child: SizedBox(
+                height: _titleBarHeight,
+                child: Row(
+                  children: [
+                    const SizedBox(width: 14),
+                    Text('Nyaxis', style: theme.titleStyle),
+                    const Spacer(),
+                  ],
+                ),
               ),
             ),
           ),
