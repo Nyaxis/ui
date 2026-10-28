@@ -43,6 +43,31 @@ class _SidebarPanelState extends State<SidebarPanel> {
   var _startX = 0.0;
   var _startWidth = 0.0;
 
+  /// the edge trails the pointer while it is dragged, so the cursor is kept
+  /// by a layer over the whole window instead of by the strip alone
+  OverlayEntry? _dragCursor;
+
+  void _startDragCursor() {
+    _dragCursor = OverlayEntry(
+      builder: (_) => const Positioned.fill(
+        child: MouseRegion(cursor: SystemMouseCursors.resizeColumn),
+      ),
+    );
+    Overlay.of(context).insert(_dragCursor!);
+  }
+
+  void _endDragCursor() {
+    _dragCursor?.remove();
+    _dragCursor?.dispose();
+    _dragCursor = null;
+  }
+
+  @override
+  void dispose() {
+    _endDragCursor();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
@@ -76,12 +101,17 @@ class _SidebarPanelState extends State<SidebarPanel> {
                 onHorizontalDragStart: (details) {
                   _startX = details.globalPosition.dx;
                   _startWidth = widget.width;
+                  _startDragCursor();
                 },
                 onHorizontalDragUpdate: (details) {
                   final moved = details.globalPosition.dx - _startX;
                   widget.onResize(_startWidth + (onLeft ? moved : -moved));
                 },
-                onHorizontalDragEnd: (_) => widget.onResizeEnd(),
+                onHorizontalDragEnd: (_) {
+                  _endDragCursor();
+                  widget.onResizeEnd();
+                },
+                onHorizontalDragCancel: _endDragCursor,
               ),
             ),
           ),
