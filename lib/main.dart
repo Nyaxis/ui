@@ -16,6 +16,7 @@ Future<void> main() async {
 
   // setTitleBarStyle is deliberately never called: it clears the frameless
   // flag the runner relies on
+  await windowManager.setMinimumSize(const Size(480, 320));
   await windowManager.center();
 
   // the webview takes the ui thread's dispatcher queue, which the acrylic
