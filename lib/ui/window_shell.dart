@@ -14,6 +14,7 @@ import '../editor/luau_lsp.dart';
 import '../editor/text_encoding.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
+import 'clickable.dart';
 import 'context_menu.dart';
 import 'deferred_size.dart';
 import 'dialog.dart';
@@ -961,6 +962,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           _BarButton(
             label: 'Minimize',
             name: 'minimize',
+            cursor: SystemMouseCursors.basic,
             extent: _titleBarHeight,
             size: _titleBarHeight * 0.4,
             theme: theme,
@@ -969,6 +971,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           _BarButton(
             label: _maximized ? 'Restore' : 'Maximize',
             name: _maximized ? 'restore' : 'maximize',
+            cursor: SystemMouseCursors.basic,
             extent: _titleBarHeight,
             size: _titleBarHeight * 0.4,
             theme: theme,
@@ -977,6 +980,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           _BarButton(
             label: 'Close',
             name: 'close',
+            cursor: SystemMouseCursors.basic,
             extent: _titleBarHeight,
             size: _titleBarHeight * 0.4,
             destructive: true,
@@ -1041,72 +1045,68 @@ class _TabState extends State<_Tab> {
   Widget build(BuildContext context) {
     final theme = widget.theme;
     final color = widget.selected ? theme.textPrimary : theme.textDim;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onSelect,
-        onSecondaryTapUp: (details) => widget.onMenu(details.globalPosition),
-        child: CustomPaint(
-          painter: widget.selected
-              ? _ReplacePainter(theme.backgroundColor)
-              : null,
-          child: Container(
-            // the dot fills the left margin, so it never moves the name
-            padding: EdgeInsets.only(
-              left: widget.tab.dirty ? 0 : _margin,
-              right: 8,
+    return Clickable(
+      onEnter: () => setState(() => _hovered = true),
+      onExit: () => setState(() => _hovered = false),
+      onTap: widget.onSelect,
+      onSecondaryTapUp: (details) => widget.onMenu(details.globalPosition),
+      child: CustomPaint(
+        painter: widget.selected
+            ? _ReplacePainter(theme.backgroundColor)
+            : null,
+        child: Container(
+          // the dot fills the left margin, so it never moves the name
+          padding: EdgeInsets.only(
+            left: widget.tab.dirty ? 0 : _margin,
+            right: 8,
+          ),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: widget.selected ? null : _inactive(theme),
+            border: Border(
+              right: widget.line,
+              // the selected tab keeps the space, so the text doesn't shift
+              bottom: widget.selected
+                  ? widget.line.copyWith(color: Colors.transparent)
+                  : widget.line,
             ),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: widget.selected ? null : _inactive(theme),
-              border: Border(
-                right: widget.line,
-                // the selected tab keeps the space, so the text doesn't shift
-                bottom: widget.selected
-                    ? widget.line.copyWith(color: Colors.transparent)
-                    : widget.line,
+          ),
+          child: Row(
+            children: [
+              if (widget.tab.dirty)
+                Container(
+                  width: _dotSize,
+                  height: _dotSize,
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: (_margin - _dotSize) / 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.accent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              Text(
+                widget.tab.name,
+                style: theme.bodyStyle.copyWith(color: color),
               ),
-            ),
-            child: Row(
-              children: [
-                if (widget.tab.dirty)
-                  Container(
-                    width: _dotSize,
-                    height: _dotSize,
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: (_margin - _dotSize) / 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: theme.accent,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                Text(
-                  widget.tab.name,
-                  style: theme.bodyStyle.copyWith(color: color),
-                ),
-                // the slot is always there, so hovering never resizes the tab
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: Opacity(
-                    opacity: _hovered ? 1 : 0,
-                    child: _BarButton(
-                      label: 'Close',
-                      name: 'close',
-                      extent: _closeExtent,
-                      size: _closeSize,
-                      hoverInset: 1,
-                      hoverRadius: 4,
-                      theme: theme,
-                      onPressed: widget.onClose,
-                    ),
+              // the slot is always there, so hovering never resizes the tab
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Opacity(
+                  opacity: _hovered ? 1 : 0,
+                  child: _BarButton(
+                    label: 'Close',
+                    name: 'close',
+                    extent: _closeExtent,
+                    size: _closeSize,
+                    hoverInset: 1,
+                    hoverRadius: 4,
+                    theme: theme,
+                    onPressed: widget.onClose,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1170,33 +1170,30 @@ class _StatusItemState extends State<_StatusItem> {
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onPressed,
-        onSecondaryTapUp: (details) => widget.onMenu(details.globalPosition),
-        child: _tip(
-          theme: theme,
-          label: widget.label,
-          keys: widget.keys,
-          below: false,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: _hovered
-                  ? theme.hover.withValues(alpha: 0.3)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              widget.text,
-              style: theme.captionStyle.copyWith(
-                color: _hovered ? theme.textPrimary : null,
-              ),
+    return Clickable(
+      onEnter: () => setState(() => _hovered = true),
+      onExit: () => setState(() => _hovered = false),
+      onTap: widget.onPressed,
+      onSecondaryTapUp: (details) => widget.onMenu(details.globalPosition),
+      child: _tip(
+        theme: theme,
+        label: widget.label,
+        keys: widget.keys,
+        below: false,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _hovered
+                ? theme.hover.withValues(alpha: 0.3)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            widget.text,
+            style: theme.captionStyle.copyWith(
+              color: _hovered ? theme.textPrimary : null,
             ),
           ),
         ),
@@ -1220,6 +1217,7 @@ class _BarButton extends StatefulWidget {
     this.active = false,
     this.keys,
     this.tipBelow = true,
+    this.cursor = SystemMouseCursors.click,
   });
 
   /// what the button does
@@ -1230,6 +1228,8 @@ class _BarButton extends StatefulWidget {
 
   /// whether its tooltip opens under the button, or above it
   final bool tipBelow;
+
+  final MouseCursor cursor;
 
   /// the icon's name
   final String name;
@@ -1282,32 +1282,30 @@ class _BarButtonState extends State<_BarButton> {
   Widget _hoverFill(AppTheme theme) {
     final onRed = widget.destructive && (_hovered || _pressed);
     // only the visible fill reacts, not the inset around it
-    final fill = MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => setState(() => _pressed = true),
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTap: widget.onPressed,
-        child: Container(
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: _fillColor(theme),
-            borderRadius: BorderRadius.circular(widget.hoverRadius),
-          ),
-          child: SkinnableIcon(
-            name: widget.name,
-            size: widget.size,
-            color: onRed
-                ? theme.background
-                : widget.active
-                ? theme.accent
-                : (widget.dim && !_hovered && !_pressed
-                      ? theme.textDim
-                      : theme.textPrimary),
-          ),
+    final fill = Clickable(
+      cursor: widget.cursor,
+      onEnter: () => setState(() => _hovered = true),
+      onExit: () => setState(() => _hovered = false),
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onPressed,
+      child: Container(
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _fillColor(theme),
+          borderRadius: BorderRadius.circular(widget.hoverRadius),
+        ),
+        child: SkinnableIcon(
+          name: widget.name,
+          size: widget.size,
+          color: onRed
+              ? theme.background
+              : widget.active
+              ? theme.accent
+              : (widget.dim && !_hovered && !_pressed
+                    ? theme.textDim
+                    : theme.textPrimary),
         ),
       ),
     );

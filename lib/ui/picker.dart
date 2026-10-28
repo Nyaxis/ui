@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../theme/app_theme.dart';
+import 'clickable.dart';
 import 'skinnable_icon.dart';
 
 /// a line of a list picker
@@ -329,35 +330,28 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => onHover(),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 5),
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: highlighted
-                ? theme.selection.withValues(alpha: 0.3)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Row(
-            children: [
-              if (item.icon != null) ...[
-                SvgPicture.asset(item.icon!, width: 16, height: 16),
-                const SizedBox(width: 8),
-              ],
-              Expanded(child: Text(item.label, style: theme.bodyStyle)),
-              if (item.checked)
-                SkinnableIcon(
-                  name: 'checkmark',
-                  size: 14,
-                  color: theme.textDim,
-                ),
+    return Clickable(
+      onEnter: onHover,
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: highlighted
+              ? theme.selection.withValues(alpha: 0.3)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          children: [
+            if (item.icon != null) ...[
+              SvgPicture.asset(item.icon!, width: 16, height: 16),
+              const SizedBox(width: 8),
             ],
-          ),
+            Expanded(child: Text(item.label, style: theme.bodyStyle)),
+            if (item.checked)
+              SkinnableIcon(name: 'checkmark', size: 14, color: theme.textDim),
+          ],
         ),
       ),
     );

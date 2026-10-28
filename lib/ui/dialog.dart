@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
+import 'clickable.dart';
 
 /// asks [message] in the middle of the window, with the lines of [details]
 /// under it, and resolves to the index in [buttons] that was chosen, or null
@@ -208,24 +209,20 @@ class _DialogButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => onHover(),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: highlighted ? theme.hover : Colors.transparent,
-            borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
-            border: Border.all(
-              color: highlighted ? theme.accent : theme.border,
-              width: theme.borderWidth,
-            ),
+    return Clickable(
+      onEnter: onHover,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: highlighted ? theme.hover : Colors.transparent,
+          borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
+          border: Border.all(
+            color: highlighted ? theme.accent : theme.border,
+            width: theme.borderWidth,
           ),
-          child: Text(label, style: theme.bodyStyle),
         ),
+        child: Text(label, style: theme.bodyStyle),
       ),
     );
   }
