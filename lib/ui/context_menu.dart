@@ -4,6 +4,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../editor/keymap.dart';
 import '../theme/app_theme.dart';
+import 'clickable.dart';
 import 'skinnable_icon.dart';
 
 sealed class ContextMenuEntry {
@@ -251,64 +252,62 @@ class _ItemState extends State<_Item> {
     final color = enabled
         ? theme.textPrimary
         : theme.textDim.withValues(alpha: 0.5);
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: enabled
-            ? () {
-                widget.onClose();
-                onPressed();
-              }
-            : null,
-        child: Container(
-          height: 26,
-          margin: const EdgeInsets.symmetric(horizontal: 5),
-          // the check mark's column starts at the fill's edge, so the mark is
-          // centered between the edge and the label
-          padding: EdgeInsets.only(
-            left: widget.item.checked == null ? 8 : 0,
-            right: 8,
-          ),
-          decoration: BoxDecoration(
-            color: enabled && _hovered
-                ? theme.hover.withValues(alpha: 0.3)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Row(
-            children: [
-              if (widget.item.checked != null)
-                SizedBox(
-                  width: 25,
-                  child: widget.item.checked!
-                      ? Center(
-                          child: SkinnableIcon(
-                            name: 'checkmark',
-                            size: 14,
-                            color: theme.accent.withValues(
-                              alpha: enabled ? 1 : 0.5,
-                            ),
+    return Clickable(
+      cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+      onEnter: () => setState(() => _hovered = true),
+      onExit: () => setState(() => _hovered = false),
+      onTap: enabled
+          ? () {
+              widget.onClose();
+              onPressed();
+            }
+          : null,
+      child: Container(
+        height: 26,
+        margin: const EdgeInsets.symmetric(horizontal: 5),
+        // the check mark's column starts at the fill's edge, so the mark is
+        // centered between the edge and the label
+        padding: EdgeInsets.only(
+          left: widget.item.checked == null ? 8 : 0,
+          right: 8,
+        ),
+        decoration: BoxDecoration(
+          color: enabled && _hovered
+              ? theme.hover.withValues(alpha: 0.3)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          children: [
+            if (widget.item.checked != null)
+              SizedBox(
+                width: 25,
+                child: widget.item.checked!
+                    ? Center(
+                        child: SkinnableIcon(
+                          name: 'checkmark',
+                          size: 14,
+                          color: theme.accent.withValues(
+                            alpha: enabled ? 1 : 0.5,
                           ),
-                        )
-                      : null,
-                ),
-              Text(
-                widget.item.label,
-                style: theme.bodyStyle.copyWith(color: color),
+                        ),
+                      )
+                    : null,
               ),
-              const SizedBox(width: 24),
-              const Spacer(),
-              if (keys != null)
-                Text(
-                  Keymap.formatKeys(keys),
-                  style: theme.bodyStyle.copyWith(
-                    color: theme.textDim.withValues(alpha: enabled ? 1 : 0.5),
-                  ),
+            Text(
+              widget.item.label,
+              style: theme.bodyStyle.copyWith(color: color),
+            ),
+            const SizedBox(width: 24),
+            const Spacer(),
+            if (keys != null)
+              Text(
+                Keymap.formatKeys(keys),
+                style: theme.bodyStyle.copyWith(
+                  color: theme.textDim.withValues(alpha: enabled ? 1 : 0.5),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
