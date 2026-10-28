@@ -346,6 +346,12 @@ reportLanguage();''';
     for (final i in indexes) {
       await _remove(i);
     }
+    // once, so a tab that cannot be activated does not stop the closing
+    if (tabs.isEmpty) {
+      await newTab();
+    } else {
+      await select(active);
+    }
   }
 
   Future<void> _remove(int index) async {
@@ -361,11 +367,6 @@ reportLanguage();''';
     active = active.clamp(0, tabs.isNotEmpty ? tabs.length - 1 : 0);
     await tab.document.close();
     _scheduleSession();
-    if (tabs.isEmpty) {
-      await newTab();
-    } else {
-      await select(active);
-    }
   }
 
   /// the file's path, or its name when [relative], since scripts are all in
