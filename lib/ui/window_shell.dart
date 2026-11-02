@@ -12,6 +12,7 @@ import '../editor/keymap.dart';
 import '../editor/language_extensions.dart';
 import '../editor/luau_lsp.dart';
 import '../editor/text_encoding.dart';
+import '../native/backend.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import 'clickable.dart';
@@ -109,6 +110,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   MonacoController? _monaco;
   final _tabs = EditorTabs();
   final _keymap = Keymap();
+  Backend? _backend;
+  String? _presenceFile;
 
   bool _sidebarOpen = false;
   double _sidebarWidth = 240;
@@ -252,15 +255,38 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     _tabs.confirmClose = _confirmClose;
     widget.controller.addListener(_applyMonacoTheme);
     windowManager.addListener(this);
+    _tabs.addListener(_updatePresence);
+    Backend.start().then((backend) {
+      if (!mounted) {
+        backend.dispose();
+        return;
+      }
+      setState(() => _backend = backend);
+      _updatePresence();
+    });
   }
 
   @override
   void dispose() {
     windowManager.removeListener(this);
     widget.controller.removeListener(_applyMonacoTheme);
+    _tabs.removeListener(_updatePresence);
+    _backend?.dispose();
     _tabs.dispose();
     _keymap.dispose();
     super.dispose();
+  }
+
+  /// tells the backend which script is open, skipping redundant updates
+  void _updatePresence() {
+    final file = _tabs.active < _tabs.tabs.length
+        ? _tabs.tabs[_tabs.active].name
+        : null;
+    if (file == _presenceFile) {
+      return;
+    }
+    _presenceFile = file;
+    _backend?.presence(file);
   }
 
   @override
@@ -508,9 +534,9 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                     ),
                   ),
                 ),
-                for (final (label, name) in const [
-                  ('Inject', 'inject'),
-                  ('Execute', 'execute'),
+                for (final (label, name, onPressed) in [
+                  ('Inject', 'inject', _inject),
+                  ('Execute', 'execute', _execute),
                 ])
                   Padding(
                     padding: EdgeInsets.only(bottom: theme.borderWidth),
@@ -522,8 +548,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                       hoverInset: 5,
                       hoverRadius: 4,
                       theme: theme,
-                      // shortcut: no inject/execute backend exists yet
-                      onPressed: () {},
+                      onPressed: onPressed,
                     ),
                   ),
               ],
@@ -532,6 +557,16 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         ),
       ),
     );
+  }
+
+  void _inject() => _backend?.inject();
+
+  Future<void> _execute() async {
+    if (_tabs.active >= _tabs.tabs.length) {
+      return;
+    }
+    final script = await _tabs.tabs[_tabs.active].document.getText();
+    _backend?.execute(script);
   }
 
   Future<void> _openFile() async {
