@@ -39,6 +39,8 @@ flutter:
     - assets/icons/add/
     - assets/icons/checkmark/
     - assets/icons/close/
+    - assets/icons/execute/
+    - assets/icons/inject/
     - assets/icons/maximize/
     - assets/icons/minimize/
     - assets/icons/restore/

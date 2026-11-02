@@ -126,6 +126,8 @@ class ThemeController extends ValueNotifier<AppTheme> {
       'sidebar-open',
       'add',
       'checkmark',
+      'inject',
+      'execute',
     ]) {
       if (!existing.contains(name)) {
         await File('${icons.path}\\$name.svg').writeAsString(
