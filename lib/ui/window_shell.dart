@@ -451,7 +451,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   static const _titleBarHeight = 40.0;
   static const _bottomBarHeight = 28.0;
-  static const _tabBarHeight = 34.0;
+  static const _tabBarHeight = 40.0;
 
   /// the selected tab shares the editor's color, so it reads as part of it
   /// and breaks the line under the other tabs
@@ -499,7 +499,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                       label: 'New',
                       name: 'add',
                       extent: _tabBarHeight,
-                      size: _tabBarHeight * 0.5,
+                      size: _tabBarHeight * 0.55,
                       hoverInset: 5,
                       hoverRadius: 4,
                       active: _newMenuOpen,
@@ -508,6 +508,24 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                     ),
                   ),
                 ),
+                for (final (label, name) in const [
+                  ('Inject', 'inject'),
+                  ('Execute', 'execute'),
+                ])
+                  Padding(
+                    padding: EdgeInsets.only(bottom: theme.borderWidth),
+                    child: _BarButton(
+                      label: label,
+                      name: name,
+                      extent: _tabBarHeight,
+                      size: _tabBarHeight * 0.55,
+                      hoverInset: 5,
+                      hoverRadius: 4,
+                      theme: theme,
+                      // shortcut: no inject/execute backend exists yet
+                      onPressed: () {},
+                    ),
+                  ),
               ],
             ),
           ],
