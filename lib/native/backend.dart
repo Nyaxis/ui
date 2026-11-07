@@ -44,5 +44,20 @@ class Backend {
   /// the name of the script being edited, or null when there is none
   void presence(String? file) => _send({'cmd': 'presence', 'file': file});
 
-  void dispose() => _process?.kill();
+  /// closes the backend's stdin so it can clear its discord presence and exit,
+  /// killing it only if it has not exited after a second
+  void dispose() {
+    final process = _process;
+    if (process == null) return;
+    process.stdin.close().ignore();
+    process.exitCode
+        .timeout(
+          const Duration(seconds: 1),
+          onTimeout: () {
+            process.kill();
+            return -1;
+          },
+        )
+        .ignore();
+  }
 }
