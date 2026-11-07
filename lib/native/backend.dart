@@ -9,6 +9,7 @@ class Backend {
   Backend._(this._process);
 
   final Process? _process;
+  Future<void>? _shutdown;
 
   /// `NYAXIS_HOST` overrides the host's path, for running from the backend's
   /// build output
@@ -46,18 +47,20 @@ class Backend {
 
   /// closes the backend's stdin so it can clear its discord presence and exit,
   /// killing it only if it has not exited after a second
-  void dispose() {
+  Future<void> shutdown() => _shutdown ??= _stop();
+
+  Future<void> _stop() async {
     final process = _process;
     if (process == null) return;
     process.stdin.close().ignore();
-    process.exitCode
-        .timeout(
-          const Duration(seconds: 1),
-          onTimeout: () {
-            process.kill();
-            return -1;
-          },
-        )
-        .ignore();
+    await process.exitCode.timeout(
+      const Duration(seconds: 1),
+      onTimeout: () {
+        process.kill();
+        return -1;
+      },
+    );
   }
+
+  void dispose() => shutdown().ignore();
 }
