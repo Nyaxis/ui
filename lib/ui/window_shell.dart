@@ -255,6 +255,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     _tabs.confirmClose = _confirmClose;
     widget.controller.addListener(_applyMonacoTheme);
     windowManager.addListener(this);
+    windowManager.setPreventClose(true);
     _tabs.addListener(_updatePresence);
     Backend.start().then((backend) {
       if (!mounted) {
@@ -275,6 +276,12 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     _tabs.dispose();
     _keymap.dispose();
     super.dispose();
+  }
+
+  @override
+  Future<void> onWindowClose() async {
+    await _backend?.shutdown();
+    await windowManager.destroy();
   }
 
   /// tells the backend which script is open, skipping redundant updates
