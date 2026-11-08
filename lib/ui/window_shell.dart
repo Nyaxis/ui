@@ -280,6 +280,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   @override
   Future<void> onWindowClose() async {
+    await windowManager.hide();
     _backend?.dispose();
     await windowManager.destroy();
   }
