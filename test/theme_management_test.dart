@@ -275,6 +275,49 @@ void main() {
     });
   });
 
+  group('palette previews', () {
+    test('the palette in use gives the colors it has now', () {
+      controller.setColor('accent', const Color(0xff112233));
+      final colors = controller.paletteColors('Dark')!;
+
+      expect(colors, hasLength(ThemeController.paletteRoles.length));
+      final accent = ThemeController.paletteRoles.indexWhere(
+        (role) => role.$1 == 'accent',
+      );
+      expect(colors[accent], const Color(0xff112233));
+    });
+
+    test(
+      'another palette is read from its file, in the order of the roles',
+      () {
+        final colors = controller.paletteColors('Light')!;
+        final background = ThemeController.paletteRoles.indexWhere(
+          (role) => role.$1 == 'background',
+        );
+        expect(colors[background], const Color(0xfff0f0f0));
+      },
+    );
+
+    test('a palette that is not there has none', () {
+      expect(controller.paletteColors('Nowhere'), isNull);
+    });
+
+    test('a palette that is broken has none', () {
+      inTheme('mine', ['palettes', 'Broken.json']).writeAsStringSync('{ nope');
+      expect(controller.paletteColors('Broken'), isNull);
+    });
+
+    test('a palette is read again once its file changes, and not before', () {
+      final file = inTheme('mine', ['palettes', 'Light.json']);
+      final first = controller.paletteColors('Light')!;
+      expect(identical(controller.paletteColors('Light'), first), isTrue);
+
+      file.writeAsStringSync(jsonEncode({'background': '#0000ff'}));
+      file.setLastModifiedSync(DateTime.now().add(const Duration(minutes: 5)));
+      expect(controller.paletteColors('Light')![0], const Color(0xff0000ff));
+    });
+  });
+
   group('window', () {
     test(
       'the rounding power is changed and saved, within its limits',

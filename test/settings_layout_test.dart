@@ -42,7 +42,12 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 300));
-      expect(tester.takeException(), isNull);
+      final error = tester.takeException();
+      if (error is FlutterError) {
+        // names the widget that overflowed, which the short message does not
+        debugPrint(error.toStringDeep());
+      }
+      expect(error, isNull);
       controller.dispose();
       dir.deleteSync(recursive: true);
     });

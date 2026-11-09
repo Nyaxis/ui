@@ -9,6 +9,7 @@ import 'package:ui/settings/config_file.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/theme/theme_controller.dart';
 import 'package:ui/ui/color_picker.dart';
+import 'package:ui/ui/palette_preview.dart';
 import 'package:ui/ui/settings_controls.dart';
 import 'package:ui/ui/theme_settings.dart';
 
@@ -111,6 +112,117 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(Overlay), findsOneWidget);
       expect(find.text('Beta'), findsNothing);
+    });
+  });
+
+  group('dropdown with a preview', () {
+    Future<void> pump(WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: DropdownControl<String>(
+                theme: theme,
+                value: 'a',
+                options: const [('a', 'Alpha'), ('b', 'Beta'), ('c', 'Gamma')],
+                onChanged: (_) {},
+                leadingFor: (option) => option == 'c'
+                    ? null
+                    : SizedBox(
+                        key: ValueKey('preview-$option'),
+                        width: 20,
+                        height: 10,
+                      ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('the button shows the preview of the one chosen', (
+      tester,
+    ) async {
+      await pump(tester);
+      expect(find.byKey(const ValueKey('preview-a')), findsOneWidget);
+      expect(find.byKey(const ValueKey('preview-b')), findsNothing);
+    });
+
+    testWidgets('the menu shows a preview before each name that has one', (
+      tester,
+    ) async {
+      await pump(tester);
+      await tester.tap(find.text('Alpha'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('preview-a')), findsNWidgets(2));
+      expect(find.byKey(const ValueKey('preview-b')), findsOneWidget);
+      expect(find.text('Gamma'), findsOneWidget);
+    });
+  });
+
+  group('palette preview', () {
+    final colors = [
+      for (var i = 0; i < 12; i++) Color(0xff000000 | (i * 0x101010)),
+    ];
+
+    testWidgets('it is a box in the background color with a square for each '
+        'other color', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: PalettePreview(colors: colors, border: theme.border),
+            ),
+          ),
+        ),
+      );
+
+      final box = tester.widget<Container>(
+        find
+            .descendant(
+              of: find.byType(PalettePreview),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
+      expect((box.decoration! as BoxDecoration).color, colors[0]);
+
+      final squares = find.descendant(
+        of: find.byType(PalettePreview),
+        matching: find.byWidgetPredicate(
+          (w) =>
+              w is Container &&
+              w.constraints?.maxWidth == 8 &&
+              w.constraints?.maxHeight == 8,
+        ),
+      );
+      expect(squares, findsNWidgets(11));
+      expect(
+        tester.getSize(find.byType(PalettePreview)),
+        const Size(PalettePreview.width, PalettePreview.height),
+      );
+    });
+
+    testWidgets('colors that are not a whole palette draw an empty space', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: PalettePreview(
+                colors: colors.take(5).toList(),
+                border: theme.border,
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(
+        tester.getSize(find.byType(PalettePreview)),
+        const Size(PalettePreview.width, PalettePreview.height),
+      );
     });
   });
 
@@ -378,6 +490,28 @@ void main() {
       expect(reported.every((v) => v == v.roundToDouble()), isTrue);
       expect(reported.toSet().length, reported.length);
     });
+
+    testWidgets(
+      'the thumb stays under the pointer while the setting moves in steps',
+      (tester) async {
+        // the setting never follows here, as when the app is slow to
+        final reported = await pumpStepper(tester, slider: spec);
+        final gesture = await tester.startGesture(
+          tester.getCenter(find.byType(Slider)),
+        );
+        await gesture.moveBy(const Offset(13, 0));
+        await tester.pump();
+
+        final dragged = tester.widget<Slider>(find.byType(Slider)).value;
+        expect(dragged, greaterThan(5));
+        expect(dragged, isNot(dragged.roundToDouble()));
+        expect(reported.last, dragged.roundToDouble());
+
+        await gesture.up();
+        await tester.pump();
+        expect(tester.widget<Slider>(find.byType(Slider)).value, 5);
+      },
+    );
 
     testWidgets('a value outside the range does not break it', (tester) async {
       await pumpStepper(tester, slider: (r) => spec(r, value: 99));

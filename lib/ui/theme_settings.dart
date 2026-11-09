@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import 'dialog.dart';
+import 'palette_preview.dart';
 import 'picker.dart';
 import 'settings_controls.dart';
 
@@ -216,8 +217,15 @@ class ThemeSettings extends StatelessWidget {
                 menu: DropdownControl<String>(
                   theme: theme,
                   value: palette,
+                  width: 260,
                   options: [for (final name in palettes) (name, name)],
                   onChanged: controller.setPalette,
+                  leadingFor: (name) {
+                    final colors = controller.paletteColors(name);
+                    return colors == null
+                        ? null
+                        : PalettePreview(colors: colors, border: theme.border);
+                  },
                 ),
                 onNew: () => _ask(
                   context,

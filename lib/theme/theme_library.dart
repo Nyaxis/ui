@@ -132,6 +132,27 @@ class ThemeLibrary {
     }
   }
 
+  /// the same, for the few small files that are read as a menu opens
+  Map<String, dynamic>? readPaletteSync(String theme, String name) {
+    try {
+      final json = jsonDecode(_palette(theme, name).readAsStringSync());
+      return json is Map<String, dynamic> ? json : null;
+    } on FileSystemException {
+      return null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// when the file of a palette was last written, null when there is none
+  DateTime? paletteModified(String theme, String name) {
+    try {
+      return _palette(theme, name).statSync().modified;
+    } on FileSystemException {
+      return null;
+    }
+  }
+
   Future<void> writePalette(
     String theme,
     String name,

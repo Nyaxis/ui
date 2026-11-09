@@ -588,21 +588,55 @@ class ThemeController extends ValueNotifier<AppTheme> {
     ('active', 'Pressed'),
   ];
 
-  Color colorOf(String role) => switch (role) {
-    'background' => value.background,
-    'titleBar' => value.titleBar,
-    'surface' => value.surface,
-    'border' => value.border,
-    'textPrimary' => value.textPrimary,
-    'textDim' => value.textDim,
-    'accent' => value.accent,
-    'red' => value.red,
-    'lineNumber' => value.lineNumber,
-    'selection' => value.selection,
-    'hover' => value.hover,
-    'active' => value.active,
+  Color colorOf(String role) => _roleColor(value, role);
+
+  static Color _roleColor(AppTheme theme, String role) => switch (role) {
+    'background' => theme.background,
+    'titleBar' => theme.titleBar,
+    'surface' => theme.surface,
+    'border' => theme.border,
+    'textPrimary' => theme.textPrimary,
+    'textDim' => theme.textDim,
+    'accent' => theme.accent,
+    'red' => theme.red,
+    'lineNumber' => theme.lineNumber,
+    'selection' => theme.selection,
+    'hover' => theme.hover,
+    'active' => theme.active,
     _ => throw ArgumentError.value(role, 'role'),
   };
+
+  final _previews = <String, (DateTime?, List<Color>)>{};
+
+  /// the colors of the palette [name], in the order of [paletteRoles], for
+  /// showing what it looks like. the palette in use gives the colors it has
+  /// now, as they are being changed; another is read from its file, and kept
+  /// until the file changes. null when there is no such palette
+  List<Color>? paletteColors(String name) {
+    if (name == palette) {
+      return [for (final (role, _) in paletteRoles) colorOf(role)];
+    }
+    final library = _library;
+    final modified = library?.paletteModified(themeName, name);
+    if (library == null || modified == null) {
+      return null;
+    }
+    final key = '$themeName/$name';
+    final kept = _previews[key];
+    if (kept != null && kept.$1 == modified) {
+      return kept.$2;
+    }
+    final colors = library.readPaletteSync(themeName, name);
+    if (colors == null) {
+      return null;
+    }
+    final theme = AppTheme.fromJson(const {}, palette: colors);
+    final read = [
+      for (final (role, _) in paletteRoles) _roleColor(theme, role),
+    ];
+    _previews[key] = (modified, read);
+    return read;
+  }
 
   /// changes one color of the palette in use, which is saved as it is
   void setColor(String role, Color color) {

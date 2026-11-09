@@ -18,9 +18,14 @@ class ContextMenuItem extends ContextMenuEntry {
     this.onPressed,
     this.action,
     this.checked,
+    this.leading,
   });
 
   final String label;
+
+  /// drawn between the check mark and the label, such as a preview of what
+  /// the item chooses
+  final Widget? leading;
 
   /// a check mark before the label when true; any value makes room for the
   /// mark, so the labels of a menu of choices line up
@@ -294,6 +299,10 @@ class _ItemState extends State<_Item> {
                       )
                     : null,
               ),
+            if (widget.item.leading != null) ...[
+              widget.item.leading!,
+              const SizedBox(width: 8),
+            ],
             Text(
               widget.item.label,
               style: theme.bodyStyle.copyWith(color: color),

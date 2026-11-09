@@ -187,41 +187,21 @@ class StepperControl extends StatelessWidget {
   final VoidCallback? onPlus;
   final SliderSpec? slider;
 
-  Widget _slider(SliderSpec spec) {
-    return Flexible(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: sliderWidth),
-        child: SliderTheme(
-          data: SliderThemeData(
-            trackHeight: 4,
-            activeTrackColor: theme.accent,
-            inactiveTrackColor: theme.active,
-            thumbColor: theme.accent,
-            overlayColor: theme.accent.withValues(alpha: 0.15),
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-            tickMarkShape: SliderTickMarkShape.noTickMark,
-            showValueIndicator: ShowValueIndicator.never,
-          ),
-          child: Slider(
-            value: spec.value.clamp(spec.min, spec.max),
-            min: spec.min,
-            max: spec.max,
-            divisions: spec.divisions,
-            onChanged: spec.onChanged,
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final spec = slider;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (spec != null) ...[_slider(spec), const SizedBox(width: 10)],
+        if (spec != null) ...[
+          Flexible(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: sliderWidth),
+              child: _SteppedSlider(theme: theme, spec: spec),
+            ),
+          ),
+          const SizedBox(width: 10),
+        ],
         _StepButton(theme: theme, label: '−', onTap: onMinus),
         ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 48),
@@ -233,6 +213,74 @@ class StepperControl extends StatelessWidget {
         ),
         _StepButton(theme: theme, label: '+', onTap: onPlus),
       ],
+    );
+  }
+}
+
+/// a slider whose thumb stays under the pointer, wherever the setting is. the
+/// setting moves in steps, and is told only when the pointer crosses into
+/// another one, so a drag does not change it, and rebuild everything that
+/// shows it, at every pixel
+class _SteppedSlider extends StatefulWidget {
+  const _SteppedSlider({required this.theme, required this.spec});
+
+  final AppTheme theme;
+  final SliderSpec spec;
+
+  @override
+  State<_SteppedSlider> createState() => _SteppedSliderState();
+}
+
+class _SteppedSliderState extends State<_SteppedSlider> {
+  /// where the thumb is while it is dragged, which is not on a step; null
+  /// when it is not, and the thumb is on the setting's own value
+  double? _drag;
+
+  /// the step the setting was last told to move to by this drag
+  double? _reported;
+
+  double _snap(double value) {
+    final spec = widget.spec;
+    final step = (spec.max - spec.min) / spec.divisions;
+    final snapped = spec.min + ((value - spec.min) / step).round() * step;
+    return snapped.clamp(spec.min, spec.max);
+  }
+
+  void _move(double value) {
+    setState(() => _drag = value);
+    final snapped = _snap(value);
+    if (snapped != _reported) {
+      _reported = snapped;
+      widget.spec.onChanged(snapped);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final spec = widget.spec;
+    final theme = widget.theme;
+    return SliderTheme(
+      data: SliderThemeData(
+        trackHeight: 4,
+        activeTrackColor: theme.accent,
+        inactiveTrackColor: theme.active,
+        thumbColor: theme.accent,
+        overlayColor: theme.accent.withValues(alpha: 0.15),
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+        showValueIndicator: ShowValueIndicator.never,
+      ),
+      child: Slider(
+        value: (_drag ?? spec.value).clamp(spec.min, spec.max),
+        min: spec.min,
+        max: spec.max,
+        onChangeStart: (_) => _reported = spec.value,
+        onChanged: _move,
+        onChangeEnd: (_) => setState(() {
+          _drag = null;
+          _reported = null;
+        }),
+      ),
     );
   }
 }
@@ -421,6 +469,7 @@ class DropdownControl<T> extends StatefulWidget {
     required this.options,
     required this.onChanged,
     this.width = 180,
+    this.leadingFor,
   });
 
   final AppTheme theme;
@@ -428,6 +477,10 @@ class DropdownControl<T> extends StatefulWidget {
   final List<(T, String)> options;
   final ValueChanged<T> onChanged;
   final double width;
+
+  /// what goes before the name of an option, in the menu and, for the one
+  /// chosen, in the button; null for none
+  final Widget? Function(T option)? leadingFor;
 
   @override
   State<DropdownControl<T>> createState() => _DropdownControlState<T>();
@@ -456,6 +509,7 @@ class _DropdownControlState<T> extends State<DropdownControl<T>> {
           ContextMenuItem(
             label,
             checked: option == widget.value,
+            leading: widget.leadingFor?.call(option),
             onPressed: () => widget.onChanged(option),
           ),
       ],
@@ -465,34 +519,48 @@ class _DropdownControlState<T> extends State<DropdownControl<T>> {
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
-    return Clickable(
-      onEnter: () => setState(() => _hovered = true),
-      onExit: () => setState(() => _hovered = false),
-      onTap: widget.options.isEmpty ? null : _open,
-      child: Container(
-        width: widget.width,
-        height: 30,
-        padding: const EdgeInsets.only(left: 10, right: 6),
-        decoration: BoxDecoration(
-          color: _hovered ? theme.hover : theme.background,
-          borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
-          border: Border.all(color: theme.border, width: theme.borderWidth),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                _label,
-                overflow: TextOverflow.ellipsis,
-                style: theme.bodyStyle,
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = widget.width.clamp(0.0, constraints.maxWidth);
+        // in a narrow button the preview would leave no room for the name
+        final leading = width >= _minWidthForLeading
+            ? widget.leadingFor?.call(widget.value)
+            : null;
+        return Clickable(
+          onEnter: () => setState(() => _hovered = true),
+          onExit: () => setState(() => _hovered = false),
+          onTap: widget.options.isEmpty ? null : _open,
+          child: Container(
+            width: width,
+            height: 30,
+            padding: EdgeInsets.only(left: leading == null ? 10 : 4, right: 6),
+            decoration: BoxDecoration(
+              color: _hovered ? theme.hover : theme.background,
+              borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
+              border: Border.all(color: theme.border, width: theme.borderWidth),
             ),
-            Icon(Icons.expand_more, size: 16, color: theme.textDim),
-          ],
-        ),
-      ),
+            child: Row(
+              children: [
+                if (leading != null) ...[leading, const SizedBox(width: 8)],
+                Expanded(
+                  child: Text(
+                    _label,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.bodyStyle,
+                  ),
+                ),
+                Icon(Icons.expand_more, size: 16, color: theme.textDim),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
+
+  /// the least width of a button that has room for a preview and the start of
+  /// a name beside it
+  static const _minWidthForLeading = 150.0;
 }
 
 /// a color shown as a swatch, which opens a picker, and as hex that can be
