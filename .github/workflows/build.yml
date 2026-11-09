@@ -57,9 +57,14 @@ jobs:
             Write-Output ("{0,-55} {1,10:N0} bytes" -f $_, $size)
           }
 
+      - name: Name artifact
+        id: artifact
+        shell: pwsh
+        run: '"name=nyaxis-ui-$($env:GITHUB_REF_NAME -replace ''/'', ''-'')-win-x64" >> $env:GITHUB_OUTPUT'
+
       - name: Upload artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: nyaxis-ui-${{ replace(github.ref_name, '/', '-') }}-win-x64
+          name: ${{ steps.artifact.outputs.name }}
           path: build/windows/x64/runner/${{ env.BUILD_TYPE == 'debug' && 'Debug' || 'Release' }}/
           retention-days: 14
