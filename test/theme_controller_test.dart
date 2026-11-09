@@ -212,7 +212,7 @@ void main() {
     },
   );
 
-  test('the palettes list the Catppuccin flavors first, then the others', () {
+  test('the palettes are the files of the theme, in alphabetical order', () {
     for (final name in [
       'Zebra',
       'Catppuccin Mocha',
@@ -225,9 +225,9 @@ void main() {
         .writeAsStringSync('not a palette');
 
     expect(controller.palettes, [
+      'Apple',
       'Catppuccin Latte',
       'Catppuccin Mocha',
-      'Apple',
       'Zebra',
     ]);
   });

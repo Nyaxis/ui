@@ -124,8 +124,6 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   double _sidebarWidth = 240;
 
   String? _editorCss;
-  List<String> _palettes = const [];
-  List<String> _themes = const [];
 
   var _view = _View.editor;
   final _config = ConfigFile.user();
@@ -268,13 +266,12 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     super.initState();
     _loadSettings();
     _loadEditorCss();
-    _palettes = widget.controller.palettes;
-    _themes = widget.controller.themes;
     _editorSettings.load();
     _editorSettings.addListener(_applyEditorOptions);
     _tabs.confirmClose = _confirmClose;
     widget.controller.addListener(_applyMonacoTheme);
     widget.controller.addListener(_applyEditorOptions);
+    widget.controller.addListener(_applyEditorFont);
     windowManager.addListener(this);
     windowManager.setPreventClose(true);
     _tabs.addListener(_updatePresence);
@@ -293,6 +290,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     windowManager.removeListener(this);
     widget.controller.removeListener(_applyMonacoTheme);
     widget.controller.removeListener(_applyEditorOptions);
+    widget.controller.removeListener(_applyEditorFont);
     _editorSettings.removeListener(_applyEditorOptions);
     _editorSettings.dispose();
     _tabs.removeListener(_updatePresence);
@@ -363,6 +361,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     }
     await _applyEditorOptions();
     final family = widget.controller.value.monospaceFontFamily;
+    // the page was loaded with this font already
+    _editorFontKey = '${widget.controller.themeName}/$family';
     if (EditorFont.isSafe(family)) {
       await controller.runJavaScript(EditorFont.remeasureScript(family));
     }
@@ -372,41 +372,24 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   void _showView(_View view) {
     if (_view != view) {
-      setState(() {
-        _view = view;
-        if (view == _View.settings) {
-          _palettes = widget.controller.palettes;
-          _themes = widget.controller.themes;
-        }
-      });
+      setState(() => _view = view);
     }
   }
 
-  /// moves to another theme folder, remembers it for the next start, and gives
-  /// the editor the monospace font of the new theme
-  Future<void> _switchTheme(String name) async {
-    if (name == widget.controller.themeName ||
-        !await widget.controller.switchTheme(name)) {
-      return;
-    }
-    _config.update((json) => json['theme'] = name);
-    if (mounted) {
-      setState(() {
-        _palettes = widget.controller.palettes;
-        _themes = widget.controller.themes;
-      });
-    }
-    await _applyEditorFont();
-  }
+  /// the theme and font the editor was last given, so that it is given a font
+  /// again only when one of them changes
+  String? _editorFontKey;
 
-  /// the editor page has the font it was loaded with, so the one of a theme
-  /// that is switched to is put in it
+  /// the editor page has the font it was loaded with, so the font of a theme
+  /// that is switched to, or one that is chosen, is put in it
   Future<void> _applyEditorFont() async {
     final monaco = _monaco;
     final family = widget.controller.value.monospaceFontFamily;
-    if (monaco == null) {
+    final key = '${widget.controller.themeName}/$family';
+    if (monaco == null || key == _editorFontKey) {
       return;
     }
+    _editorFontKey = key;
     try {
       final dir = ThemeController.directory;
       final css = await EditorFont.css(
@@ -612,9 +595,6 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       builder: (context, _) => SettingsView(
         theme: theme,
         controller: widget.controller,
-        palettes: _palettes,
-        themes: _themes,
-        onTheme: _switchTheme,
         prefs: _editorSettings.value,
         onPrefs: _editorSettings.change,
         autoSave: _tabs.autoSave,

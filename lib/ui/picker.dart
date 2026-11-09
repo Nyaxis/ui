@@ -48,13 +48,15 @@ void showListPicker(
 
 /// opens a field at the top of the window, with a line under it that
 /// [describe] writes for what is typed. enter runs [onSubmitted] with the
-/// text, and escape or anything else closes it
+/// text, and escape or anything else closes it. [initialText] is in the field
+/// at first, and selected
 void showInputPicker(
   BuildContext context, {
   required AppTheme theme,
   required String hint,
   required String Function(String text) describe,
   required ValueChanged<String> onSubmitted,
+  String initialText = '',
   double top = 0,
 }) {
   _show(
@@ -64,6 +66,7 @@ void showInputPicker(
       top: top,
       width: 380,
       hint: hint,
+      initialText: initialText,
       describe: describe,
       onSubmitted: onSubmitted,
       onClose: close,
@@ -84,6 +87,7 @@ class _Picker extends StatefulWidget {
     required this.width,
     this.items,
     this.hint,
+    this.initialText = '',
     this.describe,
     this.onSelected,
     this.onSubmitted,
@@ -95,6 +99,7 @@ class _Picker extends StatefulWidget {
   final double width;
   final List<PickerItem>? items;
   final String? hint;
+  final String initialText;
   final String Function(String text)? describe;
   final ValueChanged<int>? onSelected;
   final ValueChanged<String>? onSubmitted;
@@ -108,7 +113,7 @@ class _PickerState extends State<_Picker> with WindowListener {
   static const _rowHeight = 30.0;
   static const _maxListHeight = 400.0;
 
-  final _text = TextEditingController();
+  late final _text = TextEditingController(text: widget.initialText);
   final _scroll = ScrollController();
   late final FocusNode _focus;
 
@@ -123,6 +128,10 @@ class _PickerState extends State<_Picker> with WindowListener {
     _highlight = current < 0 ? 0 : current;
     // the page under the picker has focus already, so autofocus would not move it
     _focus.requestFocus();
+    _text.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: _text.text.length,
+    );
     _text.addListener(() => setState(() => _highlight = 0));
     windowManager.addListener(this);
   }
