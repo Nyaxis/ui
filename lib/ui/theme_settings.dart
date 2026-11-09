@@ -104,7 +104,8 @@ class ThemeSettings extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        menu,
+        // the menu gives way when the row is narrow, the links do not
+        Flexible(child: menu),
         const SizedBox(width: 14),
         LinkButton(theme: theme, label: 'New', onTap: onNew),
         const SizedBox(width: 12),
@@ -134,6 +135,14 @@ class ThemeSettings extends StatelessWidget {
       control: StepperControl(
         theme: theme,
         text: _number(value),
+        slider: SliderSpec(
+          value: value,
+          min: ThemeController.minFontSize,
+          max: ThemeController.maxFontSize,
+          divisions: (ThemeController.maxFontSize - ThemeController.minFontSize)
+              .round(),
+          onChanged: (v) => controller.setFontSize(role, v.roundToDouble()),
+        ),
         onMinus: value > ThemeController.minFontSize
             ? () => controller.setFontSize(role, value - 1)
             : null,
@@ -268,6 +277,14 @@ class ThemeSettings extends StatelessWidget {
               control: StepperControl(
                 theme: theme,
                 text: _number(theme.cornerRadius),
+                slider: SliderSpec(
+                  value: theme.cornerRadius,
+                  min: 0,
+                  max: _maxRadius,
+                  divisions: _maxRadius.round(),
+                  onChanged: (v) =>
+                      controller.setCornerRadius(v.roundToDouble()),
+                ),
                 onMinus: theme.cornerRadius > 0
                     ? () => controller.setCornerRadius(theme.cornerRadius - 1)
                     : null,
@@ -282,6 +299,19 @@ class ThemeSettings extends StatelessWidget {
               control: StepperControl(
                 theme: theme,
                 text: _number(theme.roundingPower),
+                slider: SliderSpec(
+                  value: theme.roundingPower,
+                  min: ThemeController.minRoundingPower,
+                  max: ThemeController.maxRoundingPower,
+                  divisions:
+                      ((ThemeController.maxRoundingPower -
+                                  ThemeController.minRoundingPower) /
+                              _powerStep)
+                          .round(),
+                  onChanged: (v) => controller.setRoundingPower(
+                    (v / _powerStep).round() * _powerStep,
+                  ),
+                ),
                 onMinus: theme.roundingPower > ThemeController.minRoundingPower
                     ? () => controller.setRoundingPower(
                         theme.roundingPower - _powerStep,
@@ -300,6 +330,14 @@ class ThemeSettings extends StatelessWidget {
               control: StepperControl(
                 theme: theme,
                 text: _number(theme.borderWidth),
+                slider: SliderSpec(
+                  value: theme.borderWidth,
+                  min: 0,
+                  max: _maxBorder,
+                  divisions: _maxBorder.round(),
+                  onChanged: (v) =>
+                      controller.setBorderWidth(v.roundToDouble()),
+                ),
                 onMinus: theme.borderWidth > 0
                     ? () => controller.setBorderWidth(theme.borderWidth - 1)
                     : null,
@@ -314,6 +352,14 @@ class ThemeSettings extends StatelessWidget {
               control: StepperControl(
                 theme: theme,
                 text: '${(theme.backgroundOpacity * 100).round()}%',
+                slider: SliderSpec(
+                  value: theme.backgroundOpacity,
+                  min: _minOpacity,
+                  max: 1,
+                  divisions: ((1 - _minOpacity) / _opacityStep).round(),
+                  onChanged: (v) =>
+                      controller.setBackgroundOpacity(_roundOpacity(v)),
+                ),
                 onMinus: theme.backgroundOpacity > _minOpacity
                     ? () => controller.setBackgroundOpacity(
                         _roundOpacity(theme.backgroundOpacity - _opacityStep),

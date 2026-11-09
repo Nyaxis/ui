@@ -70,24 +70,33 @@ class SettingRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: theme.bodyStyle),
-                if (description != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(description!, style: theme.captionStyle),
-                  ),
-              ],
+      // a control is as wide as it wants up to most of the row, which lets the
+      // parts of it that can shrink, such as a slider, do so in a narrow one
+      child: LayoutBuilder(
+        builder: (context, constraints) => Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: theme.bodyStyle),
+                  if (description != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(description!, style: theme.captionStyle),
+                    ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 16),
-          control,
-        ],
+            const SizedBox(width: 16),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: constraints.maxWidth * 0.75,
+              ),
+              child: control,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -140,8 +149,26 @@ class SwitchControl extends StatelessWidget {
   }
 }
 
+/// a slider over a range in [divisions] equal steps; it only reports when the
+/// value moves to another step
+class SliderSpec {
+  const SliderSpec({
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.divisions,
+    required this.onChanged,
+  });
+
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+  final ValueChanged<double> onChanged;
+}
+
 /// a number that moves by one step each way; a null callback disables that
-/// side
+/// side. a [slider] goes beside the buttons, and does not replace them
 class StepperControl extends StatelessWidget {
   const StepperControl({
     super.key,
@@ -149,18 +176,52 @@ class StepperControl extends StatelessWidget {
     required this.text,
     required this.onMinus,
     required this.onPlus,
+    this.slider,
   });
+
+  static const sliderWidth = 150.0;
 
   final AppTheme theme;
   final String text;
   final VoidCallback? onMinus;
   final VoidCallback? onPlus;
+  final SliderSpec? slider;
+
+  Widget _slider(SliderSpec spec) {
+    return Flexible(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: sliderWidth),
+        child: SliderTheme(
+          data: SliderThemeData(
+            trackHeight: 4,
+            activeTrackColor: theme.accent,
+            inactiveTrackColor: theme.active,
+            thumbColor: theme.accent,
+            overlayColor: theme.accent.withValues(alpha: 0.15),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+            tickMarkShape: SliderTickMarkShape.noTickMark,
+            showValueIndicator: ShowValueIndicator.never,
+          ),
+          child: Slider(
+            value: spec.value.clamp(spec.min, spec.max),
+            min: spec.min,
+            max: spec.max,
+            divisions: spec.divisions,
+            onChanged: spec.onChanged,
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final spec = slider;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (spec != null) ...[_slider(spec), const SizedBox(width: 10)],
         _StepButton(theme: theme, label: '−', onTap: onMinus),
         ConstrainedBox(
           constraints: const BoxConstraints(minWidth: 48),

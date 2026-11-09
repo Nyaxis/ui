@@ -302,6 +302,90 @@ void main() {
     });
   });
 
+  group('stepper with a slider', () {
+    Future<List<double>> pumpStepper(
+      WidgetTester tester, {
+      SliderSpec? Function(List<double> reported)? slider,
+    }) async {
+      final reported = <double>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: StepperControl(
+                theme: theme,
+                text: '5',
+                onMinus: () {},
+                onPlus: () {},
+                slider: slider?.call(reported),
+              ),
+            ),
+          ),
+        ),
+      );
+      return reported;
+    }
+
+    SliderSpec spec(List<double> reported, {double value = 5}) => SliderSpec(
+      value: value,
+      min: 0,
+      max: 10,
+      divisions: 10,
+      onChanged: reported.add,
+    );
+
+    testWidgets('the slider is beside the buttons, not instead of them', (
+      tester,
+    ) async {
+      await pumpStepper(tester, slider: spec);
+      expect(find.byType(Slider), findsOneWidget);
+      expect(find.text('−'), findsOneWidget);
+      expect(find.text('+'), findsOneWidget);
+      expect(find.text('5'), findsOneWidget);
+    });
+
+    testWidgets('without a slider there is none', (tester) async {
+      await pumpStepper(tester);
+      expect(find.byType(Slider), findsNothing);
+      expect(find.text('+'), findsOneWidget);
+    });
+
+    testWidgets('the ends of the track are the ends of the range', (
+      tester,
+    ) async {
+      final reported = await pumpStepper(tester, slider: spec);
+      await tester.drag(find.byType(Slider), const Offset(500, 0));
+      await tester.pump();
+      expect(reported.last, 10);
+
+      await tester.drag(find.byType(Slider), const Offset(-1000, 0));
+      await tester.pump();
+      expect(reported.last, 0);
+    });
+
+    testWidgets('it only reports whole steps', (tester) async {
+      final reported = await pumpStepper(tester, slider: spec);
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(Slider)),
+      );
+      for (var i = 1; i <= 40; i++) {
+        await gesture.moveBy(const Offset(2, 0));
+        await tester.pump();
+      }
+      await gesture.up();
+
+      expect(reported, isNotEmpty);
+      expect(reported.every((v) => v == v.roundToDouble()), isTrue);
+      expect(reported.toSet().length, reported.length);
+    });
+
+    testWidgets('a value outside the range does not break it', (tester) async {
+      await pumpStepper(tester, slider: (r) => spec(r, value: 99));
+      expect(find.byType(Slider), findsOneWidget);
+      expect(tester.widget<Slider>(find.byType(Slider)).value, 10);
+    });
+  });
+
   group('theme settings', () {
     late Directory root;
     late Directory themes;
@@ -550,6 +634,31 @@ void main() {
       await tester.pump();
 
       expect(controller.colorOf('background'), const Color(0xff123456));
+      await work(tester);
+    });
+
+    testWidgets('every number has a slider, and it changes the theme', (
+      tester,
+    ) async {
+      await pumpSettings(tester);
+      // corner radius, rounding power, border width, opacity, four sizes
+      expect(find.byType(Slider), findsNWidgets(8));
+
+      await tester.drag(find.byType(Slider).at(0), const Offset(1000, 0));
+      await tester.pump();
+      expect(controller.value.cornerRadius, 24);
+
+      await tester.drag(find.byType(Slider).at(1), const Offset(1000, 0));
+      await tester.pump();
+      expect(controller.value.roundingPower, ThemeController.maxRoundingPower);
+
+      await tester.drag(find.byType(Slider).at(3), const Offset(-1000, 0));
+      await tester.pump();
+      expect(controller.value.backgroundOpacity, closeTo(0.3, 0.001));
+
+      await tester.drag(find.byType(Slider).at(6), const Offset(1000, 0));
+      await tester.pump();
+      expect(controller.value.fontSizeBody, ThemeController.maxFontSize);
       await work(tester);
     });
 
