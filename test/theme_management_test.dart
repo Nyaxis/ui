@@ -275,6 +275,36 @@ void main() {
     });
   });
 
+  group('window', () {
+    test(
+      'the rounding power is changed and saved, within its limits',
+      () async {
+        controller.setRoundingPower(4.5);
+        expect(controller.value.roundingPower, 4.5);
+        await settle();
+        expect(json(inTheme('mine', ['theme.json']))['roundingPower'], 4.5);
+
+        controller.setRoundingPower(0);
+        expect(
+          controller.value.roundingPower,
+          ThemeController.minRoundingPower,
+        );
+        controller.setRoundingPower(99);
+        expect(
+          controller.value.roundingPower,
+          ThemeController.maxRoundingPower,
+        );
+      },
+    );
+
+    test('the title color is named for all it colors', () {
+      final label = ThemeController.paletteRoles
+          .firstWhere((role) => role.$1 == 'titleBar')
+          .$2;
+      expect(label, contains('bottom'));
+    });
+  });
+
   group('text', () {
     test('the fonts are the files of the theme', () {
       expect(controller.fonts, ['Mono']);

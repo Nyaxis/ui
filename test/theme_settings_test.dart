@@ -563,6 +563,11 @@ void main() {
       await tester.pump();
       expect(controller.value.cornerRadius, before + 1);
 
+      final powerBefore = controller.value.roundingPower;
+      await tester.tap(plus.at(1));
+      await tester.pump();
+      expect(controller.value.roundingPower, powerBefore + 0.5);
+
       final bodyBefore = controller.value.fontSizeBody;
       await tester.tap(plus.at(plus.evaluate().length - 2));
       await tester.pump();

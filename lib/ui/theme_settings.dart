@@ -17,6 +17,7 @@ class ThemeSettings extends StatelessWidget {
 
   static const _maxRadius = 24.0;
   static const _maxBorder = 6.0;
+  static const _powerStep = 0.5;
   static const _minOpacity = 0.3;
   static const _opacityStep = 0.05;
 
@@ -272,6 +273,24 @@ class ThemeSettings extends StatelessWidget {
                     : null,
                 onPlus: theme.cornerRadius < _maxRadius
                     ? () => controller.setCornerRadius(theme.cornerRadius + 1)
+                    : null,
+              ),
+            ),
+            SettingRow(
+              theme: theme,
+              label: 'Rounding power',
+              control: StepperControl(
+                theme: theme,
+                text: _number(theme.roundingPower),
+                onMinus: theme.roundingPower > ThemeController.minRoundingPower
+                    ? () => controller.setRoundingPower(
+                        theme.roundingPower - _powerStep,
+                      )
+                    : null,
+                onPlus: theme.roundingPower < ThemeController.maxRoundingPower
+                    ? () => controller.setRoundingPower(
+                        theme.roundingPower + _powerStep,
+                      )
                     : null,
               ),
             ),

@@ -575,7 +575,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
   /// they are shown under
   static const paletteRoles = <(String, String)>[
     ('background', 'Background'),
-    ('titleBar', 'Title bar'),
+    ('titleBar', 'Title and bottom bar'),
     ('surface', 'Surface'),
     ('border', 'Border'),
     ('textPrimary', 'Text'),
@@ -690,6 +690,17 @@ class ThemeController extends ValueNotifier<AppTheme> {
 
   void setCornerRadius(double radius) {
     value = value.copyWith(cornerRadius: radius);
+    unawaited(_save());
+  }
+
+  static const minRoundingPower = 1.0;
+  static const maxRoundingPower = 10.0;
+
+  /// how square the corners are: 2 is a circle's, and more is squarer
+  void setRoundingPower(double power) {
+    value = value.copyWith(
+      roundingPower: power.clamp(minRoundingPower, maxRoundingPower),
+    );
     unawaited(_save());
   }
 

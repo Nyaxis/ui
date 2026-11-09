@@ -23,7 +23,7 @@ class SettingsView extends StatelessWidget {
     required this.onAutoSaveDelay,
   });
 
-  static const _maxWidth = 640.0;
+  static const _maxWidth = 760.0;
   static const _delayStep = Duration(milliseconds: 500);
   static const _minDelay = Duration(milliseconds: 500);
   static const _maxDelay = Duration(seconds: 60);
@@ -55,7 +55,7 @@ class SettingsView extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
       child: Align(
-        alignment: Alignment.topLeft,
+        alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: _maxWidth),
           child: Column(
