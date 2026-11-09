@@ -47,6 +47,59 @@ void main() {
     });
   });
 
+  group('switch', () {
+    Future<Container> pumpSwitch(WidgetTester tester, bool value) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SwitchControl(
+                theme: theme,
+                value: value,
+                onChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // the track draws itself with a container too, so the knob is the last
+      return tester.widget<Container>(
+        find
+            .descendant(
+              of: find.byType(AnimatedContainer),
+              matching: find.byType(Container),
+            )
+            .last,
+      );
+    }
+
+    testWidgets('on, the track is the accent and the knob is solid', (
+      tester,
+    ) async {
+      final knob = await pumpSwitch(tester, true);
+      final track = tester.widget<AnimatedContainer>(
+        find.byType(AnimatedContainer),
+      );
+      expect((track.decoration! as BoxDecoration).color, theme.accent);
+      expect((knob.decoration! as BoxDecoration).color, theme.titleBar);
+    });
+
+    testWidgets('off, the track is the disabled color and the knob is dimmed', (
+      tester,
+    ) async {
+      final knob = await pumpSwitch(tester, false);
+      final track = tester.widget<AnimatedContainer>(
+        find.byType(AnimatedContainer),
+      );
+      expect((track.decoration! as BoxDecoration).color, theme.disabled);
+      expect(
+        (knob.decoration! as BoxDecoration).color,
+        theme.textPrimary.withValues(alpha: 0.5),
+      );
+    });
+  });
+
   group('dropdown', () {
     Future<List<String>> pumpDropdown(
       WidgetTester tester, {

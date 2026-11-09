@@ -28,6 +28,8 @@ class AppTheme {
     this.selection = const Color(0xff9399b2),
     this.hover = const Color(0xff45475a),
     this.active = const Color(0xff585b70),
+    this.focus = const Color(0xffb4befe),
+    this.disabled = const Color(0xff6c7086),
     this.comment = const Color(0xff9399b2),
     this.keyword = const Color(0xffcba6f7),
     this.string = const Color(0xffa6e3a1),
@@ -86,8 +88,13 @@ class AppTheme {
   final Color hover;
   final Color active;
 
-  /// the colors of code, which the defaults give as Catppuccin Mocha does in
-  /// Zed: comments
+  /// the outline of what has the keyboard's focus
+  final Color focus;
+
+  /// what cannot be used, such as a switch that is off
+  final Color disabled;
+
+  /// the colors of code: comments
   final Color comment;
   final Color keyword;
   final Color string;
@@ -166,6 +173,8 @@ class AppTheme {
     Color? selection,
     Color? hover,
     Color? active,
+    Color? focus,
+    Color? disabled,
     Color? comment,
     Color? keyword,
     Color? string,
@@ -201,6 +210,8 @@ class AppTheme {
       selection: selection ?? this.selection,
       hover: hover ?? this.hover,
       active: active ?? this.active,
+      focus: focus ?? this.focus,
+      disabled: disabled ?? this.disabled,
       comment: comment ?? this.comment,
       keyword: keyword ?? this.keyword,
       string: string ?? this.string,
@@ -279,6 +290,8 @@ class AppTheme {
       selection: _color(colors['selection'], _fallback.selection),
       hover: _color(colors['hover'], _fallback.hover),
       active: _color(colors['active'], _fallback.active),
+      focus: _color(colors['focus'], _fallback.focus),
+      disabled: _color(colors['disabled'], _fallback.disabled),
       comment: _color(colors['comment'], _fallback.comment),
       keyword: _color(colors['keyword'], _fallback.keyword),
       string: _color(colors['string'], _fallback.string),

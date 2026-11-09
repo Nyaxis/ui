@@ -112,7 +112,7 @@ class _DialogState extends State<_Dialog> {
               text: '$_pad${parts[i]}$_pad',
               style: theme.headingStyle.copyWith(
                 fontFamily: theme.monospaceFontFamily,
-                backgroundColor: theme.hover.withValues(alpha: 0.5),
+                backgroundColor: theme.titleBar,
               ),
             )
           else
@@ -215,10 +215,10 @@ class _DialogButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: highlighted ? theme.hover : Colors.transparent,
+          color: highlighted ? theme.titleBar : Colors.transparent,
           borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
           border: Border.all(
-            color: highlighted ? theme.accent : theme.border,
+            color: highlighted ? theme.focus : theme.border,
             width: theme.borderWidth,
           ),
         ),

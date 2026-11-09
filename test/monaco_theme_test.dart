@@ -50,7 +50,7 @@ void main() {
       },
     );
 
-    test('code is colored as Catppuccin Mocha is in Zed', () {
+    test('code is colored in the colors of Catppuccin Mocha', () {
       String? color(String token) => rules[token]?.foreground;
       expect(color('keyword'), 'cba6f7');
       expect(color('string'), 'a6e3a1');
@@ -142,8 +142,8 @@ void main() {
   });
 
   group('the Catppuccin palettes', () {
-    // what Zed's Catppuccin theme colors code with, from its themes folder
-    const zed = {
+    // the color each flavor gives each kind of code
+    const codeColors = {
       'Catppuccin Latte': {
         'comment': '#7c7f93',
         'keyword': '#8839ef',
@@ -194,12 +194,12 @@ void main() {
       },
     };
 
-    test('there is one of each flavor Zed has', () {
-      expect(catppuccinPalettes.keys.toSet(), zed.keys.toSet());
+    test('there is one of each flavor', () {
+      expect(catppuccinPalettes.keys.toSet(), codeColors.keys.toSet());
     });
 
-    for (final flavor in zed.entries) {
-      test('${flavor.key} colors code as it does in Zed', () {
+    for (final flavor in codeColors.entries) {
+      test('${flavor.key} colors code in its own colors', () {
         final palette = catppuccinPalettes[flavor.key]!;
         for (final entry in flavor.value.entries) {
           expect(
@@ -211,40 +211,46 @@ void main() {
       });
     }
 
-    // what Zed's Catppuccin theme uses for muted text (`text.muted`), for a
-    // hovered element that has a background (`element.hover`, which is the
-    // border color), and for the borderless ones, hovered and pressed
-    // (`ghost_element.hover` and `ghost_element.active`, the colors they are
-    // drawn in at 30% and 60%)
-    const zedChrome = {
+    // the colors each flavor gives muted text, the hover of an element that
+    // has a background (the border color), the hover and pressed colors of
+    // the borderless ones, the outline of focus, and what is disabled
+    const interfaceColors = {
       'Catppuccin Latte': {
         'textDim': '#5c5f77',
         'border': '#ccd0da',
         'hover': '#bcc0cc',
         'active': '#acb0be',
+        'focus': '#7287fd',
+        'disabled': '#9ca0b0',
       },
       'Catppuccin Frappé': {
         'textDim': '#b5bfe2',
         'border': '#414559',
         'hover': '#51576d',
         'active': '#626880',
+        'focus': '#babbf1',
+        'disabled': '#737994',
       },
       'Catppuccin Macchiato': {
         'textDim': '#b8c0e0',
         'border': '#363a4f',
         'hover': '#494d64',
         'active': '#5b6078',
+        'focus': '#b7bdf8',
+        'disabled': '#6e738d',
       },
       'Catppuccin Mocha': {
         'textDim': '#bac2de',
         'border': '#313244',
         'hover': '#45475a',
         'active': '#585b70',
+        'focus': '#b4befe',
+        'disabled': '#6c7086',
       },
     };
 
-    for (final flavor in zedChrome.entries) {
-      test('${flavor.key} has the muted text and hover colors of Zed', () {
+    for (final flavor in interfaceColors.entries) {
+      test('${flavor.key} has its own muted text, hover and focus colors', () {
         final palette = catppuccinPalettes[flavor.key]!;
         for (final entry in flavor.value.entries) {
           expect(

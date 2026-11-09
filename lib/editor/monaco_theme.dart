@@ -70,7 +70,7 @@ MonacoThemeDefinition monacoThemeFor(AppTheme theme, {required String id}) {
       'editorIndentGuide.background1': hexOf(theme.border, 0.6),
       'editorWidget.background': hexOf(theme.titleBar),
       'editorWidget.border': hexOf(theme.border),
-      // pairs of brackets in turn, as the accents of Catppuccin in Zed run
+      // pairs of brackets in turn
       'editorBracketHighlight.foreground1': hexOf(theme.keyword),
       'editorBracketHighlight.foreground2': hexOf(theme.property),
       'editorBracketHighlight.foreground3': hexOf(theme.function),

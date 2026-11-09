@@ -132,14 +132,16 @@ class SwitchControl extends StatelessWidget {
           padding: const EdgeInsets.all((_height - _knob) / 2),
           alignment: value ? Alignment.centerRight : Alignment.centerLeft,
           decoration: BoxDecoration(
-            color: value ? theme.accent : theme.active,
+            color: value ? theme.accent : theme.disabled,
             borderRadius: BorderRadius.circular(_height / 2),
           ),
           child: Container(
             width: _knob,
             height: _knob,
             decoration: BoxDecoration(
-              color: value ? theme.titleBar : theme.textPrimary,
+              color: value
+                  ? theme.titleBar
+                  : theme.textPrimary.withValues(alpha: 0.5),
               shape: BoxShape.circle,
             ),
           ),
