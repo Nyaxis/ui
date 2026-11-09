@@ -4,6 +4,7 @@ import 'package:flutter_monaco/flutter_monaco.dart' show RenderWhitespace;
 import '../editor/editor_tabs.dart' show AutoSave;
 import '../settings/editor_settings.dart';
 import '../theme/app_theme.dart';
+import '../theme/theme_controller.dart';
 import 'clickable.dart';
 
 /// the settings of the editor and of saving files, which take effect as they
@@ -12,6 +13,8 @@ class SettingsView extends StatelessWidget {
   const SettingsView({
     super.key,
     required this.theme,
+    required this.controller,
+    required this.palettes,
     required this.prefs,
     required this.onPrefs,
     required this.autoSave,
@@ -26,6 +29,12 @@ class SettingsView extends StatelessWidget {
   static const _maxDelay = Duration(seconds: 60);
 
   final AppTheme theme;
+
+  /// what the theme settings change
+  final ThemeController controller;
+
+  /// the palettes of the theme, which the current one is among
+  final List<String> palettes;
   final EditorPrefs prefs;
   final ValueChanged<EditorPrefs> onPrefs;
   final AutoSave autoSave;
@@ -35,6 +44,17 @@ class SettingsView extends StatelessWidget {
 
   static String _number(num value) =>
       value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
+
+  static const _maxRadius = 24.0;
+  static const _maxBorder = 6.0;
+  static const _minOpacity = 0.3;
+  static const _opacityStep = 0.05;
+
+  /// `Catppuccin Mocha` is `Mocha`, since the flavors are all Catppuccin's
+  static String _paletteLabel(String name) =>
+      name.replaceFirst('Catppuccin ', '');
+
+  static double _round(double opacity) => (opacity * 20).round() / 20;
 
   static String _autoSaveLabel(AutoSave value) => switch (value) {
     AutoSave.off => 'Off',
@@ -59,14 +79,93 @@ class SettingsView extends StatelessWidget {
               const SizedBox(height: 24),
               _Section(
                 theme: theme,
+                title: 'Theme',
+                rows: [
+                  if (palettes.length > 1)
+                    _SettingRow(
+                      theme: theme,
+                      label: 'Palette',
+                      control: _Choice<String>(
+                        theme: theme,
+                        value: controller.palette,
+                        options: [
+                          for (final name in palettes)
+                            (name, _paletteLabel(name)),
+                        ],
+                        onChanged: controller.setPalette,
+                      ),
+                    ),
+                  _SettingRow(
+                    theme: theme,
+                    label: 'Corner radius',
+                    control: _Stepper(
+                      theme: theme,
+                      text: _number(theme.cornerRadius),
+                      onMinus: theme.cornerRadius > 0
+                          ? () => controller.setCornerRadius(
+                              theme.cornerRadius - 1,
+                            )
+                          : null,
+                      onPlus: theme.cornerRadius < _maxRadius
+                          ? () => controller.setCornerRadius(
+                              theme.cornerRadius + 1,
+                            )
+                          : null,
+                    ),
+                  ),
+                  _SettingRow(
+                    theme: theme,
+                    label: 'Border width',
+                    control: _Stepper(
+                      theme: theme,
+                      text: _number(theme.borderWidth),
+                      onMinus: theme.borderWidth > 0
+                          ? () =>
+                                controller.setBorderWidth(theme.borderWidth - 1)
+                          : null,
+                      onPlus: theme.borderWidth < _maxBorder
+                          ? () =>
+                                controller.setBorderWidth(theme.borderWidth + 1)
+                          : null,
+                    ),
+                  ),
+                  _SettingRow(
+                    theme: theme,
+                    label: 'Window opacity',
+                    control: _Stepper(
+                      theme: theme,
+                      text: '${(theme.backgroundOpacity * 100).round()}%',
+                      onMinus: theme.backgroundOpacity > _minOpacity
+                          ? () => controller.setBackgroundOpacity(
+                              _round(theme.backgroundOpacity - _opacityStep),
+                            )
+                          : null,
+                      onPlus: theme.backgroundOpacity < 1
+                          ? () => controller.setBackgroundOpacity(
+                              _round(theme.backgroundOpacity + _opacityStep),
+                            )
+                          : null,
+                    ),
+                  ),
+                  _SettingRow(
+                    theme: theme,
+                    label: 'Blurred window background',
+                    control: _Switch(
+                      theme: theme,
+                      value: theme.acrylic,
+                      onChanged: controller.setAcrylic,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _Section(
+                theme: theme,
                 title: 'Editor',
                 rows: [
                   _SettingRow(
                     theme: theme,
                     label: 'Font size',
-                    description: prefs.fontSize == null
-                        ? 'Follows the theme'
-                        : null,
                     control: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -200,7 +299,6 @@ class SettingsView extends StatelessWidget {
                   _SettingRow(
                     theme: theme,
                     label: 'Auto save',
-                    description: 'Untitled tabs are never saved',
                     control: _Choice<AutoSave>(
                       theme: theme,
                       value: autoSave,

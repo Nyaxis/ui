@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show Color;
@@ -9,11 +10,19 @@ import 'app_theme.dart';
 import 'catppuccin.dart';
 
 class ThemeController extends ValueNotifier<AppTheme> {
-  ThemeController(super.value, {this.palette = defaultPaletteName});
+  ThemeController(
+    super.value, {
+    this.palette = defaultPaletteName,
+    @visibleForTesting Directory? directory,
+  }) : _directory = directory ?? _themeDirectory;
 
   /// the name of the palette the colors come from, which also picks the icon
   /// theme
-  final String palette;
+  String palette;
+
+  /// the folder the theme is saved to, null when there is none and changes
+  /// last only until the window closes
+  final Directory? _directory;
 
   static const _defaultName = 'default';
 
@@ -257,8 +266,111 @@ class ThemeController extends ValueNotifier<AppTheme> {
     }
   }
 
-  void setCornerRadius(double radius) =>
-      value = value.copyWith(cornerRadius: radius);
+  /// every change is written to the theme's `theme.json`, which keeps no
+  /// other settings of the window
+  Future<void> _save() {
+    final dir = _directory;
+    if (dir == null) {
+      return Future.value();
+    }
+    // one write at a time, so a quick run of changes cannot leave the file
+    // with an older one
+    return _saves = _saves.then((_) async {
+      try {
+        await File('${dir.path}${Platform.pathSeparator}theme.json')
+            .writeAsString(_serialize(value, palette), flush: true);
+      } catch (e) {
+        debugPrint('ThemeController: cannot save the theme ($e)');
+      }
+    });
+  }
+
+  var _saves = Future<void>.value();
+
+  void setCornerRadius(double radius) {
+    value = value.copyWith(cornerRadius: radius);
+    unawaited(_save());
+  }
+
+  void setBorderWidth(double width) {
+    value = value.copyWith(borderWidth: width);
+    unawaited(_save());
+  }
+
+  void setBackgroundOpacity(double opacity) {
+    value = value.copyWith(backgroundOpacity: opacity.clamp(0.0, 1.0));
+    unawaited(_save());
+  }
+
+  void setAcrylic(bool acrylic) {
+    value = value.copyWith(acrylic: acrylic);
+    unawaited(_save());
+  }
+
+  /// the palettes of the theme, the Catppuccin flavors first
+  List<String> get palettes {
+    final dir = _directory;
+    if (dir == null) {
+      return [palette];
+    }
+    final folder = Directory('${dir.path}${Platform.pathSeparator}palettes');
+    if (!folder.existsSync()) {
+      return [palette];
+    }
+    final names = [
+      for (final file in folder.listSync().whereType<File>())
+        if (file.path.toLowerCase().endsWith('.json'))
+          file.uri.pathSegments.last.substring(
+            0,
+            file.uri.pathSegments.last.length - '.json'.length,
+          ),
+    ];
+    int rank(String name) {
+      final index = catppuccinPalettes.keys.toList().indexOf(name);
+      return index < 0 ? catppuccinPalettes.length : index;
+    }
+
+    names.sort((a, b) {
+      final byRank = rank(a).compareTo(rank(b));
+      return byRank != 0 ? byRank : a.compareTo(b);
+    });
+    return names;
+  }
+
+  /// takes the colors of the palette [name] and keeps the rest of the theme;
+  /// a palette that is missing or unreadable changes nothing
+  Future<void> setPalette(String name) async {
+    final dir = _directory;
+    if (dir == null || _safeName(name) == null) {
+      return;
+    }
+    try {
+      final separator = Platform.pathSeparator;
+      final colors = jsonDecode(
+        await File('${dir.path}${separator}palettes$separator$name.json')
+            .readAsString(),
+      ) as Map<String, dynamic>;
+      final themed = AppTheme.fromJson(const {}, palette: colors);
+      palette = name;
+      value = value.copyWith(
+        background: themed.background,
+        titleBar: themed.titleBar,
+        surface: themed.surface,
+        border: themed.border,
+        textPrimary: themed.textPrimary,
+        textDim: themed.textDim,
+        accent: themed.accent,
+        red: themed.red,
+        lineNumber: themed.lineNumber,
+        selection: themed.selection,
+        hover: themed.hover,
+        active: themed.active,
+      );
+      await _save();
+    } catch (e) {
+      debugPrint('ThemeController: cannot use the palette $name ($e)');
+    }
+  }
 
   static String _serializePalette(AppTheme t) {
     return const JsonEncoder.withIndent('  ').convert({

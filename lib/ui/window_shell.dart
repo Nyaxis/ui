@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../editor/editor_font.dart';
 import '../editor/editor_tabs.dart';
 import '../editor/file_icon_theme.dart';
 import '../editor/keymap.dart';
@@ -121,6 +122,9 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   bool _sidebarOpen = false;
   double _sidebarWidth = 240;
+
+  String? _editorCss;
+  List<String> _palettes = const [];
 
   var _view = _View.editor;
   final _config = ConfigFile.user();
@@ -262,6 +266,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   void initState() {
     super.initState();
     _loadSettings();
+    _loadEditorCss();
+    _palettes = widget.controller.palettes;
     _editorSettings.load();
     _editorSettings.addListener(_applyEditorOptions);
     _tabs.confirmClose = _confirmClose;
@@ -354,13 +360,22 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       setState(() {});
     }
     await _applyEditorOptions();
+    final family = widget.controller.value.monospaceFontFamily;
+    if (EditorFont.isSafe(family)) {
+      await controller.runJavaScript(EditorFont.remeasureScript(family));
+    }
     await _tabs.attach(controller);
     await connectLuauLsp(controller);
   }
 
   void _showView(_View view) {
     if (_view != view) {
-      setState(() => _view = view);
+      setState(() {
+        _view = view;
+        if (view == _View.settings) {
+          _palettes = widget.controller.palettes;
+        }
+      });
     }
   }
 
@@ -550,6 +565,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       listenable: Listenable.merge([_editorSettings, _tabs]),
       builder: (context, _) => SettingsView(
         theme: theme,
+        controller: widget.controller,
+        palettes: _palettes,
         prefs: _editorSettings.value,
         onPrefs: _editorSettings.change,
         autoSave: _tabs.autoSave,
@@ -566,28 +583,49 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     // window to stop being dragged
     DeferredSize(
       key: _editorKey,
-      child: MonacoEditor(
-        backgroundColor: Colors.transparent,
-        // the editor background is transparent, so the caret of monaco's
-        // hidden input element, which sits behind the text, shows through
-        page: const MonacoPageConfig(
-          customCss:
-              'html, body { background: transparent !important; }'
-              '.monaco-editor .native-edit-context { caret-color: transparent; }',
-        ),
-        loadingBuilder: (_) => const SizedBox.expand(),
-        onReady: (controller) {
-          setState(() => _monaco = controller);
-          _applyMonacoTheme();
-          _attachEditor(controller);
-        },
-        options: EditorOptions(
-          theme: _monacoTheme,
-          fontFamily: theme.monospaceFontFamily,
-          fontSize: theme.fontSizeBody,
-        ),
-      ),
+      // the page takes its css when it loads, so it waits for the font
+      child: _editorCss == null
+          ? const SizedBox.expand()
+          : MonacoEditor(
+              backgroundColor: Colors.transparent,
+              // the editor background is transparent, so the caret of monaco's
+              // hidden input element, which sits behind the text, shows through
+              page: MonacoPageConfig(customCss: _editorCss),
+              loadingBuilder: (_) => const SizedBox.expand(),
+              onReady: (controller) {
+                setState(() => _monaco = controller);
+                _applyMonacoTheme();
+                _attachEditor(controller);
+              },
+              options: EditorOptions(
+                theme: _monacoTheme,
+                fontFamily: theme.monospaceFontFamily,
+                fontSize: theme.fontSizeBody,
+              ),
+            ),
     );
+  }
+
+  static const _editorBaseCss =
+      'html, body { background: transparent !important; }'
+      '.monaco-editor .native-edit-context { caret-color: transparent; }';
+
+  /// the editor page's css: its own, and the monospace font of the theme
+  Future<void> _loadEditorCss() async {
+    final family = widget.controller.value.monospaceFontFamily;
+    String? font;
+    try {
+      final dir = ThemeController.directory;
+      font = await EditorFont.css(
+        family,
+        themeFonts: dir == null ? null : Directory('${dir.path}\\fonts'),
+      );
+    } catch (e) {
+      debugPrint('WindowShell: cannot load the editor font $family ($e)');
+    }
+    if (mounted) {
+      setState(() => _editorCss = '$_editorBaseCss${font ?? ''}');
+    }
   }
 
   static const _titleBarHeight = 40.0;
