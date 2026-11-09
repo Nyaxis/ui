@@ -474,9 +474,13 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           'minimap.background': '#00000000',
           'minimap.selectionHighlight': _hex(theme.accent, 0.8),
           'minimap.findMatchHighlight': _hex(theme.accent, 0.8),
-          'minimapSlider.background': _hex(theme.accent, 0.12),
-          'minimapSlider.hoverBackground': _hex(theme.accent, 0.2),
-          'minimapSlider.activeBackground': _hex(theme.accent, 0.3),
+          'minimapSlider.background': _hex(theme.accent, 0.22),
+          'minimapSlider.hoverBackground': _hex(theme.accent, 0.32),
+          'minimapSlider.activeBackground': _hex(theme.accent, 0.42),
+          // the scrollbar is drawn over the minimap, so it is a lighter touch
+          'scrollbarSlider.background': _hex(theme.textDim, 0.18),
+          'scrollbarSlider.hoverBackground': _hex(theme.textDim, 0.3),
+          'scrollbarSlider.activeBackground': _hex(theme.textDim, 0.42),
         },
       ),
     );
