@@ -28,6 +28,16 @@ class AppTheme {
     this.selection = const Color(0xff9399b2),
     this.hover = const Color(0xff45475a),
     this.active = const Color(0xff585b70),
+    this.comment = const Color(0xff9399b2),
+    this.keyword = const Color(0xffcba6f7),
+    this.string = const Color(0xffa6e3a1),
+    this.number = const Color(0xfffab387),
+    this.function = const Color(0xff89b4fa),
+    this.type = const Color(0xfff9e2af),
+    this.operator = const Color(0xff89dceb),
+    this.property = const Color(0xffb4befe),
+    this.special = const Color(0xfff5c2e7),
+    this.punctuation = const Color(0xff9399b2),
   });
 
   final double cornerRadius;
@@ -75,6 +85,27 @@ class AppTheme {
 
   final Color hover;
   final Color active;
+
+  /// the colors of code, which the defaults give as Catppuccin Mocha does in
+  /// Zed: comments
+  final Color comment;
+  final Color keyword;
+  final Color string;
+  final Color number;
+
+  /// calls and definitions, and the names a language has built in
+  final Color function;
+  final Color type;
+  final Color operator;
+
+  /// the keys of objects and the members of things
+  final Color property;
+
+  /// escapes in strings, and regular expressions
+  final Color special;
+
+  /// brackets, commas and the like
+  final Color punctuation;
 
   TextStyle get titleStyle => TextStyle(
     fontFamily: fontFamily,
@@ -135,6 +166,16 @@ class AppTheme {
     Color? selection,
     Color? hover,
     Color? active,
+    Color? comment,
+    Color? keyword,
+    Color? string,
+    Color? number,
+    Color? function,
+    Color? type,
+    Color? operator,
+    Color? property,
+    Color? special,
+    Color? punctuation,
   }) {
     return AppTheme(
       cornerRadius: cornerRadius ?? this.cornerRadius,
@@ -160,6 +201,16 @@ class AppTheme {
       selection: selection ?? this.selection,
       hover: hover ?? this.hover,
       active: active ?? this.active,
+      comment: comment ?? this.comment,
+      keyword: keyword ?? this.keyword,
+      string: string ?? this.string,
+      number: number ?? this.number,
+      function: function ?? this.function,
+      type: type ?? this.type,
+      operator: operator ?? this.operator,
+      property: property ?? this.property,
+      special: special ?? this.special,
+      punctuation: punctuation ?? this.punctuation,
     );
   }
 
@@ -228,6 +279,16 @@ class AppTheme {
       selection: _color(colors['selection'], _fallback.selection),
       hover: _color(colors['hover'], _fallback.hover),
       active: _color(colors['active'], _fallback.active),
+      comment: _color(colors['comment'], _fallback.comment),
+      keyword: _color(colors['keyword'], _fallback.keyword),
+      string: _color(colors['string'], _fallback.string),
+      number: _color(colors['number'], _fallback.number),
+      function: _color(colors['function'], _fallback.function),
+      type: _color(colors['type'], _fallback.type),
+      operator: _color(colors['operator'], _fallback.operator),
+      property: _color(colors['property'], _fallback.property),
+      special: _color(colors['special'], _fallback.special),
+      punctuation: _color(colors['punctuation'], _fallback.punctuation),
     );
   }
 }

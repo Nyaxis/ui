@@ -567,6 +567,16 @@ class ThemeController extends ValueNotifier<AppTheme> {
       selection: themed.selection,
       hover: themed.hover,
       active: themed.active,
+      comment: themed.comment,
+      keyword: themed.keyword,
+      string: themed.string,
+      number: themed.number,
+      function: themed.function,
+      type: themed.type,
+      operator: themed.operator,
+      property: themed.property,
+      special: themed.special,
+      punctuation: themed.punctuation,
     );
     await _save();
   }
@@ -574,6 +584,12 @@ class ThemeController extends ValueNotifier<AppTheme> {
   /// the colors of a palette, by the key they have in its file and the name
   /// they are shown under
   static const paletteRoles = <(String, String)>[
+    ...interfaceRoles,
+    ...codeRoles,
+  ];
+
+  /// the colors of the window and the editor around the code
+  static const interfaceRoles = <(String, String)>[
     ('background', 'Background'),
     ('titleBar', 'Title and bottom bar'),
     ('surface', 'Surface'),
@@ -586,6 +602,20 @@ class ThemeController extends ValueNotifier<AppTheme> {
     ('selection', 'Selection'),
     ('hover', 'Hover'),
     ('active', 'Pressed'),
+  ];
+
+  /// the colors of the code
+  static const codeRoles = <(String, String)>[
+    ('comment', 'Comments'),
+    ('keyword', 'Keywords'),
+    ('string', 'Strings'),
+    ('number', 'Numbers'),
+    ('function', 'Functions'),
+    ('type', 'Types'),
+    ('operator', 'Operators'),
+    ('property', 'Properties'),
+    ('special', 'Escapes and patterns'),
+    ('punctuation', 'Punctuation'),
   ];
 
   Color colorOf(String role) => _roleColor(value, role);
@@ -603,6 +633,16 @@ class ThemeController extends ValueNotifier<AppTheme> {
     'selection' => theme.selection,
     'hover' => theme.hover,
     'active' => theme.active,
+    'comment' => theme.comment,
+    'keyword' => theme.keyword,
+    'string' => theme.string,
+    'number' => theme.number,
+    'function' => theme.function,
+    'type' => theme.type,
+    'operator' => theme.operator,
+    'property' => theme.property,
+    'special' => theme.special,
+    'punctuation' => theme.punctuation,
     _ => throw ArgumentError.value(role, 'role'),
   };
 
@@ -654,6 +694,16 @@ class ThemeController extends ValueNotifier<AppTheme> {
       'selection' => value.copyWith(selection: opaque),
       'hover' => value.copyWith(hover: opaque),
       'active' => value.copyWith(active: opaque),
+      'comment' => value.copyWith(comment: opaque),
+      'keyword' => value.copyWith(keyword: opaque),
+      'string' => value.copyWith(string: opaque),
+      'number' => value.copyWith(number: opaque),
+      'function' => value.copyWith(function: opaque),
+      'type' => value.copyWith(type: opaque),
+      'operator' => value.copyWith(operator: opaque),
+      'property' => value.copyWith(property: opaque),
+      'special' => value.copyWith(special: opaque),
+      'punctuation' => value.copyWith(punctuation: opaque),
       _ => throw ArgumentError.value(role, 'role'),
     };
     // a drag through the picker changes it many times a second
@@ -793,6 +843,16 @@ class ThemeController extends ValueNotifier<AppTheme> {
     'selection': _hex(t.selection),
     'hover': _hex(t.hover),
     'active': _hex(t.active),
+    'comment': _hex(t.comment),
+    'keyword': _hex(t.keyword),
+    'string': _hex(t.string),
+    'number': _hex(t.number),
+    'function': _hex(t.function),
+    'type': _hex(t.type),
+    'operator': _hex(t.operator),
+    'property': _hex(t.property),
+    'special': _hex(t.special),
+    'punctuation': _hex(t.punctuation),
   };
 
   static String _serializePalette(AppTheme t) =>

@@ -263,7 +263,12 @@ void main() {
         controller.setColor(role, const Color(0xff0a0b0c));
         expect(controller.colorOf(role), const Color(0xff0a0b0c), reason: role);
       }
-      expect(ThemeController.paletteRoles, hasLength(12));
+      expect(ThemeController.interfaceRoles, hasLength(12));
+      expect(ThemeController.codeRoles, hasLength(10));
+      expect(ThemeController.paletteRoles, [
+        ...ThemeController.interfaceRoles,
+        ...ThemeController.codeRoles,
+      ]);
     });
 
     test('a role that does not exist is refused', () {

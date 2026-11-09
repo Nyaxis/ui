@@ -12,6 +12,7 @@ import '../editor/file_icon_theme.dart';
 import '../editor/keymap.dart';
 import '../editor/language_extensions.dart';
 import '../editor/luau_lsp.dart';
+import '../editor/monaco_theme.dart';
 import '../editor/text_encoding.dart';
 import '../native/backend.dart';
 import '../settings/config_file.dart';
@@ -430,15 +431,6 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     _config.update((json) => json['autoSaveDelay'] = value.inMilliseconds);
   }
 
-  /// `#rrggbb`, with an alpha suffix when [opacity] is given
-  static String _hex(Color c, [double? opacity]) {
-    final rgb = (c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0');
-    final alpha = opacity == null
-        ? ''
-        : (opacity * 255).round().toRadixString(16).padLeft(2, '0');
-    return '#$rgb$alpha';
-  }
-
   /// the editor is drawn by monaco, so the palette reaches it as a custom
   /// monaco theme
   Future<void> _applyMonacoTheme() async {
@@ -446,50 +438,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     if (monaco == null) {
       return;
     }
-    final theme = widget.controller.value;
-    final dark = theme.background.computeLuminance() < 0.5;
     await monaco.defineTheme(
-      MonacoThemeDefinition(
-        id: _monacoTheme.id,
-        base: dark ? MonacoBaseTheme.vsDark : MonacoBaseTheme.vs,
-        colors: {
-          // the window paints the background, so its opacity applies
-          'editor.background': '#00000000',
-          'editor.foreground': _hex(theme.textPrimary),
-          'editorGutter.background': '#00000000',
-          'editorLineNumber.foreground': _hex(theme.lineNumber),
-          'editorLineNumber.activeForeground': _hex(theme.accent),
-          'editorCursor.foreground': _hex(theme.accent),
-          'editor.selectionBackground': _hex(
-            theme.selection,
-            dark ? 0.25 : 0.3,
-          ),
-          'editor.lineHighlightBackground': _hex(theme.textPrimary, 0.07),
-          // the focused line is outlined in this color
-          'focusBorder': '#00000000',
-          'editorIndentGuide.background1': _hex(theme.border, 0.6),
-          'editorWidget.background': _hex(theme.titleBar),
-          'editorWidget.border': _hex(theme.border),
-          // the minimap is a panel of its own, so it does not blend into the
-          // editor; the window's opacity applies, as it does to the editor
-          // monaco reads the editor's background without its transparency, so
-          // the scrollbar's column, which takes that color, would be black
-          'editorOverviewRuler.background': '#00000000',
-          'minimap.background': _hex(theme.surface, theme.backgroundOpacity),
-          'minimap.selectionHighlight': _hex(theme.accent, 0.8),
-          'minimap.findMatchHighlight': _hex(theme.accent, 0.8),
-          // the sliders are the text color, which stands out from the
-          // backgrounds of any palette, and the minimap's is the stronger, so
-          // the two are told apart where the scrollbar is drawn over it
-          'minimapSlider.background': _hex(theme.textPrimary, 0.14),
-          'minimapSlider.hoverBackground': _hex(theme.textPrimary, 0.22),
-          'minimapSlider.activeBackground': _hex(theme.textPrimary, 0.3),
-          'scrollbar.background': '#00000000',
-          'scrollbarSlider.background': _hex(theme.textDim, 0.28),
-          'scrollbarSlider.hoverBackground': _hex(theme.textDim, 0.42),
-          'scrollbarSlider.activeBackground': _hex(theme.textDim, 0.56),
-        },
-      ),
+      monacoThemeFor(widget.controller.value, id: _monacoTheme.id),
     );
     await monaco.setTheme(_monacoTheme);
   }

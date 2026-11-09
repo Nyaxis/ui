@@ -613,7 +613,11 @@ void main() {
         for (final (_, label) in ThemeController.paletteRoles) {
           expect(find.text(label), findsWidgets, reason: label);
         }
-        expect(find.byType(ColorField), findsNWidgets(12));
+        expect(
+          find.byType(ColorField),
+          findsNWidgets(ThemeController.paletteRoles.length),
+        );
+        expect(find.text('Code colors'), findsOneWidget);
       },
     );
 

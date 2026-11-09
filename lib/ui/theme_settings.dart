@@ -117,6 +117,22 @@ class ThemeSettings extends StatelessWidget {
     );
   }
 
+  /// a row for each of [roles], with the color it has in the palette in use
+  List<Widget> _colorRows(List<(String, String)> roles) {
+    return [
+      for (final (role, label) in roles)
+        SettingRow(
+          theme: theme,
+          label: label,
+          control: ColorField(
+            theme: theme,
+            color: controller.colorOf(role),
+            onChanged: (color) => controller.setColor(role, color),
+          ),
+        ),
+    ];
+  }
+
   Widget _fontMenu(String value, ValueChanged<String> onChanged) {
     final fonts = controller.fonts;
     return DropdownControl<String>(
@@ -261,18 +277,13 @@ class ThemeSettings extends StatelessWidget {
         SettingsSection(
           theme: theme,
           title: 'Colors',
-          rows: [
-            for (final (role, label) in ThemeController.paletteRoles)
-              SettingRow(
-                theme: theme,
-                label: label,
-                control: ColorField(
-                  theme: theme,
-                  color: controller.colorOf(role),
-                  onChanged: (color) => controller.setColor(role, color),
-                ),
-              ),
-          ],
+          rows: _colorRows(ThemeController.interfaceRoles),
+        ),
+        gap,
+        SettingsSection(
+          theme: theme,
+          title: 'Code colors',
+          rows: _colorRows(ThemeController.codeRoles),
         ),
         gap,
         SettingsSection(
