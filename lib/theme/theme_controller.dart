@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show Color;
@@ -5,15 +6,37 @@ import 'dart:ui' show Color;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show FontLoader, rootBundle;
 
+import '../settings/config_file.dart';
 import 'app_theme.dart';
 import 'catppuccin.dart';
+import 'theme_library.dart';
 
 class ThemeController extends ValueNotifier<AppTheme> {
-  ThemeController(super.value, {this.palette = defaultPaletteName});
+  ThemeController(
+    super.value, {
+    this.palette = defaultPaletteName,
+    @visibleForTesting Directory? directory,
+    @visibleForTesting ConfigFile? config,
+    this.persist = true,
+  }) : _directory = directory ?? _themeDirectory,
+       // a controller that is given a folder is not the one of the window, so it
+       // does not touch the window's config unless it is given one
+       _config = config ?? (directory == null ? ConfigFile.user() : null);
+
+  /// where the theme in use is remembered
+  final ConfigFile? _config;
 
   /// the name of the palette the colors come from, which also picks the icon
   /// theme
-  final String palette;
+  String palette;
+
+  /// the folder the theme is saved to, null when there is none and changes
+  /// last only until the window closes
+  Directory? _directory;
+
+  /// false when the theme could not be read, so changes are not saved over
+  /// the files that were
+  final bool persist;
 
   static const _defaultName = 'default';
 
@@ -83,7 +106,9 @@ class ThemeController extends ValueNotifier<AppTheme> {
   /// missing keys are filled in, so edited values are kept
   static Future<void> _seedPalettes(Directory dir) async {
     for (final entry in catppuccinPalettes.entries) {
-      final file = File('${dir.path}\\palettes\\${entry.key}.json');
+      final file = File(
+        '${dir.path}${Platform.pathSeparator}palettes${Platform.pathSeparator}${entry.key}.json',
+      );
       var colors = <String, dynamic>{};
       try {
         if (file.existsSync()) {
@@ -111,7 +136,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
   /// and replaced; one is skipped when the folder already has any file by its
   /// name
   static Future<void> _seedIcons(Directory dir) async {
-    final icons = Directory('${dir.path}\\icons');
+    final icons = Directory('${dir.path}${Platform.pathSeparator}icons');
     final existing = icons
         .listSync()
         .whereType<File>()
@@ -130,10 +155,11 @@ class ThemeController extends ValueNotifier<AppTheme> {
       'execute',
     ]) {
       if (!existing.contains(name)) {
-        await File('${icons.path}\\$name.svg').writeAsString(
-          await rootBundle.loadString('assets/icons/$name/$name-16.svg'),
-          flush: true,
-        );
+        await File('${icons.path}${Platform.pathSeparator}$name.svg')
+            .writeAsString(
+              await rootBundle.loadString('assets/icons/$name/$name-16.svg'),
+              flush: true,
+            );
       }
     }
   }
@@ -148,7 +174,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
   /// the default theme ships the bundled fonts as files, named after their
   /// family, so they can be seen and replaced
   static Future<void> _seedFonts(Directory dir) async {
-    final fonts = Directory('${dir.path}\\fonts');
+    final fonts = Directory('${dir.path}${Platform.pathSeparator}fonts');
     final existing = fonts
         .listSync()
         .whereType<File>()
@@ -157,10 +183,11 @@ class ThemeController extends ValueNotifier<AppTheme> {
     for (final entry in _bundledFonts.entries) {
       if (!existing.contains(entry.key)) {
         final data = await rootBundle.load(entry.value);
-        await File('${fonts.path}\\${entry.key}.ttf').writeAsBytes(
-          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-          flush: true,
-        );
+        await File('${fonts.path}${Platform.pathSeparator}${entry.key}.ttf')
+            .writeAsBytes(
+              data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+              flush: true,
+            );
       }
     }
   }
@@ -170,7 +197,9 @@ class ThemeController extends ValueNotifier<AppTheme> {
   /// app, so the defaults always resolve
   static Future<void> _registerFonts(Directory? dir) async {
     final loaded = <String>{};
-    final folder = dir == null ? null : Directory('${dir.path}\\fonts');
+    final folder = dir == null
+        ? null
+        : Directory('${dir.path}${Platform.pathSeparator}fonts');
     if (folder != null && folder.existsSync()) {
       for (final file in folder.listSync().whereType<File>()) {
         final name = file.uri.pathSegments.last;
@@ -218,64 +247,630 @@ class ThemeController extends ValueNotifier<AppTheme> {
       final name = await _activeName(root);
       final dir = Directory('${root.path}\\themes\\$name');
       await _migrateLegacy(root, dir);
-      await Directory('${dir.path}\\icons').create(recursive: true);
-      await Directory('${dir.path}\\palettes').create(recursive: true);
-      await Directory('${dir.path}\\fonts').create(recursive: true);
-      if (name == _defaultName) {
-        await _seedPalettes(dir);
-        await _seedIcons(dir);
-        await _seedFonts(dir);
-      }
       _themeDirectory = dir;
-
       file = File('${dir.path}\\theme.json');
-      final json = file.existsSync()
-          ? jsonDecode(await file.readAsString()) as Map<String, dynamic>
-          : <String, dynamic>{};
-      // a theme from before palettes names none, and keeps its own colors
-      final paletteName =
-          _safeName(json['palette']) ??
-          (json.containsKey('background') ? _defaultName : defaultPaletteName);
-
-      // a theme from before palettes carries its colors itself, so they seed
-      // the palette file
-      final paletteFile = File('${dir.path}\\palettes\\$paletteName.json');
-      final palette = paletteFile.existsSync()
-          ? jsonDecode(await paletteFile.readAsString()) as Map<String, dynamic>
-          : null;
-
-      final theme = AppTheme.fromJson(json, palette: palette);
-      await file.writeAsString(_serialize(theme, paletteName), flush: true);
-      await paletteFile.writeAsString(_serializePalette(theme), flush: true);
+      final (theme, paletteName) = await _readTheme(dir, name);
       return ThemeController(theme, palette: paletteName);
     } catch (e) {
       debugPrint(
         'ThemeController.load: unreadable ${file?.path ?? root.path}, '
         'using defaults ($e)',
       );
-      return ThemeController(const AppTheme());
+      // what could not be read is not written over
+      return ThemeController(const AppTheme(), persist: false);
     }
   }
 
-  void setCornerRadius(double radius) =>
-      value = value.copyWith(cornerRadius: radius);
+  /// the theme in [dir], named [name], and the palette it uses; the folder
+  /// is filled in with what a theme has, and the files are written back
+  /// complete
+  static Future<(AppTheme, String)> _readTheme(
+    Directory dir,
+    String name,
+  ) async {
+    final s = Platform.pathSeparator;
+    await Directory('${dir.path}${s}icons').create(recursive: true);
+    await Directory('${dir.path}${s}palettes').create(recursive: true);
+    await Directory('${dir.path}${s}fonts').create(recursive: true);
+    if (name == _defaultName) {
+      await _seedPalettes(dir);
+      await _seedIcons(dir);
+      await _seedFonts(dir);
+    }
 
-  static String _serializePalette(AppTheme t) {
-    return const JsonEncoder.withIndent('  ').convert({
-      'background': _hex(t.background),
-      'titleBar': _hex(t.titleBar),
-      'surface': _hex(t.surface),
-      'border': _hex(t.border),
-      'textPrimary': _hex(t.textPrimary),
-      'textDim': _hex(t.textDim),
-      'accent': _hex(t.accent),
-      'red': _hex(t.red),
-      'lineNumber': _hex(t.lineNumber),
-      'selection': _hex(t.selection),
-      'hover': _hex(t.hover),
-      'active': _hex(t.active),
+    final file = File('${dir.path}${s}theme.json');
+    final json = file.existsSync()
+        ? jsonDecode(await file.readAsString()) as Map<String, dynamic>
+        : <String, dynamic>{};
+    // a theme from before palettes names none, and keeps its own colors
+    final paletteName =
+        _safeName(json['palette']) ??
+        (json.containsKey('background') ? _defaultName : defaultPaletteName);
+
+    // a theme from before palettes carries its colors itself, so they seed
+    // the palette file
+    final paletteFile = File('${dir.path}${s}palettes$s$paletteName.json');
+    final palette = paletteFile.existsSync()
+        ? jsonDecode(await paletteFile.readAsString()) as Map<String, dynamic>
+        : null;
+
+    final theme = AppTheme.fromJson(json, palette: palette);
+    await file.writeAsString(_serialize(theme, paletteName), flush: true);
+    await paletteFile.writeAsString(_serializePalette(theme), flush: true);
+    return (theme, paletteName);
+  }
+
+  /// the name of the theme in use, which is the name of its folder
+  String get themeName => _directory?.path.split(RegExp(r'[\\/]')).last ?? '';
+
+  ThemeLibrary? get _library {
+    final dir = _directory;
+    return dir == null ? null : ThemeLibrary(dir.parent);
+  }
+
+  /// the themes, `default` first
+  List<String> get themes => _library?.themes() ?? [themeName];
+
+  /// the palettes of the theme in use
+  List<String> get palettes {
+    final names = _library?.palettes(themeName);
+    return names == null || names.isEmpty ? [palette] : names;
+  }
+
+  /// the fonts the theme has, which are the files in its `fonts` folder
+  List<String> get fonts {
+    final dir = _directory;
+    final folder = dir == null
+        ? null
+        : Directory('${dir.path}${Platform.pathSeparator}fonts');
+    if (folder == null || !folder.existsSync()) {
+      return const [];
+    }
+    final names = <String>[];
+    for (final file in folder.listSync().whereType<File>()) {
+      final name = file.path.split(RegExp(r'[\\/]')).last;
+      final dot = name.lastIndexOf('.');
+      if (dot > 0 &&
+          _fontExtensions.contains(name.substring(dot + 1).toLowerCase())) {
+        names.add(name.substring(0, dot));
+      }
+    }
+    return names..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  }
+
+  /// the theme in use is kept for the next start, in `config.json`
+  Future<void> _remember(String name) =>
+      _config?.update((json) => json['theme'] = name) ?? Future.value();
+
+  /// moves to the theme named [name]: its colors, fonts and icons replace the
+  /// ones in use. a font a theme has under the name of one already loaded
+  /// takes a restart to show; returns whether the theme was found and read
+  Future<bool> switchTheme(String name) async {
+    final current = _directory;
+    if (current == null || _safeName(name) == null) {
+      return false;
+    }
+    final dir = Directory(
+      '${current.parent.path}${Platform.pathSeparator}$name',
+    );
+    if (!dir.existsSync()) {
+      return false;
+    }
+    try {
+      await _flushPalette();
+      final (theme, paletteName) = await _readTheme(dir, name);
+      await _registerFonts(dir);
+      _themeDirectory = dir;
+      _directory = dir;
+      palette = paletteName;
+      value = theme;
+      await _remember(name);
+      return true;
+    } catch (e) {
+      debugPrint('ThemeController: cannot switch to the theme $name ($e)');
+      return false;
+    }
+  }
+
+  /// the default theme comes with the app, so it is not renamed or removed
+  bool get canChangeTheme => themeName != ThemeLibrary.defaultTheme;
+
+  /// why [name] cannot be the name of a theme, null when it can; with
+  /// [renaming] the theme in use may keep its own name
+  String? validateThemeName(String name, {bool renaming = false}) {
+    final library = _library;
+    if (library == null) {
+      return 'Themes cannot be saved on this computer';
+    }
+    return ThemeLibrary.checkName(
+      name,
+      library.themes(),
+      renaming: renaming ? themeName : null,
+    );
+  }
+
+  /// copies the theme in use as [name], and moves to the copy. returns why it
+  /// could not, null when it did
+  Future<String?> createTheme(String name) async {
+    final library = _library;
+    final error = validateThemeName(name);
+    if (library == null || error != null) {
+      return error ?? 'Themes cannot be saved on this computer';
+    }
+    final created = name.trim();
+    try {
+      await _flushPalette();
+      await library.copyTheme(themeName, created);
+    } on FileSystemException catch (e) {
+      return 'The theme could not be created: ${e.message}';
+    }
+    return await switchTheme(created)
+        ? null
+        : 'The new theme could not be opened';
+  }
+
+  Future<String?> renameTheme(String name) async {
+    final library = _library;
+    final from = themeName;
+    if (library == null || !canChangeTheme) {
+      return 'The default theme cannot be renamed';
+    }
+    final error = validateThemeName(name, renaming: true);
+    if (error != null) {
+      return error;
+    }
+    final renamed = name.trim();
+    if (renamed == from) {
+      return null;
+    }
+    try {
+      await _flushPalette();
+      await library.renameTheme(from, renamed);
+    } on FileSystemException catch (e) {
+      return 'The theme could not be renamed: ${e.message}';
+    }
+    final dir = library.theme(renamed);
+    _themeDirectory = dir;
+    _directory = dir;
+    await _remember(renamed);
+    notifyListeners();
+    return null;
+  }
+
+  /// removes the theme in use, after moving to the default one, or to another
+  /// when there is none
+  Future<String?> deleteTheme() async {
+    final library = _library;
+    final name = themeName;
+    if (library == null || !canChangeTheme) {
+      return 'The default theme cannot be removed';
+    }
+    final others = library.themes().where((t) => t != name).toList();
+    final target = others.contains(ThemeLibrary.defaultTheme)
+        ? ThemeLibrary.defaultTheme
+        : others.firstOrNull;
+    if (target == null || !await switchTheme(target)) {
+      return 'There is no other theme to move to first';
+    }
+    try {
+      await library.deleteTheme(name);
+    } on FileSystemException catch (e) {
+      return 'The theme could not be removed: ${e.message}';
+    }
+    notifyListeners();
+    return null;
+  }
+
+  String? validatePaletteName(String name, {bool renaming = false}) {
+    if (_library == null) {
+      return 'Palettes cannot be saved on this computer';
+    }
+    return ThemeLibrary.checkName(
+      name,
+      palettes,
+      renaming: renaming ? palette : null,
+    );
+  }
+
+  /// a palette with the colors in use, named [name], which is moved to
+  Future<String?> createPalette(String name) async {
+    final library = _library;
+    final error = validatePaletteName(name);
+    if (library == null || error != null) {
+      return error ?? 'Palettes cannot be saved on this computer';
+    }
+    final created = name.trim();
+    try {
+      await _flushPalette();
+      await library.writePalette(themeName, created, _paletteJson(value));
+    } on FileSystemException catch (e) {
+      return 'The palette could not be created: ${e.message}';
+    }
+    palette = created;
+    notifyListeners();
+    await _save();
+    return null;
+  }
+
+  Future<String?> renamePalette(String name) async {
+    final library = _library;
+    if (library == null) {
+      return 'Palettes cannot be saved on this computer';
+    }
+    final error = validatePaletteName(name, renaming: true);
+    if (error != null) {
+      return error;
+    }
+    final renamed = name.trim();
+    if (renamed == palette) {
+      return null;
+    }
+    try {
+      await _flushPalette();
+      await library.renamePalette(themeName, palette, renamed);
+    } on FileSystemException catch (e) {
+      return 'The palette could not be renamed: ${e.message}';
+    }
+    palette = renamed;
+    notifyListeners();
+    await _save();
+    return null;
+  }
+
+  /// removes the palette in use, after moving to another; a theme keeps at
+  /// least one
+  Future<String?> deletePalette() async {
+    final library = _library;
+    final name = palette;
+    final others = palettes.where((p) => p != name).toList();
+    if (library == null || others.isEmpty) {
+      return 'A theme needs at least one palette';
+    }
+    await setPalette(others.first);
+    if (palette == name) {
+      return 'Another palette could not be used first';
+    }
+    try {
+      await library.deletePalette(themeName, name);
+    } on FileSystemException catch (e) {
+      return 'The palette could not be removed: ${e.message}';
+    }
+    notifyListeners();
+    return null;
+  }
+
+  /// takes the colors of the palette [name] and keeps the rest of the theme;
+  /// a palette that is missing or unreadable changes nothing
+  Future<void> setPalette(String name) async {
+    final library = _library;
+    if (library == null || _safeName(name) == null) {
+      return;
+    }
+    await _flushPalette();
+    final colors = await library.readPalette(themeName, name);
+    if (colors == null) {
+      debugPrint('ThemeController: cannot use the palette $name');
+      return;
+    }
+    final themed = AppTheme.fromJson(const {}, palette: colors);
+    palette = name;
+    value = value.copyWith(
+      background: themed.background,
+      titleBar: themed.titleBar,
+      surface: themed.surface,
+      border: themed.border,
+      textPrimary: themed.textPrimary,
+      textDim: themed.textDim,
+      accent: themed.accent,
+      red: themed.red,
+      lineNumber: themed.lineNumber,
+      selection: themed.selection,
+      hover: themed.hover,
+      active: themed.active,
+      focus: themed.focus,
+      disabled: themed.disabled,
+      comment: themed.comment,
+      keyword: themed.keyword,
+      string: themed.string,
+      number: themed.number,
+      function: themed.function,
+      type: themed.type,
+      operator: themed.operator,
+      property: themed.property,
+      special: themed.special,
+      punctuation: themed.punctuation,
+    );
+    await _save();
+  }
+
+  /// the colors of a palette, by the key they have in its file and the name
+  /// they are shown under
+  static const paletteRoles = <(String, String)>[
+    ...interfaceRoles,
+    ...codeRoles,
+  ];
+
+  /// the colors of the window and the editor around the code
+  static const interfaceRoles = <(String, String)>[
+    ('background', 'Background'),
+    ('titleBar', 'Title and bottom bar'),
+    ('surface', 'Surface'),
+    ('border', 'Border'),
+    ('textPrimary', 'Text'),
+    ('textDim', 'Dim text'),
+    ('accent', 'Accent'),
+    ('red', 'Danger'),
+    ('lineNumber', 'Line numbers'),
+    ('selection', 'Selection'),
+    ('hover', 'Hover'),
+    ('active', 'Pressed'),
+    ('focus', 'Focus outline'),
+    ('disabled', 'Disabled'),
+  ];
+
+  /// the colors of the code
+  static const codeRoles = <(String, String)>[
+    ('comment', 'Comments'),
+    ('keyword', 'Keywords'),
+    ('string', 'Strings'),
+    ('number', 'Numbers'),
+    ('function', 'Functions'),
+    ('type', 'Types'),
+    ('operator', 'Operators'),
+    ('property', 'Properties'),
+    ('special', 'Escapes and patterns'),
+    ('punctuation', 'Punctuation'),
+  ];
+
+  Color colorOf(String role) => _roleColor(value, role);
+
+  static Color _roleColor(AppTheme theme, String role) => switch (role) {
+    'background' => theme.background,
+    'titleBar' => theme.titleBar,
+    'surface' => theme.surface,
+    'border' => theme.border,
+    'textPrimary' => theme.textPrimary,
+    'textDim' => theme.textDim,
+    'accent' => theme.accent,
+    'red' => theme.red,
+    'lineNumber' => theme.lineNumber,
+    'selection' => theme.selection,
+    'hover' => theme.hover,
+    'active' => theme.active,
+    'focus' => theme.focus,
+    'disabled' => theme.disabled,
+    'comment' => theme.comment,
+    'keyword' => theme.keyword,
+    'string' => theme.string,
+    'number' => theme.number,
+    'function' => theme.function,
+    'type' => theme.type,
+    'operator' => theme.operator,
+    'property' => theme.property,
+    'special' => theme.special,
+    'punctuation' => theme.punctuation,
+    _ => throw ArgumentError.value(role, 'role'),
+  };
+
+  final _previews = <String, (DateTime?, List<Color>)>{};
+
+  /// the colors of the palette [name], in the order of [paletteRoles], for
+  /// showing what it looks like. the palette in use gives the colors it has
+  /// now, as they are being changed; another is read from its file, and kept
+  /// until the file changes. null when there is no such palette
+  List<Color>? paletteColors(String name) {
+    if (name == palette) {
+      return [for (final (role, _) in paletteRoles) colorOf(role)];
+    }
+    final library = _library;
+    final modified = library?.paletteModified(themeName, name);
+    if (library == null || modified == null) {
+      return null;
+    }
+    final key = '$themeName/$name';
+    final kept = _previews[key];
+    if (kept != null && kept.$1 == modified) {
+      return kept.$2;
+    }
+    final colors = library.readPaletteSync(themeName, name);
+    if (colors == null) {
+      return null;
+    }
+    final theme = AppTheme.fromJson(const {}, palette: colors);
+    final read = [
+      for (final (role, _) in paletteRoles) _roleColor(theme, role),
+    ];
+    _previews[key] = (modified, read);
+    return read;
+  }
+
+  /// changes one color of the palette in use, which is saved as it is
+  void setColor(String role, Color color) {
+    final opaque = color.withValues(alpha: 1);
+    value = switch (role) {
+      'background' => value.copyWith(background: opaque),
+      'titleBar' => value.copyWith(titleBar: opaque),
+      'surface' => value.copyWith(surface: opaque),
+      'border' => value.copyWith(border: opaque),
+      'textPrimary' => value.copyWith(textPrimary: opaque),
+      'textDim' => value.copyWith(textDim: opaque),
+      'accent' => value.copyWith(accent: opaque),
+      'red' => value.copyWith(red: opaque),
+      'lineNumber' => value.copyWith(lineNumber: opaque),
+      'selection' => value.copyWith(selection: opaque),
+      'hover' => value.copyWith(hover: opaque),
+      'active' => value.copyWith(active: opaque),
+      'focus' => value.copyWith(focus: opaque),
+      'disabled' => value.copyWith(disabled: opaque),
+      'comment' => value.copyWith(comment: opaque),
+      'keyword' => value.copyWith(keyword: opaque),
+      'string' => value.copyWith(string: opaque),
+      'number' => value.copyWith(number: opaque),
+      'function' => value.copyWith(function: opaque),
+      'type' => value.copyWith(type: opaque),
+      'operator' => value.copyWith(operator: opaque),
+      'property' => value.copyWith(property: opaque),
+      'special' => value.copyWith(special: opaque),
+      'punctuation' => value.copyWith(punctuation: opaque),
+      _ => throw ArgumentError.value(role, 'role'),
+    };
+    // a drag through the picker changes it many times a second
+    _paletteTimer?.cancel();
+    _paletteTimer = Timer(_paletteDelay, () => unawaited(_savePalette()));
+  }
+
+  static const _paletteDelay = Duration(milliseconds: 250);
+  Timer? _paletteTimer;
+
+  /// waits until everything that was changed is written, which a window that
+  /// is closing has to do
+  Future<void> flush() => _flushPalette();
+
+  /// writes a color that is waiting to be saved now, to the palette it was
+  /// changed in, and waits for everything that is being written
+  Future<void> _flushPalette() async {
+    final timer = _paletteTimer;
+    if (timer != null && timer.isActive) {
+      timer.cancel();
+      await _savePalette();
+    }
+    await _saves;
+  }
+
+  @override
+  void dispose() {
+    _paletteTimer?.cancel();
+    super.dispose();
+  }
+
+  /// one write at a time, so a quick run of changes cannot leave a file with
+  /// an older one
+  Future<void> _enqueue(Future<void> Function() write) {
+    return _saves = _saves.then((_) async {
+      try {
+        await write();
+      } catch (e) {
+        debugPrint('ThemeController: cannot save the theme ($e)');
+      }
     });
   }
+
+  var _saves = Future<void>.value();
+
+  /// every change is written to the theme's `theme.json`, which keeps no
+  /// other settings of the window
+  Future<void> _save() {
+    final dir = _directory;
+    if (dir == null || !persist) {
+      return Future.value();
+    }
+    final json = _serialize(value, palette);
+    return _enqueue(
+      () =>
+          File('${dir.path}${Platform.pathSeparator}theme.json')
+              .writeAsString(json, flush: true),
+    );
+  }
+
+  /// the colors in use, written to the palette they came from
+  Future<void> _savePalette() {
+    final library = _library;
+    if (library == null || !persist) {
+      return Future.value();
+    }
+    final theme = themeName;
+    final name = palette;
+    final colors = _paletteJson(value);
+    return _enqueue(() => library.writePalette(theme, name, colors));
+  }
+
+  void setCornerRadius(double radius) {
+    value = value.copyWith(cornerRadius: radius);
+    unawaited(_save());
+  }
+
+  static const minRoundingPower = 1.0;
+  static const maxRoundingPower = 10.0;
+
+  /// how square the corners are: 2 is a circle's, and more is squarer
+  void setRoundingPower(double power) {
+    value = value.copyWith(
+      roundingPower: power.clamp(minRoundingPower, maxRoundingPower),
+    );
+    unawaited(_save());
+  }
+
+  void setBorderWidth(double width) {
+    value = value.copyWith(borderWidth: width);
+    unawaited(_save());
+  }
+
+  void setBackgroundOpacity(double opacity) {
+    value = value.copyWith(backgroundOpacity: opacity.clamp(0.0, 1.0));
+    unawaited(_save());
+  }
+
+  void setAcrylic(bool acrylic) {
+    value = value.copyWith(acrylic: acrylic);
+    unawaited(_save());
+  }
+
+  /// [family] is one of [fonts], which are loaded under their file names
+  void setFontFamily(String family) {
+    value = value.copyWith(fontFamily: family);
+    unawaited(_save());
+  }
+
+  void setMonospaceFontFamily(String family) {
+    value = value.copyWith(monospaceFontFamily: family);
+    unawaited(_save());
+  }
+
+  static const minFontSize = 8.0;
+  static const maxFontSize = 48.0;
+
+  /// `title`, `heading`, `body` or `caption`
+  void setFontSize(String role, double size) {
+    final clamped = size.clamp(minFontSize, maxFontSize).toDouble();
+    value = switch (role) {
+      'title' => value.copyWith(fontSizeTitle: clamped),
+      'heading' => value.copyWith(fontSizeHeading: clamped),
+      'body' => value.copyWith(fontSizeBody: clamped),
+      'caption' => value.copyWith(fontSizeCaption: clamped),
+      _ => throw ArgumentError.value(role, 'role'),
+    };
+    unawaited(_save());
+  }
+
+  static Map<String, dynamic> _paletteJson(AppTheme t) => {
+    'background': _hex(t.background),
+    'titleBar': _hex(t.titleBar),
+    'surface': _hex(t.surface),
+    'border': _hex(t.border),
+    'textPrimary': _hex(t.textPrimary),
+    'textDim': _hex(t.textDim),
+    'accent': _hex(t.accent),
+    'red': _hex(t.red),
+    'lineNumber': _hex(t.lineNumber),
+    'selection': _hex(t.selection),
+    'hover': _hex(t.hover),
+    'active': _hex(t.active),
+    'focus': _hex(t.focus),
+    'disabled': _hex(t.disabled),
+    'comment': _hex(t.comment),
+    'keyword': _hex(t.keyword),
+    'string': _hex(t.string),
+    'number': _hex(t.number),
+    'function': _hex(t.function),
+    'type': _hex(t.type),
+    'operator': _hex(t.operator),
+    'property': _hex(t.property),
+    'special': _hex(t.special),
+    'punctuation': _hex(t.punctuation),
+  };
+
+  static String _serializePalette(AppTheme t) =>
+      const JsonEncoder.withIndent('  ').convert(_paletteJson(t));
 
   static String _serialize(AppTheme t, String paletteName) {
     return const JsonEncoder.withIndent('  ').convert({

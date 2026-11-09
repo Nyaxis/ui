@@ -6,13 +6,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../editor/editor_font.dart';
 import '../editor/editor_tabs.dart';
 import '../editor/file_icon_theme.dart';
 import '../editor/keymap.dart';
 import '../editor/language_extensions.dart';
 import '../editor/luau_lsp.dart';
+import '../editor/monaco_theme.dart';
 import '../editor/text_encoding.dart';
 import '../native/backend.dart';
+import '../settings/config_file.dart';
+import '../settings/editor_settings.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import 'clickable.dart';
@@ -20,9 +24,13 @@ import 'context_menu.dart';
 import 'deferred_size.dart';
 import 'dialog.dart';
 import 'picker.dart';
+import 'settings_view.dart';
 import 'sidebar.dart';
 import 'skinnable_icon.dart';
 import 'superellipse.dart';
+
+/// what the window shows beside the sidebar
+enum _View { editor, settings }
 
 /// a button of the bottom bar, with the state that `config.json` keeps
 class _BottomButton {
@@ -115,6 +123,12 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   bool _sidebarOpen = false;
   double _sidebarWidth = 240;
+
+  String? _editorCss;
+
+  var _view = _View.editor;
+  final _config = ConfigFile.user();
+  late final _editorSettings = EditorSettings(_config);
 
   bool _maximized = false;
   bool _newMenuOpen = false;
@@ -252,8 +266,13 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   void initState() {
     super.initState();
     _loadSettings();
+    _loadEditorCss();
+    _editorSettings.load();
+    _editorSettings.addListener(_applyEditorOptions);
     _tabs.confirmClose = _confirmClose;
     widget.controller.addListener(_applyMonacoTheme);
+    widget.controller.addListener(_applyEditorOptions);
+    widget.controller.addListener(_applyEditorFont);
     windowManager.addListener(this);
     windowManager.setPreventClose(true);
     _tabs.addListener(_updatePresence);
@@ -271,6 +290,10 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   void dispose() {
     windowManager.removeListener(this);
     widget.controller.removeListener(_applyMonacoTheme);
+    widget.controller.removeListener(_applyEditorOptions);
+    widget.controller.removeListener(_applyEditorFont);
+    _editorSettings.removeListener(_applyEditorOptions);
+    _editorSettings.dispose();
     _tabs.removeListener(_updatePresence);
     _backend?.dispose();
     _tabs.dispose();
@@ -282,6 +305,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   Future<void> onWindowClose() async {
     await windowManager.hide();
     _backend?.dispose();
+    // what was changed a moment ago has not been written yet
+    await Future.wait([widget.controller.flush(), _config.flush()]);
     await windowManager.destroy();
   }
 
@@ -327,18 +352,85 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       'workspace::RevealInFileManager',
       () => _tabs.reveal(_tabs.active),
     );
+    _keymap.on('workspace::ShowEditor', () async => _showView(_View.editor));
+    _keymap.on(
+      'workspace::ShowSettings',
+      () async => _showView(_View.settings),
+    );
     await _keymap.attach(controller);
+    // the sidebar names the keys of its items, which are known by now
+    if (mounted) {
+      setState(() {});
+    }
+    await _applyEditorOptions();
+    final family = widget.controller.value.monospaceFontFamily;
+    // the page was loaded with this font already
+    _editorFontKey = '${widget.controller.themeName}/$family';
+    if (EditorFont.isSafe(family)) {
+      await controller.runJavaScript(EditorFont.remeasureScript(family));
+    }
     await _tabs.attach(controller);
     await connectLuauLsp(controller);
   }
 
-  /// `#rrggbb`, with an alpha suffix when [opacity] is given
-  static String _hex(Color c, [double? opacity]) {
-    final rgb = (c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0');
-    final alpha = opacity == null
-        ? ''
-        : (opacity * 255).round().toRadixString(16).padLeft(2, '0');
-    return '#$rgb$alpha';
+  void _showView(_View view) {
+    if (_view != view) {
+      setState(() => _view = view);
+    }
+  }
+
+  /// the theme and font the editor was last given, so that it is given a font
+  /// again only when one of them changes
+  String? _editorFontKey;
+
+  /// the editor page has the font it was loaded with, so the font of a theme
+  /// that is switched to, or one that is chosen, is put in it
+  Future<void> _applyEditorFont() async {
+    final monaco = _monaco;
+    final family = widget.controller.value.monospaceFontFamily;
+    final key = '${widget.controller.themeName}/$family';
+    if (monaco == null || key == _editorFontKey) {
+      return;
+    }
+    _editorFontKey = key;
+    try {
+      final dir = ThemeController.directory;
+      final css = await EditorFont.css(
+        family,
+        themeFonts: dir == null ? null : Directory('${dir.path}\\fonts'),
+      );
+      if (css != null) {
+        await monaco.runJavaScript(EditorFont.injectScript(css));
+      }
+      await monaco.updateOptions(EditorOptions(fontFamily: family));
+      if (EditorFont.isSafe(family)) {
+        await monaco.runJavaScript(EditorFont.remeasureScript(family));
+      }
+    } catch (e) {
+      debugPrint('WindowShell: cannot give the editor the font $family ($e)');
+    }
+  }
+
+  /// sends the editor settings to the editor, which has the theme's font size
+  /// until one is set
+  Future<void> _applyEditorOptions() async {
+    final monaco = _monaco;
+    if (monaco == null) {
+      return;
+    }
+    await monaco.updateOptions(
+      _editorSettings.value.toOptions(widget.controller.value.fontSizeBody),
+    );
+  }
+
+  void _setAutoSave(AutoSave value) {
+    setState(() => _tabs.autoSave = value);
+    _config.update((json) => json['autoSave'] = value.name);
+  }
+
+  void _setAutoSaveDelay(Duration value) {
+    setState(() => _tabs.autoSaveDelay = value);
+    _config.update((json) => json['autoSaveDelay'] = value.inMilliseconds);
   }
 
   /// the editor is drawn by monaco, so the palette reaches it as a custom
@@ -348,32 +440,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     if (monaco == null) {
       return;
     }
-    final theme = widget.controller.value;
-    final dark = theme.background.computeLuminance() < 0.5;
     await monaco.defineTheme(
-      MonacoThemeDefinition(
-        id: _monacoTheme.id,
-        base: dark ? MonacoBaseTheme.vsDark : MonacoBaseTheme.vs,
-        colors: {
-          // the window paints the background, so its opacity applies
-          'editor.background': '#00000000',
-          'editor.foreground': _hex(theme.textPrimary),
-          'editorGutter.background': '#00000000',
-          'editorLineNumber.foreground': _hex(theme.lineNumber),
-          'editorLineNumber.activeForeground': _hex(theme.accent),
-          'editorCursor.foreground': _hex(theme.accent),
-          'editor.selectionBackground': _hex(
-            theme.selection,
-            dark ? 0.25 : 0.3,
-          ),
-          'editor.lineHighlightBackground': _hex(theme.textPrimary, 0.07),
-          // the focused line is outlined in this color
-          'focusBorder': '#00000000',
-          'editorIndentGuide.background1': _hex(theme.border, 0.6),
-          'editorWidget.background': _hex(theme.titleBar),
-          'editorWidget.border': _hex(theme.border),
-        },
-      ),
+      monacoThemeFor(widget.controller.value, id: _monacoTheme.id),
     );
     await monaco.setTheme(_monacoTheme);
   }
@@ -413,11 +481,22 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                           children: [
                             if (_sidebarOpen && _sidebar.dock == _Dock.left)
                               _sidebarPanel(theme),
+                            // the editor stays alive under the settings, and the
+                            // key keeps this view's state when the sidebar
+                            // docks to the other side
                             Expanded(
-                              child: Column(
+                              key: const ValueKey('content'),
+                              child: IndexedStack(
+                                index: _view.index,
+                                sizing: StackFit.expand,
                                 children: [
-                                  _tabBar(theme),
-                                  Expanded(child: _editor(theme)),
+                                  Column(
+                                    children: [
+                                      _tabBar(theme),
+                                      Expanded(child: _editor(theme)),
+                                    ],
+                                  ),
+                                  _settingsView(theme),
                                 ],
                               ),
                             ),
@@ -450,6 +529,49 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         ),
       ),
       onResizeEnd: _saveSettings,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          children: [
+            for (final (view, icon, label, action) in [
+              (_View.editor, 'editor', 'Editor', 'workspace::ShowEditor'),
+              (
+                _View.settings,
+                'settings',
+                'Settings',
+                'workspace::ShowSettings',
+              ),
+            ])
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: SidebarItem(
+                  theme: theme,
+                  icon: icon,
+                  label: label,
+                  keys: _keymap.keysFor(action),
+                  selected: _view == view,
+                  onTap: () => _showView(view),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _settingsView(AppTheme theme) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([_editorSettings, _tabs]),
+      builder: (context, _) => SettingsView(
+        theme: theme,
+        controller: widget.controller,
+        prefs: _editorSettings.value,
+        onPrefs: _editorSettings.change,
+        autoSave: _tabs.autoSave,
+        onAutoSave: _setAutoSave,
+        autoSaveDelay: _tabs.autoSaveDelay,
+        onAutoSaveDelay: _setAutoSaveDelay,
+      ),
     );
   }
 
@@ -459,28 +581,49 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     // window to stop being dragged
     DeferredSize(
       key: _editorKey,
-      child: MonacoEditor(
-        backgroundColor: Colors.transparent,
-        // the editor background is transparent, so the caret of monaco's
-        // hidden input element, which sits behind the text, shows through
-        page: const MonacoPageConfig(
-          customCss:
-              'html, body { background: transparent !important; }'
-              '.monaco-editor .native-edit-context { caret-color: transparent; }',
-        ),
-        loadingBuilder: (_) => const SizedBox.expand(),
-        onReady: (controller) {
-          setState(() => _monaco = controller);
-          _applyMonacoTheme();
-          _attachEditor(controller);
-        },
-        options: EditorOptions(
-          theme: _monacoTheme,
-          fontFamily: theme.monospaceFontFamily,
-          fontSize: theme.fontSizeBody,
-        ),
-      ),
+      // the page takes its css when it loads, so it waits for the font
+      child: _editorCss == null
+          ? const SizedBox.expand()
+          : MonacoEditor(
+              backgroundColor: Colors.transparent,
+              // the editor background is transparent, so the caret of monaco's
+              // hidden input element, which sits behind the text, shows through
+              page: MonacoPageConfig(customCss: _editorCss),
+              loadingBuilder: (_) => const SizedBox.expand(),
+              onReady: (controller) {
+                setState(() => _monaco = controller);
+                _applyMonacoTheme();
+                _attachEditor(controller);
+              },
+              options: EditorOptions(
+                theme: _monacoTheme,
+                fontFamily: theme.monospaceFontFamily,
+                fontSize: theme.fontSizeBody,
+              ),
+            ),
     );
+  }
+
+  static const _editorBaseCss =
+      'html, body { background: transparent !important; }'
+      '.monaco-editor .native-edit-context { caret-color: transparent; }';
+
+  /// the editor page's css: its own, and the monospace font of the theme
+  Future<void> _loadEditorCss() async {
+    final family = widget.controller.value.monospaceFontFamily;
+    String? font;
+    try {
+      final dir = ThemeController.directory;
+      font = await EditorFont.css(
+        family,
+        themeFonts: dir == null ? null : Directory('${dir.path}\\fonts'),
+      );
+    } catch (e) {
+      debugPrint('WindowShell: cannot load the editor font $family ($e)');
+    }
+    if (mounted) {
+      setState(() => _editorCss = '$_editorBaseCss${font ?? ''}');
+    }
   }
 
   static const _titleBarHeight = 40.0;
@@ -973,7 +1116,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           children: [
             if (dock == _Dock.left) ...[sidebarButton, divider],
             const Spacer(),
-            if (monaco != null) _status(theme, monaco),
+            if (monaco != null && _view == _View.editor) _status(theme, monaco),
             if (dock == _Dock.right) ...[divider, sidebarButton],
           ],
         ),

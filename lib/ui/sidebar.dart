@@ -1,7 +1,81 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../editor/keymap.dart';
 import '../theme/app_theme.dart';
+import 'clickable.dart';
+import 'skinnable_icon.dart';
+
+/// a view that can be opened from the sidebar, with its icon on the left and
+/// the keys that open it, when any are bound, on the right
+class SidebarItem extends StatefulWidget {
+  const SidebarItem({
+    super.key,
+    required this.theme,
+    required this.icon,
+    required this.label,
+    required this.keys,
+    required this.selected,
+    required this.onTap,
+  });
+
+  /// the name of the icon in `assets/icons`
+  final String icon;
+  final AppTheme theme;
+  final String label;
+
+  /// in [Keymap.toKeys] form, null when none are bound
+  final String? keys;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  State<SidebarItem> createState() => _SidebarItemState();
+}
+
+class _SidebarItemState extends State<SidebarItem> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    final keys = widget.keys;
+    final color = widget.selected ? theme.textPrimary : theme.textDim;
+    return Clickable(
+      onEnter: () => setState(() => _hovered = true),
+      onExit: () => setState(() => _hovered = false),
+      onTap: widget.onTap,
+      child: Container(
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          // as the buttons of the bars are
+          color: widget.selected
+              ? theme.active.withValues(alpha: 0.6)
+              : (_hovered ? theme.hover.withValues(alpha: 0.3) : null),
+          borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
+        ),
+        child: Row(
+          children: [
+            SkinnableIcon(name: widget.icon, size: 16, color: color),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                widget.label,
+                overflow: TextOverflow.ellipsis,
+                style: theme.bodyStyle.copyWith(color: color),
+              ),
+            ),
+            if (keys != null) ...[
+              const SizedBox(width: 8),
+              Text(Keymap.formatKeys(keys), style: theme.captionStyle),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// a panel beside the editor, whose edge towards the editor is dragged to
 /// resize it; [onResize] gets the width the drag asks for, and [onResizeEnd]
