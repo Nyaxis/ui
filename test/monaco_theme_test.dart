@@ -211,6 +211,51 @@ void main() {
       });
     }
 
+    // what Zed's Catppuccin theme uses for muted text (`text.muted`), for a
+    // hovered element that has a background (`element.hover`, which is the
+    // border color), and for the borderless ones, hovered and pressed
+    // (`ghost_element.hover` and `ghost_element.active`, the colors they are
+    // drawn in at 30% and 60%)
+    const zedChrome = {
+      'Catppuccin Latte': {
+        'textDim': '#5c5f77',
+        'border': '#ccd0da',
+        'hover': '#bcc0cc',
+        'active': '#acb0be',
+      },
+      'Catppuccin Frappé': {
+        'textDim': '#b5bfe2',
+        'border': '#414559',
+        'hover': '#51576d',
+        'active': '#626880',
+      },
+      'Catppuccin Macchiato': {
+        'textDim': '#b8c0e0',
+        'border': '#363a4f',
+        'hover': '#494d64',
+        'active': '#5b6078',
+      },
+      'Catppuccin Mocha': {
+        'textDim': '#bac2de',
+        'border': '#313244',
+        'hover': '#45475a',
+        'active': '#585b70',
+      },
+    };
+
+    for (final flavor in zedChrome.entries) {
+      test('${flavor.key} has the muted text and hover colors of Zed', () {
+        final palette = catppuccinPalettes[flavor.key]!;
+        for (final entry in flavor.value.entries) {
+          expect(
+            palette[entry.key],
+            entry.value,
+            reason: '${flavor.key} ${entry.key}',
+          );
+        }
+      });
+    }
+
     test('each palette has a color for every role', () {
       for (final entry in catppuccinPalettes.entries) {
         for (final (role, _) in ThemeController.paletteRoles) {

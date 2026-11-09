@@ -21,7 +21,7 @@ class AppTheme {
     this.acrylic = false,
     this.border = const Color(0xff313244),
     this.textPrimary = const Color(0xffcdd6f4),
-    this.textDim = const Color(0xffa6adc8),
+    this.textDim = const Color(0xffbac2de),
     this.accent = const Color(0xffcba6f7),
     this.red = const Color(0xfff38ba8),
     this.lineNumber = const Color(0xff7f849c),

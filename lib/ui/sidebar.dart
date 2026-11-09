@@ -49,9 +49,10 @@ class _SidebarItemState extends State<SidebarItem> {
         height: 32,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
+          // as the buttons of the bars are, and as Zed's borderless elements
           color: widget.selected
-              ? theme.hover
-              : (_hovered ? theme.hover.withValues(alpha: 0.5) : null),
+              ? theme.active.withValues(alpha: 0.6)
+              : (_hovered ? theme.hover.withValues(alpha: 0.3) : null),
           borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
         ),
         child: Row(

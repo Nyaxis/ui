@@ -317,7 +317,7 @@ class _StepButtonState extends State<_StepButton> {
         height: 26,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: enabled && _hovered ? theme.hover : theme.background,
+          color: enabled && _hovered ? theme.border : theme.background,
           borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
           border: Border.all(color: theme.border, width: theme.borderWidth),
         ),
@@ -398,7 +398,7 @@ class _ChoiceButtonState extends State<_ChoiceButton> {
         decoration: BoxDecoration(
           color: widget.selected
               ? theme.accent
-              : (_hovered ? theme.hover : theme.background),
+              : (_hovered ? theme.border : theme.background),
           borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
           border: Border.all(
             color: widget.selected ? theme.accent : theme.border,
@@ -535,7 +535,7 @@ class _DropdownControlState<T> extends State<DropdownControl<T>> {
             height: 30,
             padding: EdgeInsets.only(left: leading == null ? 10 : 4, right: 6),
             decoration: BoxDecoration(
-              color: _hovered ? theme.hover : theme.background,
+              color: _hovered ? theme.border : theme.background,
               borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
               border: Border.all(color: theme.border, width: theme.borderWidth),
             ),
