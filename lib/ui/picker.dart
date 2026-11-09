@@ -347,7 +347,7 @@ class _Row extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
           color: highlighted
-              ? theme.selection.withValues(alpha: 0.3)
+              ? theme.active.withValues(alpha: 0.6)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(4),
         ),
