@@ -472,6 +472,9 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           'editorWidget.border': _hex(theme.border),
           // the minimap is a panel of its own, so it does not blend into the
           // editor; the window's opacity applies, as it does to the editor
+          // monaco reads the editor's background without its transparency, so
+          // the scrollbar's column, which takes that color, would be black
+          'editorOverviewRuler.background': '#00000000',
           'minimap.background': _hex(theme.surface, theme.backgroundOpacity),
           'minimap.selectionHighlight': _hex(theme.accent, 0.8),
           'minimap.findMatchHighlight': _hex(theme.accent, 0.8),
