@@ -39,11 +39,13 @@ flutter:
     - assets/icons/add/
     - assets/icons/checkmark/
     - assets/icons/close/
+    - assets/icons/editor/
     - assets/icons/execute/
     - assets/icons/inject/
     - assets/icons/maximize/
     - assets/icons/minimize/
     - assets/icons/restore/
+    - assets/icons/settings/
     - assets/icons/sidebar-closed/
     - assets/icons/sidebar-open/
     - assets/keymaps/

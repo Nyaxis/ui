@@ -13,6 +13,8 @@ import '../editor/language_extensions.dart';
 import '../editor/luau_lsp.dart';
 import '../editor/text_encoding.dart';
 import '../native/backend.dart';
+import '../settings/config_file.dart';
+import '../settings/editor_settings.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import 'clickable.dart';
@@ -20,9 +22,13 @@ import 'context_menu.dart';
 import 'deferred_size.dart';
 import 'dialog.dart';
 import 'picker.dart';
+import 'settings_view.dart';
 import 'sidebar.dart';
 import 'skinnable_icon.dart';
 import 'superellipse.dart';
+
+/// what the window shows beside the sidebar
+enum _View { editor, settings }
 
 /// a button of the bottom bar, with the state that `config.json` keeps
 class _BottomButton {
@@ -115,6 +121,10 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   bool _sidebarOpen = false;
   double _sidebarWidth = 240;
+
+  var _view = _View.editor;
+  final _config = ConfigFile.user();
+  late final _editorSettings = EditorSettings(_config);
 
   bool _maximized = false;
   bool _newMenuOpen = false;
@@ -252,8 +262,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   void initState() {
     super.initState();
     _loadSettings();
+    _editorSettings.load();
+    _editorSettings.addListener(_applyEditorOptions);
     _tabs.confirmClose = _confirmClose;
     widget.controller.addListener(_applyMonacoTheme);
+    widget.controller.addListener(_applyEditorOptions);
     windowManager.addListener(this);
     windowManager.setPreventClose(true);
     _tabs.addListener(_updatePresence);
@@ -271,6 +284,9 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   void dispose() {
     windowManager.removeListener(this);
     widget.controller.removeListener(_applyMonacoTheme);
+    widget.controller.removeListener(_applyEditorOptions);
+    _editorSettings.removeListener(_applyEditorOptions);
+    _editorSettings.dispose();
     _tabs.removeListener(_updatePresence);
     _backend?.dispose();
     _tabs.dispose();
@@ -327,9 +343,47 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       'workspace::RevealInFileManager',
       () => _tabs.reveal(_tabs.active),
     );
+    _keymap.on('workspace::ShowEditor', () async => _showView(_View.editor));
+    _keymap.on(
+      'workspace::ShowSettings',
+      () async => _showView(_View.settings),
+    );
     await _keymap.attach(controller);
+    // the sidebar names the keys of its items, which are known by now
+    if (mounted) {
+      setState(() {});
+    }
+    await _applyEditorOptions();
     await _tabs.attach(controller);
     await connectLuauLsp(controller);
+  }
+
+  void _showView(_View view) {
+    if (_view != view) {
+      setState(() => _view = view);
+    }
+  }
+
+  /// sends the editor settings to the editor, which has the theme's font size
+  /// until one is set
+  Future<void> _applyEditorOptions() async {
+    final monaco = _monaco;
+    if (monaco == null) {
+      return;
+    }
+    await monaco.updateOptions(
+      _editorSettings.value.toOptions(widget.controller.value.fontSizeBody),
+    );
+  }
+
+  void _setAutoSave(AutoSave value) {
+    setState(() => _tabs.autoSave = value);
+    _config.update((json) => json['autoSave'] = value.name);
+  }
+
+  void _setAutoSaveDelay(Duration value) {
+    setState(() => _tabs.autoSaveDelay = value);
+    _config.update((json) => json['autoSaveDelay'] = value.inMilliseconds);
   }
 
   /// `#rrggbb`, with an alpha suffix when [opacity] is given
@@ -413,11 +467,22 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                           children: [
                             if (_sidebarOpen && _sidebar.dock == _Dock.left)
                               _sidebarPanel(theme),
+                            // the editor stays alive under the settings, and the
+                            // key keeps this view's state when the sidebar
+                            // docks to the other side
                             Expanded(
-                              child: Column(
+                              key: const ValueKey('content'),
+                              child: IndexedStack(
+                                index: _view.index,
+                                sizing: StackFit.expand,
                                 children: [
-                                  _tabBar(theme),
-                                  Expanded(child: _editor(theme)),
+                                  Column(
+                                    children: [
+                                      _tabBar(theme),
+                                      Expanded(child: _editor(theme)),
+                                    ],
+                                  ),
+                                  _settingsView(theme),
                                 ],
                               ),
                             ),
@@ -450,6 +515,48 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         ),
       ),
       onResizeEnd: _saveSettings,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          children: [
+            for (final (view, icon, label, action) in [
+              (_View.editor, 'editor', 'Editor', 'workspace::ShowEditor'),
+              (
+                _View.settings,
+                'settings',
+                'Settings',
+                'workspace::ShowSettings',
+              ),
+            ])
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: SidebarItem(
+                  theme: theme,
+                  icon: icon,
+                  label: label,
+                  keys: _keymap.keysFor(action),
+                  selected: _view == view,
+                  onTap: () => _showView(view),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _settingsView(AppTheme theme) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([_editorSettings, _tabs]),
+      builder: (context, _) => SettingsView(
+        theme: theme,
+        prefs: _editorSettings.value,
+        onPrefs: _editorSettings.change,
+        autoSave: _tabs.autoSave,
+        onAutoSave: _setAutoSave,
+        autoSaveDelay: _tabs.autoSaveDelay,
+        onAutoSaveDelay: _setAutoSaveDelay,
+      ),
     );
   }
 
@@ -973,7 +1080,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           children: [
             if (dock == _Dock.left) ...[sidebarButton, divider],
             const Spacer(),
-            if (monaco != null) _status(theme, monaco),
+            if (monaco != null && _view == _View.editor) _status(theme, monaco),
             if (dock == _Dock.right) ...[divider, sidebarButton],
           ],
         ),

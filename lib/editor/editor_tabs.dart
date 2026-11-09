@@ -59,8 +59,22 @@ class EditorTabs extends ChangeNotifier with WindowListener {
   var _nextUri = 0;
 
   var _autoSave = AutoSave.off;
-  var _autoSaveDelay = const Duration(seconds: 1);
+  var autoSaveDelay = const Duration(seconds: 1);
   final _timers = <EditorTab, Timer>{};
+
+  AutoSave get autoSave => _autoSave;
+
+  /// saves that are waiting for the delay are dropped when it is no longer
+  /// the way to save
+  set autoSave(AutoSave value) {
+    _autoSave = value;
+    if (value != AutoSave.afterDelay) {
+      for (final timer in _timers.values) {
+        timer.cancel();
+      }
+      _timers.clear();
+    }
+  }
 
   /// the tabs with unsaved changes are kept for the next start, since the
   /// window can close at any moment
@@ -129,11 +143,11 @@ reportLanguage();''';
     _autoSave = AutoSave.values.asNameMap()[json['autoSave']] ?? AutoSave.off;
     final delay = json['autoSaveDelay'];
     if (delay is int && delay >= 0) {
-      _autoSaveDelay = Duration(milliseconds: delay);
+      autoSaveDelay = Duration(milliseconds: delay);
     }
     if (!json.containsKey('autoSave') || !json.containsKey('autoSaveDelay')) {
       json.putIfAbsent('autoSave', () => AutoSave.off.name);
-      json.putIfAbsent('autoSaveDelay', () => _autoSaveDelay.inMilliseconds);
+      json.putIfAbsent('autoSaveDelay', () => autoSaveDelay.inMilliseconds);
       await file.writeAsString(
         const JsonEncoder.withIndent('  ').convert(json),
         flush: true,
@@ -543,7 +557,7 @@ reportLanguage();''';
           _timers.remove(tab)?.cancel();
           if (dirty && _autoSave == AutoSave.afterDelay) {
             _timers[tab] = Timer(
-              _autoSaveDelay,
+              autoSaveDelay,
               () => _autoSaveTab(tabs.indexOf(tab)),
             );
           }
