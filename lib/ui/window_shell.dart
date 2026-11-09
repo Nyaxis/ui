@@ -439,6 +439,13 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     return '#$rgb$alpha';
   }
 
+  /// [color] at [opacity] over [base], as a color that is not transparent. the
+  /// editor is a transparent page, where a translucent color with nothing
+  /// opaque behind it can come out darker than it is, so what has to be seen
+  /// is given as the color it would be
+  static String _over(Color color, double opacity, Color base) =>
+      _hex(Color.alphaBlend(color.withValues(alpha: opacity), base));
+
   /// the editor is drawn by monaco, so the palette reaches it as a custom
   /// monaco theme
   Future<void> _applyMonacoTheme() async {
@@ -471,20 +478,44 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           'editorWidget.background': _hex(theme.titleBar),
           'editorWidget.border': _hex(theme.border),
           // the minimap is a panel of its own, so it does not blend into the
-          // editor; the window's opacity applies, as it does to the editor
-          'minimap.background': _hex(theme.surface, theme.backgroundOpacity),
-          'minimap.selectionHighlight': _hex(theme.accent, 0.8),
-          'minimap.findMatchHighlight': _hex(theme.accent, 0.8),
+          // editor
+          'minimap.background': _hex(theme.surface),
+          'minimap.selectionHighlight': _hex(theme.accent),
+          'minimap.findMatchHighlight': _hex(theme.accent),
           // the sliders are the text color, which stands out from the
           // backgrounds of any palette, and the minimap's is the stronger, so
           // the two are told apart where the scrollbar is drawn over it
-          'minimapSlider.background': _hex(theme.textPrimary, 0.14),
-          'minimapSlider.hoverBackground': _hex(theme.textPrimary, 0.22),
-          'minimapSlider.activeBackground': _hex(theme.textPrimary, 0.3),
+          'minimapSlider.background': _over(
+            theme.textPrimary,
+            0.14,
+            theme.surface,
+          ),
+          'minimapSlider.hoverBackground': _over(
+            theme.textPrimary,
+            0.22,
+            theme.surface,
+          ),
+          'minimapSlider.activeBackground': _over(
+            theme.textPrimary,
+            0.3,
+            theme.surface,
+          ),
           'scrollbar.background': '#00000000',
-          'scrollbarSlider.background': _hex(theme.textDim, 0.28),
-          'scrollbarSlider.hoverBackground': _hex(theme.textDim, 0.42),
-          'scrollbarSlider.activeBackground': _hex(theme.textDim, 0.56),
+          'scrollbarSlider.background': _over(
+            theme.textDim,
+            0.28,
+            theme.surface,
+          ),
+          'scrollbarSlider.hoverBackground': _over(
+            theme.textDim,
+            0.42,
+            theme.surface,
+          ),
+          'scrollbarSlider.activeBackground': _over(
+            theme.textDim,
+            0.56,
+            theme.surface,
+          ),
         },
       ),
     );
