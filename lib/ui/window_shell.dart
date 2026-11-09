@@ -470,6 +470,13 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           'editorIndentGuide.background1': _hex(theme.border, 0.6),
           'editorWidget.background': _hex(theme.titleBar),
           'editorWidget.border': _hex(theme.border),
+          // the window paints behind the minimap as it does behind the editor
+          'minimap.background': '#00000000',
+          'minimap.selectionHighlight': _hex(theme.accent, 0.8),
+          'minimap.findMatchHighlight': _hex(theme.accent, 0.8),
+          'minimapSlider.background': _hex(theme.accent, 0.12),
+          'minimapSlider.hoverBackground': _hex(theme.accent, 0.2),
+          'minimapSlider.activeBackground': _hex(theme.accent, 0.3),
         },
       ),
     );
