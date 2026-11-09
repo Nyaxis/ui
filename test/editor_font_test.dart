@@ -60,9 +60,9 @@ void main() {
   });
 
   test('a name that is not plain is never written into the page', () async {
-    fontFile("x'; } body { display: none; } @font-face { font-family: 'y.ttf")
-        .createSync();
-    expect(await EditorFont.css("x'; } body {", themeFonts: dir), isNull);
+    // a file that has such a name, as an apostrophe is allowed in one
+    fontFile("x'y.ttf").writeAsBytesSync(bytes);
+    expect(await EditorFont.css("x'y", themeFonts: dir), isNull);
     expect(EditorFont.isSafe('JetBrains Mono-2'), isTrue);
     expect(EditorFont.isSafe("a'b"), isFalse);
     expect(EditorFont.isSafe('a"b'), isFalse);

@@ -13,6 +13,8 @@ import 'package:ui/ui/palette_preview.dart';
 import 'package:ui/ui/settings_controls.dart';
 import 'package:ui/ui/theme_settings.dart';
 
+import 'temp_dir.dart';
+
 void main() {
   const theme = AppTheme();
 
@@ -610,7 +612,7 @@ void main() {
     tearDown(() async {
       controller.dispose();
       await Future<void>.delayed(const Duration(milliseconds: 100));
-      root.deleteSync(recursive: true);
+      await deleteTemp(root);
     });
 
     Future<void> pumpSettings(WidgetTester tester) async {

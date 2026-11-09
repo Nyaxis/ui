@@ -37,6 +37,9 @@ class ConfigFile {
     }
   }
 
+  /// waits until the changes made so far are written
+  Future<void> flush() => _queue;
+
   /// lets [change] edit the file's content, and writes it back
   Future<void> update(void Function(Map<String, dynamic> json) change) {
     return _queue = _queue.then((_) async {

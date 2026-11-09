@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/theme/theme_controller.dart';
 
+import 'temp_dir.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -43,7 +45,7 @@ void main() {
       );
     });
 
-    tearDown(() => root.deleteSync(recursive: true));
+    tearDown(() => deleteTemp(root));
 
     test('the theme in use is named by its folder', () {
       expect(controller.themeName, 'a');
@@ -137,7 +139,7 @@ void main() {
     );
   });
 
-  tearDown(() => dir.deleteSync(recursive: true));
+  tearDown(() => deleteTemp(dir));
 
   test('each setting changes the theme and is saved to theme.json', () async {
     controller.setCornerRadius(12);

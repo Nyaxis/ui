@@ -8,6 +8,8 @@ import 'package:ui/settings/config_file.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/theme/theme_controller.dart';
 
+import 'temp_dir.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -69,7 +71,7 @@ void main() {
   tearDown(() async {
     controller.dispose();
     await settle();
-    root.deleteSync(recursive: true);
+    await deleteTemp(root);
   });
 
   group('themes', () {

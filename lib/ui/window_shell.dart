@@ -305,6 +305,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   Future<void> onWindowClose() async {
     await windowManager.hide();
     _backend?.dispose();
+    // what was changed a moment ago has not been written yet
+    await Future.wait([widget.controller.flush(), _config.flush()]);
     await windowManager.destroy();
   }
 

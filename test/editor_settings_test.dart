@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ui/settings/config_file.dart';
 import 'package:ui/settings/editor_settings.dart';
 
+import 'temp_dir.dart';
+
 void main() {
   group('EditorPrefs', () {
     test('a file that says nothing gives what the editor always had', () {
@@ -91,7 +93,7 @@ void main() {
       config = ConfigFile(file);
     });
 
-    tearDown(() => dir.deleteSync(recursive: true));
+    tearDown(() => deleteTemp(dir));
 
     test('a change is saved and the rest of the file is kept', () async {
       file.parent.createSync(recursive: true);

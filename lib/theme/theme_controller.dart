@@ -722,6 +722,10 @@ class ThemeController extends ValueNotifier<AppTheme> {
   static const _paletteDelay = Duration(milliseconds: 250);
   Timer? _paletteTimer;
 
+  /// waits until everything that was changed is written, which a window that
+  /// is closing has to do
+  Future<void> flush() => _flushPalette();
+
   /// writes a color that is waiting to be saved now, to the palette it was
   /// changed in, and waits for everything that is being written
   Future<void> _flushPalette() async {
