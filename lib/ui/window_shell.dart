@@ -470,17 +470,21 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           'editorIndentGuide.background1': _hex(theme.border, 0.6),
           'editorWidget.background': _hex(theme.titleBar),
           'editorWidget.border': _hex(theme.border),
-          // the window paints behind the minimap as it does behind the editor
-          'minimap.background': '#00000000',
+          // the minimap is a panel of its own, so it does not blend into the
+          // editor; the window's opacity applies, as it does to the editor
+          'minimap.background': _hex(theme.surface, theme.backgroundOpacity),
           'minimap.selectionHighlight': _hex(theme.accent, 0.8),
           'minimap.findMatchHighlight': _hex(theme.accent, 0.8),
-          'minimapSlider.background': _hex(theme.accent, 0.22),
-          'minimapSlider.hoverBackground': _hex(theme.accent, 0.32),
-          'minimapSlider.activeBackground': _hex(theme.accent, 0.42),
-          // the scrollbar is drawn over the minimap, so it is a lighter touch
-          'scrollbarSlider.background': _hex(theme.textDim, 0.18),
-          'scrollbarSlider.hoverBackground': _hex(theme.textDim, 0.3),
-          'scrollbarSlider.activeBackground': _hex(theme.textDim, 0.42),
+          // the sliders are the text color, which stands out from the
+          // backgrounds of any palette, and the minimap's is the stronger, so
+          // the two are told apart where the scrollbar is drawn over it
+          'minimapSlider.background': _hex(theme.textPrimary, 0.14),
+          'minimapSlider.hoverBackground': _hex(theme.textPrimary, 0.22),
+          'minimapSlider.activeBackground': _hex(theme.textPrimary, 0.3),
+          'scrollbar.background': '#00000000',
+          'scrollbarSlider.background': _hex(theme.textDim, 0.28),
+          'scrollbarSlider.hoverBackground': _hex(theme.textDim, 0.42),
+          'scrollbarSlider.activeBackground': _hex(theme.textDim, 0.56),
         },
       ),
     );
