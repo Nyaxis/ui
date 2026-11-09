@@ -38,7 +38,8 @@ class SkinnableIcon extends StatelessWidget {
     if (dir == null) {
       return null;
     }
-    return _found.putIfAbsent(name, () {
+    // by theme too, since another theme has icons of its own
+    return _found.putIfAbsent('${dir.path}|$name', () {
       for (final ext in _extensions) {
         final file = File('${dir.path}\\icons\\$name.$ext');
         if (file.existsSync()) {

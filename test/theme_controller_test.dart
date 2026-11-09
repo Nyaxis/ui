@@ -8,6 +8,108 @@ import 'package:ui/theme/app_theme.dart';
 import 'package:ui/theme/theme_controller.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('theme folders', () {
+    late Directory root;
+    late Directory themes;
+    late ThemeController controller;
+
+    String sep(String a, String b) => '$a${Platform.pathSeparator}$b';
+
+    Directory theme(String name) {
+      final dir = Directory(sep(themes.path, name))..createSync();
+      return dir;
+    }
+
+    void writeTheme(String name, Map<String, dynamic> json) {
+      File(sep(theme(name).path, 'theme.json'))
+          .writeAsStringSync(jsonEncode(json));
+    }
+
+    setUp(() {
+      root = Directory.systemTemp.createTempSync('nyaxis-themes');
+      themes = Directory(sep(root.path, 'themes'))..createSync();
+      writeTheme('a', {'cornerRadius': 4});
+      writeTheme('b', {'cornerRadius': 20, 'palette': 'Mine'});
+      final palettes = Directory(sep(sep(themes.path, 'b'), 'palettes'))
+        ..createSync();
+      File(sep(palettes.path, 'Mine.json'))
+          .writeAsStringSync(jsonEncode({'accent': '#112233'}));
+      controller = ThemeController(
+        const AppTheme(cornerRadius: 4),
+        palette: 'x',
+        directory: theme('a'),
+      );
+    });
+
+    tearDown(() => root.deleteSync(recursive: true));
+
+    test('the theme in use is named by its folder', () {
+      expect(controller.themeName, 'a');
+    });
+
+    test('the themes are the folders, with default first', () {
+      theme('default');
+      theme('zeta');
+      expect(controller.themes, ['default', 'a', 'b', 'zeta']);
+    });
+
+    test(
+      'switching takes the other theme, its palette and its settings',
+      () async {
+        expect(await controller.switchTheme('b'), isTrue);
+
+        expect(controller.themeName, 'b');
+        expect(controller.palette, 'Mine');
+        expect(controller.value.cornerRadius, 20);
+        expect(controller.value.accent, const Color(0xff112233));
+      },
+    );
+
+    test('changes after a switch are saved to the new theme only', () async {
+      await controller.switchTheme('b');
+      controller.setCornerRadius(9);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      Map<String, dynamic> read(String name) => jsonDecode(
+        File(sep(sep(themes.path, name), 'theme.json')).readAsStringSync(),
+      ) as Map<String, dynamic>;
+      expect(read('b')['cornerRadius'], 9);
+      expect(read('a')['cornerRadius'], 4);
+    });
+
+    test(
+      'a theme that is missing, unreadable or not a plain name is refused',
+      () async {
+        File(sep(theme('broken').path, 'theme.json'))
+            .writeAsStringSync('{ nope');
+        final before = controller.value;
+
+        expect(await controller.switchTheme('nowhere'), isFalse);
+        expect(await controller.switchTheme('broken'), isFalse);
+        expect(await controller.switchTheme('..'), isFalse);
+        expect(await controller.switchTheme(r'a\b'), isFalse);
+
+        expect(controller.themeName, 'a');
+        expect(controller.value, same(before));
+      },
+    );
+
+    test('a theme that could not be read is not written over', () async {
+      final file = File(sep(theme('a').path, 'theme.json'))
+        ..writeAsStringSync('{ my own edits');
+      final unreadable = ThemeController(
+        const AppTheme(),
+        directory: theme('a'),
+        persist: false,
+      );
+      unreadable.setCornerRadius(9);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(file.readAsStringSync(), '{ my own edits');
+    });
+  });
+
   late Directory dir;
   late ThemeController controller;
 

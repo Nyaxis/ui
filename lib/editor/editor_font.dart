@@ -57,6 +57,14 @@ class EditorFont {
     return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
   }
 
+  /// puts [css] in a style of its own in the page that is already loaded,
+  /// replacing the one a theme put there before it
+  static String injectScript(String css) =>
+      "(() => { let s = document.getElementById('nyaxis-theme-font'); "
+      'if (!s) { s = document.createElement(\'style\'); '
+      "s.id = 'nyaxis-theme-font'; document.head.appendChild(s); } "
+      's.textContent = ${jsonEncode(css)}; })();';
+
   /// measures the editor's text again once [family] has loaded, since it was
   /// measured with the font it fell back to
   static String remeasureScript(String family) =>

@@ -14,6 +14,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
     super.value, {
     this.palette = defaultPaletteName,
     @visibleForTesting Directory? directory,
+    this.persist = true,
   }) : _directory = directory ?? _themeDirectory;
 
   /// the name of the palette the colors come from, which also picks the icon
@@ -22,7 +23,11 @@ class ThemeController extends ValueNotifier<AppTheme> {
 
   /// the folder the theme is saved to, null when there is none and changes
   /// last only until the window closes
-  final Directory? _directory;
+  Directory? _directory;
+
+  /// false when the theme could not be read, so changes are not saved over
+  /// the files that were
+  final bool persist;
 
   static const _defaultName = 'default';
 
@@ -227,42 +232,106 @@ class ThemeController extends ValueNotifier<AppTheme> {
       final name = await _activeName(root);
       final dir = Directory('${root.path}\\themes\\$name');
       await _migrateLegacy(root, dir);
-      await Directory('${dir.path}\\icons').create(recursive: true);
-      await Directory('${dir.path}\\palettes').create(recursive: true);
-      await Directory('${dir.path}\\fonts').create(recursive: true);
-      if (name == _defaultName) {
-        await _seedPalettes(dir);
-        await _seedIcons(dir);
-        await _seedFonts(dir);
-      }
       _themeDirectory = dir;
-
       file = File('${dir.path}\\theme.json');
-      final json = file.existsSync()
-          ? jsonDecode(await file.readAsString()) as Map<String, dynamic>
-          : <String, dynamic>{};
-      // a theme from before palettes names none, and keeps its own colors
-      final paletteName =
-          _safeName(json['palette']) ??
-          (json.containsKey('background') ? _defaultName : defaultPaletteName);
-
-      // a theme from before palettes carries its colors itself, so they seed
-      // the palette file
-      final paletteFile = File('${dir.path}\\palettes\\$paletteName.json');
-      final palette = paletteFile.existsSync()
-          ? jsonDecode(await paletteFile.readAsString()) as Map<String, dynamic>
-          : null;
-
-      final theme = AppTheme.fromJson(json, palette: palette);
-      await file.writeAsString(_serialize(theme, paletteName), flush: true);
-      await paletteFile.writeAsString(_serializePalette(theme), flush: true);
+      final (theme, paletteName) = await _readTheme(dir, name);
       return ThemeController(theme, palette: paletteName);
     } catch (e) {
       debugPrint(
         'ThemeController.load: unreadable ${file?.path ?? root.path}, '
         'using defaults ($e)',
       );
-      return ThemeController(const AppTheme());
+      // what could not be read is not written over
+      return ThemeController(const AppTheme(), persist: false);
+    }
+  }
+
+  /// the theme in [dir], named [name], and the palette it uses; the folder
+  /// is filled in with what a theme has, and the files are written back
+  /// complete
+  static Future<(AppTheme, String)> _readTheme(
+    Directory dir,
+    String name,
+  ) async {
+    final s = Platform.pathSeparator;
+    await Directory('${dir.path}${s}icons').create(recursive: true);
+    await Directory('${dir.path}${s}palettes').create(recursive: true);
+    await Directory('${dir.path}${s}fonts').create(recursive: true);
+    if (name == _defaultName) {
+      await _seedPalettes(dir);
+      await _seedIcons(dir);
+      await _seedFonts(dir);
+    }
+
+    final file = File('${dir.path}${s}theme.json');
+    final json = file.existsSync()
+        ? jsonDecode(await file.readAsString()) as Map<String, dynamic>
+        : <String, dynamic>{};
+    // a theme from before palettes names none, and keeps its own colors
+    final paletteName =
+        _safeName(json['palette']) ??
+        (json.containsKey('background') ? _defaultName : defaultPaletteName);
+
+    // a theme from before palettes carries its colors itself, so they seed
+    // the palette file
+    final paletteFile = File('${dir.path}${s}palettes$s$paletteName.json');
+    final palette = paletteFile.existsSync()
+        ? jsonDecode(await paletteFile.readAsString()) as Map<String, dynamic>
+        : null;
+
+    final theme = AppTheme.fromJson(json, palette: palette);
+    await file.writeAsString(_serialize(theme, paletteName), flush: true);
+    await paletteFile.writeAsString(_serializePalette(theme), flush: true);
+    return (theme, paletteName);
+  }
+
+  /// the name of the theme in use, which is the name of its folder
+  String get themeName => _directory?.path.split(RegExp(r'[\\/]')).last ?? '';
+
+  /// the themes in the themes folder, `default` first
+  List<String> get themes {
+    final folder = _directory?.parent;
+    if (folder == null || !folder.existsSync()) {
+      return [themeName];
+    }
+    final names =
+        [
+          for (final entry in folder.listSync().whereType<Directory>())
+            entry.path.split(RegExp(r'[\\/]')).last,
+        ]..sort((a, b) {
+          if (a == _defaultName || b == _defaultName) {
+            return a == _defaultName ? -1 : 1;
+          }
+          return a.compareTo(b);
+        });
+    return names.where((n) => _safeName(n) != null).toList();
+  }
+
+  /// moves to the theme named [name]: its colors, fonts and icons replace the
+  /// ones in use. a font a theme has under the name of one already loaded
+  /// takes a restart to show; returns whether the theme was found and read
+  Future<bool> switchTheme(String name) async {
+    final current = _directory;
+    if (current == null || _safeName(name) == null) {
+      return false;
+    }
+    final dir = Directory(
+      '${current.parent.path}${Platform.pathSeparator}$name',
+    );
+    if (!dir.existsSync()) {
+      return false;
+    }
+    try {
+      final (theme, paletteName) = await _readTheme(dir, name);
+      await _registerFonts(dir);
+      _themeDirectory = dir;
+      _directory = dir;
+      palette = paletteName;
+      value = theme;
+      return true;
+    } catch (e) {
+      debugPrint('ThemeController: cannot switch to the theme $name ($e)');
+      return false;
     }
   }
 
@@ -270,7 +339,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
   /// other settings of the window
   Future<void> _save() {
     final dir = _directory;
-    if (dir == null) {
+    if (dir == null || !persist) {
       return Future.value();
     }
     // one write at a time, so a quick run of changes cannot leave the file

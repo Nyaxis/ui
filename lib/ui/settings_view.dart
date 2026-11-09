@@ -15,6 +15,8 @@ class SettingsView extends StatelessWidget {
     required this.theme,
     required this.controller,
     required this.palettes,
+    required this.themes,
+    required this.onTheme,
     required this.prefs,
     required this.onPrefs,
     required this.autoSave,
@@ -35,6 +37,10 @@ class SettingsView extends StatelessWidget {
 
   /// the palettes of the theme, which the current one is among
   final List<String> palettes;
+
+  /// the theme folders, which the one in use is among
+  final List<String> themes;
+  final ValueChanged<String> onTheme;
   final EditorPrefs prefs;
   final ValueChanged<EditorPrefs> onPrefs;
   final AutoSave autoSave;
@@ -81,6 +87,17 @@ class SettingsView extends StatelessWidget {
                 theme: theme,
                 title: 'Theme',
                 rows: [
+                  if (themes.length > 1)
+                    _SettingRow(
+                      theme: theme,
+                      label: 'Theme',
+                      control: _Choice<String>(
+                        theme: theme,
+                        value: controller.themeName,
+                        options: [for (final name in themes) (name, name)],
+                        onChanged: onTheme,
+                      ),
+                    ),
                   if (palettes.length > 1)
                     _SettingRow(
                       theme: theme,

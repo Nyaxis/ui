@@ -125,6 +125,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   String? _editorCss;
   List<String> _palettes = const [];
+  List<String> _themes = const [];
 
   var _view = _View.editor;
   final _config = ConfigFile.user();
@@ -268,6 +269,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     _loadSettings();
     _loadEditorCss();
     _palettes = widget.controller.palettes;
+    _themes = widget.controller.themes;
     _editorSettings.load();
     _editorSettings.addListener(_applyEditorOptions);
     _tabs.confirmClose = _confirmClose;
@@ -374,8 +376,52 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         _view = view;
         if (view == _View.settings) {
           _palettes = widget.controller.palettes;
+          _themes = widget.controller.themes;
         }
       });
+    }
+  }
+
+  /// moves to another theme folder, remembers it for the next start, and gives
+  /// the editor the monospace font of the new theme
+  Future<void> _switchTheme(String name) async {
+    if (name == widget.controller.themeName ||
+        !await widget.controller.switchTheme(name)) {
+      return;
+    }
+    _config.update((json) => json['theme'] = name);
+    if (mounted) {
+      setState(() {
+        _palettes = widget.controller.palettes;
+        _themes = widget.controller.themes;
+      });
+    }
+    await _applyEditorFont();
+  }
+
+  /// the editor page has the font it was loaded with, so the one of a theme
+  /// that is switched to is put in it
+  Future<void> _applyEditorFont() async {
+    final monaco = _monaco;
+    final family = widget.controller.value.monospaceFontFamily;
+    if (monaco == null) {
+      return;
+    }
+    try {
+      final dir = ThemeController.directory;
+      final css = await EditorFont.css(
+        family,
+        themeFonts: dir == null ? null : Directory('${dir.path}\\fonts'),
+      );
+      if (css != null) {
+        await monaco.runJavaScript(EditorFont.injectScript(css));
+      }
+      await monaco.updateOptions(EditorOptions(fontFamily: family));
+      if (EditorFont.isSafe(family)) {
+        await monaco.runJavaScript(EditorFont.remeasureScript(family));
+      }
+    } catch (e) {
+      debugPrint('WindowShell: cannot give the editor the font $family ($e)');
     }
   }
 
@@ -567,6 +613,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         theme: theme,
         controller: widget.controller,
         palettes: _palettes,
+        themes: _themes,
+        onTheme: _switchTheme,
         prefs: _editorSettings.value,
         onPrefs: _editorSettings.change,
         autoSave: _tabs.autoSave,

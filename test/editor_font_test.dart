@@ -70,6 +70,16 @@ void main() {
     expect(EditorFont.isSafe(''), isFalse);
   });
 
+  test('a font is put in the loaded page as one style that is replaced', () {
+    const css = "@font-face { font-family: 'Mono'; src: url(data:x); }";
+    final script = EditorFont.injectScript(css);
+    expect(script, contains("getElementById('nyaxis-theme-font')"));
+    expect(script, contains('s.textContent = ${jsonEncode(css)};'));
+    // the quotes of the css stay inside the string they are written in
+    expect(script, contains(r"font-family: 'Mono'"));
+    expect(EditorFont.injectScript('a\nb"c'), contains(r'"a\nb\"c"'));
+  });
+
   test('the script measures the text again once the font loaded', () {
     final script = EditorFont.remeasureScript('JetBrainsMono');
     expect(script, contains("document.fonts.load(\"13px 'JetBrainsMono'\")"));
