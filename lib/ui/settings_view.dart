@@ -87,17 +87,17 @@ class SettingsView extends StatelessWidget {
                 theme: theme,
                 title: 'Theme',
                 rows: [
-                  if (themes.length > 1)
-                    _SettingRow(
+                  _SettingRow(
+                    theme: theme,
+                    label: 'Theme',
+                    description: themes.length > 1 ? null : r'Add a folder to %APPDATA%\Nyaxis\ui\themes for another',
+                    control: _Choice<String>(
                       theme: theme,
-                      label: 'Theme',
-                      control: _Choice<String>(
-                        theme: theme,
-                        value: controller.themeName,
-                        options: [for (final name in themes) (name, name)],
-                        onChanged: onTheme,
-                      ),
+                      value: controller.themeName,
+                      options: [for (final name in themes) (name, name)],
+                      onChanged: onTheme,
                     ),
+                  ),
                   if (palettes.length > 1)
                     _SettingRow(
                       theme: theme,
