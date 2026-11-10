@@ -733,7 +733,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       // the window paints the background, so its opacity applies
       background: const Color(0x00000000),
       selection: theme.selection.withValues(alpha: dark ? 0.25 : 0.3),
-      cursor: theme.accent,
+      cursor: theme.cursor,
       currentLine: theme.textPrimary.withValues(alpha: 0.07),
       gutterText: theme.lineNumber,
       currentGutterText: theme.accent,
