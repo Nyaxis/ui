@@ -85,9 +85,6 @@ class EditorViewState extends State<EditorView> {
     widget.controller.addListener(_onControllerChange);
     _scrollX = widget.controller.scrollX;
     _scrollY = widget.controller.scrollY;
-    // with auto they are shown when the text is opened, and go after a moment
-    // when nothing makes them stay, as for a text with nothing to scroll
-    _showScrollbars();
   }
 
   // the scrollbars are shown for a moment when the text scrolls, or the pointer
@@ -121,7 +118,6 @@ class EditorViewState extends State<EditorView> {
     if (oldWidget.scrollbars != widget.scrollbars) {
       _hideScrollbars?.cancel();
       _render?.scrollbarsShown = true;
-      _showScrollbars();
     }
     final oldNode = oldWidget.focusNode ?? oldWidget.controller.focusNode;
     if (oldNode != focusNode) {

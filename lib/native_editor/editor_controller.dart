@@ -212,9 +212,6 @@ class EditorController extends ChangeNotifier {
   /// the highlights go under this key, which no other highlight has
   static const int _occurrencesKey = 1;
 
-  /// as many as are looked for at most
-  static const int _occurrenceLimit = 10000;
-
   /// a text that is longer is searched a moment after the selection is made,
   /// and not at once
   static const int _quickSearchLength = 100000;
@@ -308,7 +305,7 @@ class EditorController extends ChangeNotifier {
     final found = text.toString();
     final ranges = <AnchorRange>[];
     var from = 0;
-    while (ranges.length < _occurrenceLimit) {
+    while (true) {
       final index = found.indexOf(query, from);
       if (index < 0) {
         break;
