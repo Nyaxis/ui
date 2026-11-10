@@ -335,6 +335,21 @@ void main() {
       await _finish(tester, controller);
     });
 
+    testWidgets('with auto they go after a moment, with nothing scrolled', (
+      tester,
+    ) async {
+      final controller = EditorController(text: '');
+      final render = await _pump(
+        tester,
+        controller,
+        scrollbars: ScrollbarVisibility.auto,
+      );
+      expect(render.scrollbarsVisible, isTrue);
+      await tester.pump(const Duration(milliseconds: 1100));
+      expect(render.scrollbarsVisible, isFalse);
+      await _finish(tester, controller);
+    });
+
     testWidgets('asking to scroll past the ends does not bring them back', (
       tester,
     ) async {
