@@ -38,36 +38,75 @@ class RenderEditor extends RenderBox {
     required EditorStyle style,
     required bool softWrap,
     required bool showLineNumbers,
-    bool showScrollbars = true,
-  }) : this._(controller, style, softWrap, showLineNumbers, showScrollbars);
+    ScrollbarVisibility scrollbars = ScrollbarVisibility.always,
+  }) : this._(controller, style, softWrap, showLineNumbers, scrollbars);
 
   RenderEditor._(
     this._controller,
     this._style,
     this._softWrap,
     this._showLineNumbers,
-    this._showScrollbars,
+    this._scrollbars,
   );
 
   EditorController _controller;
   EditorStyle _style;
   bool _softWrap;
   bool _showLineNumbers;
-  bool _showScrollbars;
+  ScrollbarVisibility _scrollbars;
 
-  bool get showScrollbars => _showScrollbars;
+  ScrollbarVisibility get scrollbars => _scrollbars;
 
-  set showScrollbars(bool value) {
-    if (value == _showScrollbars) {
+  set scrollbars(ScrollbarVisibility value) {
+    if (value == _scrollbars) {
       return;
     }
-    _showScrollbars = value;
+    _scrollbars = value;
     markNeedsLayout();
   }
 
+  bool _scrollbarsShown = true;
+
+  /// whether the scrollbars are shown at the moment, which the view says when
+  /// it hides them after a while without scrolling
+  bool get scrollbarsShown => _scrollbarsShown;
+
+  set scrollbarsShown(bool value) {
+    if (value == _scrollbarsShown) {
+      return;
+    }
+    _scrollbarsShown = value;
+    markNeedsPaint();
+  }
+
   /// the width that the scrollbar takes at the right, which the text does not
-  /// go under
-  double get _scrollbarWidth => _showScrollbars ? _style.scrollbarWidth : 0;
+  /// go under, also when it is not drawn for a moment
+  double get _scrollbarWidth =>
+      _scrollbars == ScrollbarVisibility.never ? 0 : _style.scrollbarWidth;
+
+  /// whether the scrollbars are drawn: when they are always, when they are
+  /// shown, and with auto while a cursor is out of sight
+  bool get scrollbarsVisible => switch (_scrollbars) {
+    ScrollbarVisibility.always => true,
+    ScrollbarVisibility.never => false,
+    ScrollbarVisibility.auto => _scrollbarsShown || _cursorsOutOfSight(),
+  };
+
+  /// whether a cursor is on a row that is not on the screen
+  bool _cursorsOutOfSight() {
+    if (!hasSize) {
+      return false;
+    }
+    final first = (_controller.scrollY / _lineHeight).floor();
+    final last = ((_controller.scrollY + size.height) / _lineHeight).ceil() - 1;
+    for (final s in _controller.selections.all) {
+      final row = _snapshot.offsetToDisplayPoint(s.head).row;
+      if (row < first || row > last) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   EditorController get controller => _controller;
 
@@ -352,7 +391,7 @@ class RenderEditor extends RenderBox {
   /// the scrollbars for the scroll as it is. the one that goes down is always
   /// there, and the one that goes along when the text is wider than the view
   List<ScrollbarLayout> scrollbarLayouts() {
-    if (!_showScrollbars || !hasSize) {
+    if (_scrollbars == ScrollbarVisibility.never || !hasSize) {
       return const [];
     }
     final width = _scrollbarWidth;
@@ -362,8 +401,9 @@ class RenderEditor extends RenderBox {
         axis: ScrollbarAxis.vertical,
         track: Rect.fromLTWH(size.width - width, 0, width, size.height),
         viewportSize: size.height,
-        // there is room to scroll until the last line is at the top
-        scrollRange: content.height + size.height,
+        // the text goes as far as its last row, and there is room to scroll
+        // until that row is at the top
+        scrollRange: math.max(0.0, content.height - _lineHeight) + size.height,
         glyph: _lineHeight,
         scrollPosition: _controller.scrollY / _lineHeight,
       ),
@@ -415,7 +455,46 @@ class RenderEditor extends RenderBox {
     }
   }
 
+  /// the marks in the track that go down, at the rows of the cursors: two
+  /// pixels high, and one where the rows are next to each other
+  List<Rect> cursorMarkers() {
+    final bar = scrollbar(ScrollbarAxis.vertical);
+    final cursors = _controller.selections.all;
+    // there are none when there are too many to tell apart
+    if (bar == null || cursors.length > 100) {
+      return const [];
+    }
+    const height = 2.0;
+    final rows = {
+      for (final s in cursors) _snapshot.offsetToDisplayPoint(s.head).row,
+    }.toList()..sort();
+    final ranges = <(double, double)>[];
+    for (final row in rows) {
+      final top = bar.track.top + row * bar.unitSize;
+      if (ranges.isNotEmpty && ranges.last.$2 >= top - 1) {
+        ranges[ranges.length - 1] = (
+          ranges.last.$1,
+          math.max(ranges.last.$2, top + height),
+        );
+      } else {
+        ranges.add((top, top + height));
+      }
+    }
+    return [
+      for (final (top, bottom) in ranges)
+        Rect.fromLTRB(
+          bar.track.left + ScrollbarLayout.borderWidth,
+          top,
+          bar.track.right,
+          bottom,
+        ),
+    ];
+  }
+
   void _paintScrollbars(Canvas canvas) {
+    if (!scrollbarsVisible) {
+      return;
+    }
     for (final layout in scrollbarLayouts()) {
       canvas.drawRect(layout.track, Paint()..color = _style.scrollbarTrack);
       if (layout.axis == ScrollbarAxis.vertical) {
@@ -429,6 +508,9 @@ class RenderEditor extends RenderBox {
           ),
           Paint()..color = _style.scrollbarTrackBorder,
         );
+        for (final marker in cursorMarkers()) {
+          canvas.drawRect(marker, Paint()..color = _style.cursor);
+        }
       }
       final thumb = layout.thumb;
       if (thumb == null) {

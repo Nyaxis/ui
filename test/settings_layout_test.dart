@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ui/editor/editor_tabs.dart';
+import 'package:ui/native_editor/scrollbar_layout.dart';
 import 'package:ui/settings/editor_settings.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/theme/theme_controller.dart';
@@ -137,6 +138,43 @@ void main() {
       }, (styles) => chosen = styles);
       await tester.tap(find.text('Italic').at(0));
       expect(chosen, <String, String>{});
+    });
+
+    testWidgets('the scrollbars are chosen in the editor that flutter draws', (
+      tester,
+    ) async {
+      EditorPrefs? chosen;
+      tester.view.physicalSize = const Size(900, 4200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      Future<void> show(Map<String, String>? styles) => tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SettingsView(
+              theme: controller.value,
+              controller: controller,
+              prefs: const EditorPrefs(),
+              onPrefs: (prefs) => chosen = prefs,
+              autoSave: AutoSave.off,
+              onAutoSave: (_) {},
+              autoSaveDelay: const Duration(seconds: 2),
+              onAutoSaveDelay: (_) {},
+              syntaxStyles: styles,
+              onSyntaxStyles: styles == null ? null : (_) {},
+            ),
+          ),
+        ),
+      );
+      await show(null);
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Scrollbars'), findsNothing);
+      await show(const {});
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Scrollbars'), findsOneWidget);
+      await tester.tap(find.text('Always'));
+      expect(chosen?.scrollbars, ScrollbarVisibility.always);
+      await tester.tap(find.text('Never'));
+      expect(chosen?.scrollbars, ScrollbarVisibility.never);
     });
 
     testWidgets('the styles that are set can all be reset', (tester) async {

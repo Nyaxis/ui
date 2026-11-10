@@ -759,6 +759,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       style: _nativeStyle(theme),
       softWrap: prefs.wordWrap,
       showLineNumbers: prefs.lineNumbers,
+      scrollbars: prefs.scrollbars,
       autofocus: true,
       onFocusChanged: (focused) {
         if (!focused) {

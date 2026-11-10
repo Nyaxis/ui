@@ -4,6 +4,28 @@ import 'dart:ui';
 /// which way a scrollbar goes
 enum ScrollbarAxis { horizontal, vertical }
 
+/// when the scrollbars are shown. auto hides them a moment after the text was
+/// last scrolled, and brings them back for scrolling or for the pointer at
+/// them; they stay shown while a cursor is out of sight
+enum ScrollbarVisibility {
+  auto,
+  always,
+  never;
+
+  /// the one that [id] names, and [orElse] for another
+  static ScrollbarVisibility fromId(
+    String? id, {
+    ScrollbarVisibility orElse = auto,
+  }) {
+    for (final value in values) {
+      if (value.name == id) {
+        return value;
+      }
+    }
+    return orElse;
+  }
+}
+
 /// what the pointer is doing to the thumb of a scrollbar
 enum ThumbState { idle, hovered, dragging }
 

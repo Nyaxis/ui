@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_monaco/flutter_monaco.dart' show RenderWhitespace;
 
 import '../editor/editor_tabs.dart' show AutoSave;
+import '../native_editor/scrollbar_layout.dart' show ScrollbarVisibility;
 import '../settings/editor_settings.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
@@ -282,6 +283,24 @@ class SettingsView extends StatelessWidget {
                           onPrefs(prefs.copyWith(autoClosingBrackets: v)),
                     ),
                   ),
+                  // the scrollbars of the editor that flutter draws
+                  if (syntaxStyles != null)
+                    SettingRow(
+                      theme: theme,
+                      label: 'Scrollbars',
+                      description: 'Auto hides them a moment after scrolling',
+                      control: ChoiceControl<ScrollbarVisibility>(
+                        theme: theme,
+                        value: prefs.scrollbars,
+                        options: const [
+                          (ScrollbarVisibility.auto, 'Auto'),
+                          (ScrollbarVisibility.always, 'Always'),
+                          (ScrollbarVisibility.never, 'Never'),
+                        ],
+                        onChanged: (v) =>
+                            onPrefs(prefs.copyWith(scrollbars: v)),
+                      ),
+                    ),
                 ],
               ),
               if (syntaxStyles != null && onSyntaxStyles != null) ...[

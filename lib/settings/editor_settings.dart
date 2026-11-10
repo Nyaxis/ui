@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 
+import '../native_editor/scrollbar_layout.dart' show ScrollbarVisibility;
 import '../syntax/syntax_palette.dart' show fontStylesFromConfig;
 import 'config_file.dart';
 
@@ -20,6 +21,7 @@ class EditorPrefs {
     this.smoothScrolling = true,
     this.bracketPairColorization = true,
     this.autoClosingBrackets = true,
+    this.scrollbars = ScrollbarVisibility.auto,
   });
 
   /// unknown or malformed values fall back to their defaults
@@ -59,6 +61,10 @@ class EditorPrefs {
         'autoClosingBrackets',
         defaults.autoClosingBrackets,
       ),
+      scrollbars: ScrollbarVisibility.fromId(
+        json['scrollbars'] as String?,
+        orElse: defaults.scrollbars,
+      ),
     );
   }
 
@@ -81,6 +87,9 @@ class EditorPrefs {
   /// closes them as the language says, or never
   final bool autoClosingBrackets;
 
+  /// when the editor that flutter draws shows its scrollbars
+  final ScrollbarVisibility scrollbars;
+
   EditorPrefs copyWith({
     int? tabSize,
     bool? wordWrap,
@@ -91,6 +100,7 @@ class EditorPrefs {
     bool? smoothScrolling,
     bool? bracketPairColorization,
     bool? autoClosingBrackets,
+    ScrollbarVisibility? scrollbars,
   }) {
     return EditorPrefs(
       fontSize: fontSize,
@@ -104,6 +114,7 @@ class EditorPrefs {
       bracketPairColorization:
           bracketPairColorization ?? this.bracketPairColorization,
       autoClosingBrackets: autoClosingBrackets ?? this.autoClosingBrackets,
+      scrollbars: scrollbars ?? this.scrollbars,
     );
   }
 
@@ -120,6 +131,7 @@ class EditorPrefs {
       smoothScrolling: smoothScrolling,
       bracketPairColorization: bracketPairColorization,
       autoClosingBrackets: autoClosingBrackets,
+      scrollbars: scrollbars,
     );
   }
 
@@ -134,6 +146,7 @@ class EditorPrefs {
     'smoothScrolling': smoothScrolling,
     'bracketPairColorization': bracketPairColorization,
     'autoClosingBrackets': autoClosingBrackets,
+    'scrollbars': scrollbars.name,
   };
 
   /// what the editor is told, with [themeFontSize] when no size is set
@@ -166,7 +179,8 @@ class EditorPrefs {
       other.fontLigatures == fontLigatures &&
       other.smoothScrolling == smoothScrolling &&
       other.bracketPairColorization == bracketPairColorization &&
-      other.autoClosingBrackets == autoClosingBrackets;
+      other.autoClosingBrackets == autoClosingBrackets &&
+      other.scrollbars == scrollbars;
 
   @override
   int get hashCode => Object.hash(
@@ -180,6 +194,7 @@ class EditorPrefs {
     smoothScrolling,
     bracketPairColorization,
     autoClosingBrackets,
+    scrollbars,
   );
 }
 

@@ -20,7 +20,7 @@ class EditorView extends StatefulWidget {
     this.style = const EditorStyle(),
     this.softWrap = true,
     this.showLineNumbers = true,
-    this.showScrollbars = true,
+    this.scrollbars = ScrollbarVisibility.always,
     this.focusNode,
     this.autofocus = false,
     this.readOnly = false,
@@ -35,8 +35,8 @@ class EditorView extends StatefulWidget {
   final bool softWrap;
   final bool showLineNumbers;
 
-  /// whether the text has scrollbars
-  final bool showScrollbars;
+  /// when the text has scrollbars
+  final ScrollbarVisibility scrollbars;
   final FocusNode? focusNode;
   final bool autofocus;
 
@@ -73,11 +73,41 @@ class EditorViewState extends State<EditorView> {
     _input = EditorTextInput(widget.controller);
     focusNode.addListener(_onFocusChange);
     widget.controller.addListener(_onControllerChange);
+    _scrollX = widget.controller.scrollX;
+    _scrollY = widget.controller.scrollY;
+  }
+
+  // the scrollbars are shown for a moment when the text scrolls, or the pointer
+  // is at one of them
+
+  static const _scrollbarsShownFor = Duration(seconds: 1);
+  Timer? _hideScrollbars;
+  double _scrollX = 0;
+  double _scrollY = 0;
+
+  void _showScrollbars() {
+    if (widget.scrollbars != ScrollbarVisibility.auto) {
+      return;
+    }
+    _render?.scrollbarsShown = true;
+    _hideScrollbars?.cancel();
+    _hideScrollbars = Timer(_scrollbarsShownFor, () {
+      // not while a thumb is being dragged
+      if (_scrollbarDrag != null) {
+        _showScrollbars();
+      } else {
+        _render?.scrollbarsShown = false;
+      }
+    });
   }
 
   @override
   void didUpdateWidget(EditorView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.scrollbars != widget.scrollbars) {
+      _hideScrollbars?.cancel();
+      _render?.scrollbarsShown = true;
+    }
     final oldNode = oldWidget.focusNode ?? oldWidget.controller.focusNode;
     if (oldNode != focusNode) {
       oldNode.removeListener(_onFocusChange);
@@ -111,6 +141,12 @@ class EditorViewState extends State<EditorView> {
   }
 
   void _onControllerChange() {
+    final controller = widget.controller;
+    if (controller.scrollX != _scrollX || controller.scrollY != _scrollY) {
+      _scrollX = controller.scrollX;
+      _scrollY = controller.scrollY;
+      _showScrollbars();
+    }
     if (!_input.attached) {
       return;
     }
@@ -228,6 +264,7 @@ class EditorViewState extends State<EditorView> {
     if (hit == null) {
       return false;
     }
+    _showScrollbars();
     final thumb = hit.thumb;
     if (thumb == null) {
       return true;
@@ -254,6 +291,7 @@ class EditorViewState extends State<EditorView> {
     final now = vertical ? position.dy : position.dx;
     final start = vertical ? layout.track.top : layout.track.left;
     final end = vertical ? layout.track.bottom : layout.track.right;
+    _showScrollbars();
     // a drag only scrolls while it was on the track before it moved
     if (before >= start && before <= end) {
       render.scrollToUnits(axis, layout.draggedPosition(now - before));
@@ -285,6 +323,9 @@ class EditorViewState extends State<EditorView> {
       );
     }
     final over = hit != null;
+    if (over) {
+      _showScrollbars();
+    }
     if (over != _overScrollbar) {
       setState(() => _overScrollbar = over);
     }
@@ -373,6 +414,7 @@ class EditorViewState extends State<EditorView> {
   @override
   void dispose() {
     _blink?.cancel();
+    _hideScrollbars?.cancel();
     _input.detach();
     widget.controller.removeListener(_onControllerChange);
     focusNode.removeListener(_onFocusChange);
@@ -402,7 +444,7 @@ class EditorViewState extends State<EditorView> {
             style: widget.style,
             softWrap: widget.softWrap,
             showLineNumbers: widget.showLineNumbers,
-            showScrollbars: widget.showScrollbars,
+            scrollbars: widget.scrollbars,
           ),
         ),
       ),
@@ -417,14 +459,14 @@ class _EditorRenderWidget extends LeafRenderObjectWidget {
     required this.style,
     required this.softWrap,
     required this.showLineNumbers,
-    required this.showScrollbars,
+    required this.scrollbars,
   });
 
   final EditorController controller;
   final EditorStyle style;
   final bool softWrap;
   final bool showLineNumbers;
-  final bool showScrollbars;
+  final ScrollbarVisibility scrollbars;
 
   @override
   RenderEditor createRenderObject(BuildContext context) => RenderEditor(
@@ -432,7 +474,7 @@ class _EditorRenderWidget extends LeafRenderObjectWidget {
     style: style,
     softWrap: softWrap,
     showLineNumbers: showLineNumbers,
-    showScrollbars: showScrollbars,
+    scrollbars: scrollbars,
   );
 
   @override
@@ -442,6 +484,6 @@ class _EditorRenderWidget extends LeafRenderObjectWidget {
       ..style = style
       ..softWrap = softWrap
       ..showLineNumbers = showLineNumbers
-      ..showScrollbars = showScrollbars;
+      ..scrollbars = scrollbars;
   }
 }

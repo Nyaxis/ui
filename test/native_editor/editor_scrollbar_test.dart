@@ -18,7 +18,7 @@ Future<RenderEditor> _pump(
   WidgetTester tester,
   EditorController controller, {
   bool softWrap = true,
-  bool showScrollbars = true,
+  ScrollbarVisibility scrollbars = ScrollbarVisibility.always,
 }) async {
   await tester.pumpWidget(
     Directionality(
@@ -32,7 +32,7 @@ Future<RenderEditor> _pump(
             controller: controller,
             style: _style,
             softWrap: softWrap,
-            showScrollbars: showScrollbars,
+            scrollbars: scrollbars,
             autofocus: true,
           ),
         ),
@@ -188,13 +188,133 @@ void main() {
       tester,
     ) async {
       final controller = EditorController(text: _long + 'word ' * 100);
-      final render = await _pump(tester, controller, showScrollbars: false);
+      final render = await _pump(
+        tester,
+        controller,
+        scrollbars: ScrollbarVisibility.never,
+      );
       expect(render.scrollbarLayouts(), isEmpty);
       final columns =
           ((500 - render.textLeft - _style.textPadding) / render.charWidth)
               .floor();
       expect(controller.display.wrapWidth, columns.toDouble());
       await _finish(tester, controller);
+    });
+
+    testWidgets('the thumb reaches the end of the track at the end', (
+      tester,
+    ) async {
+      for (final text in [_long, 'one\ntwo\nthree']) {
+        final controller = EditorController(text: text);
+        final render = await _pump(tester, controller);
+        controller.setScroll(y: 1e9);
+        await tester.pump();
+        final bar = render.scrollbar(ScrollbarAxis.vertical)!;
+        expect(bar.thumb!.bottom, closeTo(bar.track.bottom, 1e-6));
+        await _finish(tester, controller);
+      }
+    });
+  });
+
+  group('marks of the cursors', () {
+    testWidgets('each cursor has a line in the track at its row', (
+      tester,
+    ) async {
+      final controller = EditorController(text: _long);
+      final render = await _pump(tester, controller);
+      // the first cursor is on the first row, which is at the top
+      var marks = render.cursorMarkers();
+      expect(marks, hasLength(1));
+      expect(marks.single.top, 0);
+      expect(marks.single.height, 2);
+      expect(marks.single.left, 485 + 1);
+      expect(marks.single.right, 500);
+
+      final bar = render.scrollbar(ScrollbarAxis.vertical)!;
+      final text = controller.text;
+      final at100 = text.indexOf('line 100');
+      controller.selections.selectRanges([(0, 0), (at100, at100)]);
+      await tester.pump();
+      marks = render.cursorMarkers();
+      expect(marks, hasLength(2));
+      expect(marks.last.top, closeTo(100 * bar.unitSize, 1e-6));
+      await _finish(tester, controller);
+    });
+
+    testWidgets('cursors on rows next to each other are one line', (
+      tester,
+    ) async {
+      final controller = EditorController(text: _long);
+      final render = await _pump(tester, controller);
+      final text = controller.text;
+      final a = text.indexOf('line 10\n');
+      final b = text.indexOf('line 11\n');
+      controller.selections.selectRanges([(a, a), (b, b)]);
+      await tester.pump();
+      expect(render.cursorMarkers(), hasLength(1));
+      await _finish(tester, controller);
+    });
+  });
+
+  group('showing and hiding', () {
+    testWidgets('with auto they go a moment after the text was scrolled', (
+      tester,
+    ) async {
+      final controller = EditorController(text: _long);
+      final render = await _pump(
+        tester,
+        controller,
+        scrollbars: ScrollbarVisibility.auto,
+      );
+      expect(render.scrollbarsVisible, isTrue);
+      controller.setScroll(y: 10);
+      await tester.pump();
+      expect(render.scrollbarsVisible, isTrue);
+      await tester.pump(const Duration(milliseconds: 1100));
+      expect(render.scrollbarsVisible, isFalse);
+      // still there for the pointer, which brings them back
+      expect(render.scrollbar(ScrollbarAxis.vertical), isNotNull);
+      final bar = render.scrollbar(ScrollbarAxis.vertical)!;
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: const Offset(100, 100));
+      await mouse.moveTo(bar.track.center);
+      await tester.pump();
+      expect(render.scrollbarsVisible, isTrue);
+      await mouse.removePointer();
+      await tester.pump(const Duration(milliseconds: 1100));
+      await _finish(tester, controller);
+    });
+
+    testWidgets('and they stay while a cursor is out of sight', (tester) async {
+      final controller = EditorController(text: _long);
+      final render = await _pump(
+        tester,
+        controller,
+        scrollbars: ScrollbarVisibility.auto,
+      );
+      controller.setScroll(y: 2000);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1100));
+      // the cursor is on the first row, which is not on the screen
+      expect(render.scrollbarsVisible, isTrue);
+      await _finish(tester, controller);
+    });
+
+    testWidgets('always keeps them, and never has none', (tester) async {
+      final controller = EditorController(text: _long);
+      final render = await _pump(tester, controller);
+      controller.setScroll(y: 10);
+      await tester.pump(const Duration(milliseconds: 1100));
+      expect(render.scrollbarsVisible, isTrue);
+      await _finish(tester, controller);
+      final other = EditorController(text: _long);
+      final never = await _pump(
+        tester,
+        other,
+        scrollbars: ScrollbarVisibility.never,
+      );
+      expect(never.scrollbarsVisible, isFalse);
+      await _finish(tester, other);
     });
   });
 }

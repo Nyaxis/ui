@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ui/native_editor/scrollbar_layout.dart';
 import 'package:ui/settings/config_file.dart';
 import 'package:ui/settings/editor_settings.dart';
 
@@ -22,6 +23,22 @@ void main() {
       expect(defaults.tabSize, 4);
       expect(defaults.smoothScrolling, isTrue);
       expect(defaults.renderWhitespace, RenderWhitespace.selection);
+    });
+
+    test('the scrollbars are auto, and another is read by its name', () {
+      expect(const EditorPrefs().scrollbars, ScrollbarVisibility.auto);
+      expect(
+        EditorPrefs.fromJson({'scrollbars': 'always'}).scrollbars,
+        ScrollbarVisibility.always,
+      );
+      expect(
+        EditorPrefs.fromJson({'scrollbars': 'sometimes'}).scrollbars,
+        ScrollbarVisibility.auto,
+      );
+      const prefs = EditorPrefs(scrollbars: ScrollbarVisibility.never);
+      expect(prefs.toJson()['scrollbars'], 'never');
+      expect(EditorPrefs.fromJson(prefs.toJson()), prefs);
+      expect(prefs.withFontSize(12).scrollbars, ScrollbarVisibility.never);
     });
 
     test('values that are out of range or the wrong type are fixed', () {
