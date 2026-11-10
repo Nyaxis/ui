@@ -153,6 +153,30 @@ class EditorViewState extends State<EditorView> {
     if (event.buttons != kPrimaryButton) {
       return;
     }
+    // a key that went up while the window was not looking, as with alt and
+    // alt tab, can stay pressed as far as flutter knows, which would make
+    // every click add a cursor. the system is asked what is pressed when alt
+    // seems to be
+    if (HardwareKeyboard.instance.isAltPressed) {
+      _syncKeyboard().then((_) {
+        if (mounted) {
+          _pointerDown(event);
+        }
+      });
+      return;
+    }
+    _pointerDown(event);
+  }
+
+  Future<void> _syncKeyboard() async {
+    try {
+      await HardwareKeyboard.instance.syncKeyboardState();
+    } on Object {
+      // no system to ask, as in a test
+    }
+  }
+
+  void _pointerDown(PointerDownEvent event) {
     final render = _render;
     if (render == null) {
       return;
