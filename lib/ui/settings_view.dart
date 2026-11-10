@@ -283,6 +283,18 @@ class SettingsView extends StatelessWidget {
                           onPrefs(prefs.copyWith(autoClosingBrackets: v)),
                     ),
                   ),
+                  if (syntaxStyles != null)
+                    SettingRow(
+                      theme: theme,
+                      label: 'Mouse wheel zoom',
+                      description: 'Whether to zoom the editor font size with the mouse wheel while holding the primary modifier key.',
+                      control: SwitchControl(
+                        theme: theme,
+                        value: prefs.mouseWheelZoom,
+                        onChanged: (v) =>
+                            onPrefs(prefs.copyWith(mouseWheelZoom: v)),
+                      ),
+                    ),
                   // the scrollbars of the editor that flutter draws
                   if (syntaxStyles != null)
                     SettingRow(

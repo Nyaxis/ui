@@ -22,6 +22,8 @@ class EditorView extends StatefulWidget {
     this.softWrap = true,
     this.showLineNumbers = true,
     this.scrollbars = ScrollbarVisibility.always,
+    this.mouseWheelZoom = false,
+    this.onZoom,
     this.focusNode,
     this.autofocus = false,
     this.readOnly = false,
@@ -38,6 +40,12 @@ class EditorView extends StatefulWidget {
 
   /// when the text has scrollbars
   final ScrollbarVisibility scrollbars;
+
+  /// whether the wheel with the control key down zooms, which is told to
+  /// [onZoom] as a step of one for the wheel going up and minus one for down,
+  /// and does not scroll
+  final bool mouseWheelZoom;
+  final ValueChanged<int>? onZoom;
   final FocusNode? focusNode;
   final bool autofocus;
 
@@ -385,6 +393,16 @@ class EditorViewState extends State<EditorView> {
     final controller = widget.controller;
     var dx = event.scrollDelta.dx;
     var dy = event.scrollDelta.dy;
+    final keys = ModifierKeys.instance;
+    if (widget.mouseWheelZoom &&
+        widget.onZoom != null &&
+        (keys.isControlPressed || keys.isMetaPressed)) {
+      // the wheel going up is a scroll up, which is a negative amount here
+      if (dy != 0) {
+        widget.onZoom!(dy < 0 ? 1 : -1);
+      }
+      return;
+    }
     if (ModifierKeys.instance.isShiftPressed && dx == 0) {
       dx = dy;
       dy = 0;

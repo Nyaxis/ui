@@ -446,10 +446,38 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     }
   }
 
+  /// the font size of the editor that flutter draws, when it was changed with
+  /// the keys or the wheel, which lasts until the app is closed and is not
+  /// saved; null is the one of the settings
+  double? _zoomedFontSize;
+
+  static const _minFontSize = 6.0;
+  static const _maxFontSize = 100.0;
+
+  /// changes the zoomed size by [step] pixels, from the size that is shown now
+  void _zoom(int step) {
+    final shown =
+        _zoomedFontSize ??
+        _editorSettings.value.fontSize ??
+        widget.controller.value.fontSizeBody;
+    setState(
+      () => _zoomedFontSize = (shown + step).clamp(_minFontSize, _maxFontSize),
+    );
+  }
+
+  void _resetZoom() {
+    if (_zoomedFontSize != null) {
+      setState(() => _zoomedFontSize = null);
+    }
+  }
+
   Future<void> _attachNativeEditor() async {
     _tabs.addListener(_applyOccurrenceColor);
     widget.controller.addListener(_applyOccurrenceColor);
     _bindKeymap();
+    _keymap.on('zed::IncreaseBufferFontSize', () async => _zoom(1));
+    _keymap.on('zed::DecreaseBufferFontSize', () async => _zoom(-1));
+    _keymap.on('zed::ResetBufferFontSize', () async => _resetZoom());
     await _keymap.attachNative(() => _tabs.activeController?.hasFocus ?? false);
     if (mounted) {
       setState(() {});
@@ -740,7 +768,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     return EditorStyle(
       textStyle: TextStyle(
         fontFamily: theme.monospaceFontFamily,
-        fontSize: prefs.fontSize ?? theme.fontSizeBody,
+        fontSize: _zoomedFontSize ?? prefs.fontSize ?? theme.fontSizeBody,
         height: 1.5,
         color: theme.textPrimary,
         fontFeatures: prefs.fontLigatures
@@ -782,6 +810,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       softWrap: prefs.wordWrap,
       showLineNumbers: prefs.lineNumbers,
       scrollbars: prefs.scrollbars,
+      mouseWheelZoom: prefs.mouseWheelZoom,
+      onZoom: _zoom,
       autofocus: true,
       onFocusChanged: (focused) {
         if (!focused) {

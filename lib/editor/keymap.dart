@@ -444,6 +444,9 @@ class Keymap {
     'right': 'ArrowRight',
     '-': 'Minus',
     '=': 'Equal',
+    // the plus that has its own key, as on the number pad; the one that is
+    // shift and = is `shift-=` for the page
+    '+': 'NumpadAdd',
     ',': 'Comma',
     '.': 'Period',
     '/': 'Slash',

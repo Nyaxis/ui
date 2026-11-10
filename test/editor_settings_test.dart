@@ -41,6 +41,23 @@ void main() {
       expect(prefs.withFontSize(12).scrollbars, ScrollbarVisibility.never);
     });
 
+    test('the wheel zoom is off, and is kept', () {
+      expect(const EditorPrefs().mouseWheelZoom, isFalse);
+      expect(
+        EditorPrefs.fromJson({'mouseWheelZoom': true}).mouseWheelZoom,
+        isTrue,
+      );
+      expect(
+        EditorPrefs.fromJson({'mouseWheelZoom': 'yes'}).mouseWheelZoom,
+        isFalse,
+      );
+      const prefs = EditorPrefs(mouseWheelZoom: true);
+      expect(prefs.toJson()['mouseWheelZoom'], isTrue);
+      expect(EditorPrefs.fromJson(prefs.toJson()), prefs);
+      expect(prefs.withFontSize(12).mouseWheelZoom, isTrue);
+      expect(prefs.copyWith(tabSize: 2).mouseWheelZoom, isTrue);
+    });
+
     test('values that are out of range or the wrong type are fixed', () {
       final prefs = EditorPrefs.fromJson({
         'fontSize': 500,

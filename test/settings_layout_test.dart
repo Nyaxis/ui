@@ -168,9 +168,11 @@ void main() {
       await show(null);
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('Scrollbars'), findsNothing);
+      expect(find.text('Mouse wheel zoom'), findsNothing);
       await show(const {});
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('Scrollbars'), findsOneWidget);
+      expect(find.text('Mouse wheel zoom'), findsOneWidget);
       await tester.tap(find.text('Always'));
       expect(chosen?.scrollbars, ScrollbarVisibility.always);
       await tester.tap(find.text('Never'));

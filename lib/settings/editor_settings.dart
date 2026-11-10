@@ -22,6 +22,7 @@ class EditorPrefs {
     this.bracketPairColorization = true,
     this.autoClosingBrackets = true,
     this.scrollbars = ScrollbarVisibility.auto,
+    this.mouseWheelZoom = false,
   });
 
   /// unknown or malformed values fall back to their defaults
@@ -65,6 +66,7 @@ class EditorPrefs {
         json['scrollbars'] as String?,
         orElse: defaults.scrollbars,
       ),
+      mouseWheelZoom: flag('mouseWheelZoom', defaults.mouseWheelZoom),
     );
   }
 
@@ -90,6 +92,10 @@ class EditorPrefs {
   /// when the editor that flutter draws shows its scrollbars
   final ScrollbarVisibility scrollbars;
 
+  /// whether the wheel with the control key down changes the font size of the
+  /// editor that flutter draws
+  final bool mouseWheelZoom;
+
   EditorPrefs copyWith({
     int? tabSize,
     bool? wordWrap,
@@ -101,6 +107,7 @@ class EditorPrefs {
     bool? bracketPairColorization,
     bool? autoClosingBrackets,
     ScrollbarVisibility? scrollbars,
+    bool? mouseWheelZoom,
   }) {
     return EditorPrefs(
       fontSize: fontSize,
@@ -115,6 +122,7 @@ class EditorPrefs {
           bracketPairColorization ?? this.bracketPairColorization,
       autoClosingBrackets: autoClosingBrackets ?? this.autoClosingBrackets,
       scrollbars: scrollbars ?? this.scrollbars,
+      mouseWheelZoom: mouseWheelZoom ?? this.mouseWheelZoom,
     );
   }
 
@@ -132,6 +140,7 @@ class EditorPrefs {
       bracketPairColorization: bracketPairColorization,
       autoClosingBrackets: autoClosingBrackets,
       scrollbars: scrollbars,
+      mouseWheelZoom: mouseWheelZoom,
     );
   }
 
@@ -147,6 +156,7 @@ class EditorPrefs {
     'bracketPairColorization': bracketPairColorization,
     'autoClosingBrackets': autoClosingBrackets,
     'scrollbars': scrollbars.name,
+    'mouseWheelZoom': mouseWheelZoom,
   };
 
   /// what the editor is told, with [themeFontSize] when no size is set
@@ -180,7 +190,8 @@ class EditorPrefs {
       other.smoothScrolling == smoothScrolling &&
       other.bracketPairColorization == bracketPairColorization &&
       other.autoClosingBrackets == autoClosingBrackets &&
-      other.scrollbars == scrollbars;
+      other.scrollbars == scrollbars &&
+      other.mouseWheelZoom == mouseWheelZoom;
 
   @override
   int get hashCode => Object.hash(
@@ -195,6 +206,7 @@ class EditorPrefs {
     bracketPairColorization,
     autoClosingBrackets,
     scrollbars,
+    mouseWheelZoom,
   );
 }
 
