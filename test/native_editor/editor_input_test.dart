@@ -66,6 +66,19 @@ Future<void> _key(
 
 void main() {
   group('keys', () {
+    testWidgets('a key with a character types it', (tester) async {
+      final controller = EditorController(text: 'ab');
+      await _pump(tester, controller);
+      controller.selections.selectRanges([(1, 1)]);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyX, character: 'x');
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyY, character: 'Y');
+      expect(controller.text, 'axYb');
+      // a key without a character does not type
+      await tester.sendKeyEvent(LogicalKeyboardKey.shiftLeft);
+      expect(controller.text, 'axYb');
+      await _finish(tester, controller);
+    });
+
     testWidgets('arrows move the cursor, and shift selects', (tester) async {
       final controller = EditorController(text: 'one two\nthree');
       await _pump(tester, controller);

@@ -19,10 +19,30 @@ KeyEventResult handleEditorKey(EditorController controller, KeyEvent event) {
     alt: keyboard.isAltPressed,
   );
   if (!handled) {
+    // a key that makes a character types it. compositions of an input method
+    // come without one, and still go through the input method
+    final character = event.character;
+    if (character != null &&
+        _isPrintable(character) &&
+        !keyboard.isMetaPressed &&
+        keyboard.isControlPressed == keyboard.isAltPressed) {
+      controller.replaceSelections(character);
+      controller.setCursorVisible(true);
+      return KeyEventResult.handled;
+    }
     return KeyEventResult.ignored;
   }
   controller.setCursorVisible(true);
   return KeyEventResult.handled;
+}
+
+bool _isPrintable(String text) {
+  for (final unit in text.codeUnits) {
+    if (unit < 0x20 || unit == 0x7f) {
+      return false;
+    }
+  }
+  return text.isNotEmpty;
 }
 
 bool _handle(
