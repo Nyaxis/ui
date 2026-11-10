@@ -3,11 +3,13 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../editor/editor_font.dart';
 import '../editor/editor_tabs.dart';
+import '../editor/tab_document.dart';
 import '../native_editor/cursor_summary.dart';
 import '../native_editor/editor_style.dart';
 import '../native_editor/editor_view.dart';
@@ -20,6 +22,9 @@ import '../editor/text_encoding.dart';
 import '../native/backend.dart';
 import '../settings/config_file.dart';
 import '../settings/editor_settings.dart';
+import '../syntax/syntax_layer.dart';
+import '../syntax/syntax_palette.dart';
+import '../syntax/syntax_tree.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import 'clickable.dart';
@@ -296,6 +301,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     widget.controller.removeListener(_applyMonacoTheme);
     widget.controller.removeListener(_applyEditorOptions);
     widget.controller.removeListener(_applyEditorFont);
+    widget.controller.removeListener(_applySyntax);
+    _tabs.removeListener(_applySyntax);
     _editorSettings.removeListener(_applyEditorOptions);
     _editorSettings.dispose();
     _tabs.removeListener(_updatePresence);
@@ -346,6 +353,70 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     setState(() => _nativeEditor = native);
     if (native) {
       await _attachNativeEditor();
+      await _loadSyntaxQuery();
+    }
+  }
+
+  /// what the parser finds to color, as the grammar says
+  String? _syntaxQuery;
+
+  /// set when the parser cannot be used, which is not tried again
+  bool _syntaxUnavailable = false;
+  AppTheme? _syntaxFor;
+  SyntaxTheme? _syntaxTheme;
+
+  Future<void> _loadSyntaxQuery() async {
+    try {
+      _syntaxQuery = await rootBundle.loadString(
+        'native/tree_sitter/queries/luau/highlights.scm',
+      );
+    } catch (e) {
+      debugPrint('WindowShell: cannot read the syntax query ($e)');
+      _syntaxUnavailable = true;
+      return;
+    }
+    _tabs.addListener(_applySyntax);
+    widget.controller.addListener(_applySyntax);
+    _applySyntax();
+  }
+
+  /// gives the tabs the syntax colors, and the colors of the theme
+  void _applySyntax() {
+    final query = _syntaxQuery;
+    if (query == null || _syntaxUnavailable || _nativeEditor != true) {
+      return;
+    }
+    final theme = widget.controller.value;
+    if (!identical(_syntaxFor, theme)) {
+      _syntaxFor = theme;
+      _syntaxTheme = syntaxThemeFor(theme);
+    }
+    final syntaxTheme = _syntaxTheme!;
+    for (final tab in _tabs.tabs) {
+      final document = tab.document;
+      if (document is! NativeTabDocument) {
+        continue;
+      }
+      final controller = document.controller;
+      final layer = controller.syntax;
+      if (layer == null) {
+        String? failure;
+        final attached = SyntaxLayer.attach(
+          controller.buffer,
+          syntaxTheme,
+          query,
+          error: (error) => failure = error,
+        );
+        if (attached == null) {
+          debugPrint('WindowShell: no syntax colors ($failure)');
+          _syntaxUnavailable = true;
+          return;
+        }
+        controller.setSyntax(attached);
+      } else if (!identical(layer.theme, syntaxTheme)) {
+        layer.theme = syntaxTheme;
+        controller.redraw();
+      }
     }
   }
 

@@ -10,6 +10,7 @@ import '../editor_core/patch.dart' show Bias;
 import '../editor_core/point.dart';
 import '../editor_core/selections_collection.dart';
 import '../editor_core/text_metrics.dart';
+import '../syntax/syntax_layer.dart';
 
 /// an editor's text and everything that is done to it: the buffer, how it is
 /// laid out on the screen, the selections, and where the view is scrolled to
@@ -55,6 +56,25 @@ class EditorController extends ChangeNotifier {
     _highlights = value;
     _changed();
   }
+
+  SyntaxLayer? _syntax;
+
+  /// what the text is drawn by, from the grammar of the language
+  SyntaxLayer? get syntax => _syntax;
+
+  /// draws the text by [layer], or plain when it is null. the controller
+  /// owns the layer from now on, and the one it had
+  void setSyntax(SyntaxLayer? layer) {
+    if (identical(layer, _syntax)) {
+      return;
+    }
+    _syntax?.dispose();
+    _syntax = layer;
+    highlights = _highlights.withSyntax(layer);
+  }
+
+  /// draws everything again, which is for when what it is drawn with changed
+  void redraw() => _changed();
 
   DisplaySnapshot get snapshot => display.snapshot;
 
@@ -771,6 +791,8 @@ class EditorController extends ChangeNotifier {
   @override
   void dispose() {
     buffer.removeListener(_onBufferChange);
+    _syntax?.dispose();
+    _syntax = null;
     display.dispose();
     focusNode.dispose();
     super.dispose();

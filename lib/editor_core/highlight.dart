@@ -69,14 +69,39 @@ class SemanticToken {
   final int precedence;
 }
 
+/// a part of the text with the style of what it is in the syntax of the
+/// language, as offsets of the text
+class SyntaxSpan {
+  const SyntaxSpan(this.start, this.end, this.style);
+
+  final int start;
+  final int end;
+  final HighlightStyle style;
+
+  @override
+  String toString() => 'SyntaxSpan($start, $end, $style)';
+}
+
+/// where the syntax of the text says what is drawn how, for the parts of it
+/// that are asked for; it is under all else that text is drawn with
+abstract interface class SyntaxHighlights {
+  /// the spans from [start] to [end] of the text of [buffer], in order and
+  /// not over each other. it has none when it is not of that text
+  List<SyntaxSpan> spans(BufferSnapshot buffer, int start, int end);
+}
+
 /// everything that text is drawn with besides its own look
 class Highlights {
   const Highlights({
     this.textHighlights = const {},
     this.semanticTokens = const [],
+    this.syntax,
   });
 
   static const none = Highlights();
+
+  /// what the grammar of the language says, which is under everything else
+  final SyntaxHighlights? syntax;
 
   /// by a key that says what made them; of those that cover the same text,
   /// the one with the higher key is on top, as the keys are ordered
@@ -85,8 +110,19 @@ class Highlights {
   /// in the order of where they start
   final List<SemanticToken> semanticTokens;
 
-  bool get isEmpty => textHighlights.isEmpty && semanticTokens.isEmpty;
+  bool get isEmpty =>
+      textHighlights.isEmpty && semanticTokens.isEmpty && syntax == null;
+
+  /// the same, with other syntax highlights
+  Highlights withSyntax(SyntaxHighlights? syntax) => Highlights(
+    textHighlights: textHighlights,
+    semanticTokens: semanticTokens,
+    syntax: syntax,
+  );
 }
+
+/// below the key of every other highlight
+const int _syntaxKey = -(1 << 41);
 
 class _Endpoint {
   _Endpoint(this.offset, this.key, this.style);
@@ -204,6 +240,15 @@ List<_Endpoint> _endpoints(
     }
     endpoints.add(_Endpoint(a, key, style));
     endpoints.add(_Endpoint(b, key, null));
+  }
+
+  final syntax = highlights.syntax;
+  if (syntax != null) {
+    // the spans do not overlap, so they can share a key
+    for (final span in syntax.spans(buffer, start, end)) {
+      endpoints.add(_Endpoint(span.start, _syntaxKey, span.style));
+      endpoints.add(_Endpoint(span.end, _syntaxKey, null));
+    }
   }
 
   for (final MapEntry(:key, :value) in highlights.textHighlights.entries) {

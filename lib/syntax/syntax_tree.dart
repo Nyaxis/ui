@@ -39,18 +39,6 @@ class SyntaxTheme {
   }
 }
 
-/// a part of the text with the style of what it is
-class SyntaxSpan {
-  const SyntaxSpan(this.start, this.end, this.style);
-
-  final int start;
-  final int end;
-  final HighlightStyle style;
-
-  @override
-  String toString() => 'SyntaxSpan($start, $end, $style)';
-}
-
 class _Capture {
   _Capture(this.start, this.end, this.pattern, this.style);
 
