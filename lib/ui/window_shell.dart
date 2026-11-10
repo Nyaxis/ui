@@ -1575,9 +1575,7 @@ class _StatusItemState extends State<_StatusItem> {
           ),
           child: Text(
             widget.text,
-            style: theme.captionStyle.copyWith(
-              color: _hovered ? theme.textPrimary : null,
-            ),
+            style: theme.captionStyle.copyWith(color: theme.textPrimary),
           ),
         ),
       ),
