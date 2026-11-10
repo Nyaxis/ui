@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../theme/theme_controller.dart';
+import 'gamma_icon.dart';
 
 /// draws `icons\<name>.<ext>` from the active theme's folder when it exists,
 /// otherwise the bundled `assets/icons/<name>/<name>-<size>.svg` closest to
@@ -15,7 +16,13 @@ class SkinnableIcon extends StatelessWidget {
     required this.name,
     required this.size,
     required this.color,
+    this.plain = false,
   });
+
+  /// whether the icon is drawn as it is, and not with the corrected edges that
+  /// every icon has otherwise; [GammaIcon] draws the plain one until its own
+  /// is ready
+  final bool plain;
 
   static const _extensions = [
     'svg',
@@ -57,6 +64,11 @@ class SkinnableIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // a bundled icon has the soft edges that the icons of Zed have; one of the
+    // theme's own is drawn as it is
+    if (!plain && !hasSkin(name)) {
+      return GammaIcon(name: name, size: size, color: color);
+    }
     final theme = SvgTheme(currentColor: color);
     final bundledSize = size >= 32 ? 32 : (size >= 22 ? 22 : 16);
     final bundled = SvgPicture.asset(

@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'direct_write.dart';
 import 'skinnable_icon.dart';
 
 /// how bright [color] is to the eye, by the weights that the correction below
@@ -141,11 +142,20 @@ class _GammaIconState extends State<GammaIcon> {
       }
       final bytes = data.buffer.asUint8List();
       final corrected = Uint8List(bytes.length);
+      // the gamma and the contrast that the system draws text with
+      final rendering = TextRendering.system;
       for (var i = 0; i < bytes.length; i += 4) {
         final coverage = bytes[i + 3] / 255;
-        final alpha = (correctCoverage(coverage, brightness) * 255)
-            .round()
-            .clamp(0, 255);
+        final alpha =
+            (correctCoverage(
+                      coverage,
+                      brightness,
+                      gamma: rendering.gamma,
+                      enhancedContrast: rendering.grayscaleContrast,
+                    ) *
+                    255)
+                .round()
+                .clamp(0, 255);
         // white, as much as is covered: the color is put on when it is drawn
         corrected[i] = alpha;
         corrected[i + 1] = alpha;
@@ -178,6 +188,7 @@ class _GammaIconState extends State<GammaIcon> {
         name: widget.name,
         size: widget.size,
         color: widget.color,
+        plain: true,
       );
     }
     return SizedBox(
