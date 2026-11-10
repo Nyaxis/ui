@@ -738,6 +738,12 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       gutterText: theme.lineNumber,
       currentGutterText: theme.accent,
       invisible: theme.textDim,
+      // the colors of the scrollbars, which the palettes have in these
+      scrollbarTrack: theme.titleBar,
+      scrollbarTrackBorder: theme.textPrimary.withValues(alpha: 0.07),
+      scrollbarThumb: theme.active.withValues(alpha: 0.5),
+      scrollbarThumbHover: theme.disabled,
+      scrollbarThumbActive: theme.disabled,
     );
   }
 

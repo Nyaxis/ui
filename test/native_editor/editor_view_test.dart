@@ -64,7 +64,11 @@ void main() {
       final controller = EditorController(text: 'word ' * 60);
       final render = await _pump(tester, controller, width: 300);
       final columns =
-          ((300 - render.textLeft - _style.textPadding) / render.charWidth)
+          ((300 -
+                      render.textLeft -
+                      _style.textPadding -
+                      _style.scrollbarWidth) /
+                  render.charWidth)
               .floor();
       expect(controller.display.wrapWidth, columns.toDouble());
       expect(controller.snapshot.rowCount, greaterThan(3));

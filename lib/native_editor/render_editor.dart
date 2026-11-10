@@ -7,6 +7,7 @@ import '../editor_core/patch.dart' show Bias;
 import '../editor_core/point.dart';
 import 'editor_controller.dart';
 import 'editor_style.dart';
+import 'scrollbar_layout.dart';
 
 /// a row of the screen, laid out as one line of text, with where each of its
 /// columns is
@@ -37,19 +38,36 @@ class RenderEditor extends RenderBox {
     required EditorStyle style,
     required bool softWrap,
     required bool showLineNumbers,
-  }) : this._(controller, style, softWrap, showLineNumbers);
+    bool showScrollbars = true,
+  }) : this._(controller, style, softWrap, showLineNumbers, showScrollbars);
 
   RenderEditor._(
     this._controller,
     this._style,
     this._softWrap,
     this._showLineNumbers,
+    this._showScrollbars,
   );
 
   EditorController _controller;
   EditorStyle _style;
   bool _softWrap;
   bool _showLineNumbers;
+  bool _showScrollbars;
+
+  bool get showScrollbars => _showScrollbars;
+
+  set showScrollbars(bool value) {
+    if (value == _showScrollbars) {
+      return;
+    }
+    _showScrollbars = value;
+    markNeedsLayout();
+  }
+
+  /// the width that the scrollbar takes at the right, which the text does not
+  /// go under
+  double get _scrollbarWidth => _showScrollbars ? _style.scrollbarWidth : 0;
 
   EditorController get controller => _controller;
 
@@ -171,10 +189,7 @@ class RenderEditor extends RenderBox {
               2 * _style.gutterPadding
         : 0;
     final columns = _softWrap
-        ? math.max(
-            1,
-            ((size.width - textLeft - _style.textPadding) / _charWidth).floor(),
-          )
+        ? math.max(1, (_textWidth / _charWidth).floor())
         : null;
     _controller.setWrapColumns(columns);
     _controller.viewportRows = math.max(
@@ -194,6 +209,10 @@ class RenderEditor extends RenderBox {
     _clampScroll();
   }
 
+  /// the width that the text has, between the gutter and the scrollbar
+  double get _textWidth =>
+      size.width - textLeft - _style.textPadding - _scrollbarWidth;
+
   /// how far the contents go
   Size get contentSize {
     final width = _softWrap
@@ -205,8 +224,7 @@ class RenderEditor extends RenderBox {
   void _clampScroll() {
     final content = contentSize;
     final maxY = math.max(0.0, content.height - _lineHeight);
-    final viewportWidth = size.width - textLeft - _style.textPadding;
-    final maxX = math.max(0.0, content.width - viewportWidth);
+    final maxX = math.max(0.0, content.width - _textWidth);
     _controller.scrollY = _controller.scrollY.clamp(0.0, maxY);
     _controller.scrollX = _controller.scrollX.clamp(0.0, maxX);
   }
@@ -226,7 +244,7 @@ class RenderEditor extends RenderBox {
     }
     if (!_softWrap) {
       final x = _row(point.row).xOf(point.column);
-      final width = size.width - textLeft - _style.textPadding;
+      final width = _textWidth;
       if (x < _controller.scrollX) {
         _controller.scrollX = math.max(0, x - 2 * _charWidth);
       } else if (x + _charWidth > _controller.scrollX + width) {
@@ -315,6 +333,116 @@ class RenderEditor extends RenderBox {
     return _snapshot.displayPointToOffset(clipped);
   }
 
+  // scrollbars
+
+  final Map<ScrollbarAxis, ThumbState> _thumbStates = {};
+
+  /// what is being done to the thumb of the scrollbar that goes [axis]
+  ThumbState thumbState(ScrollbarAxis axis) =>
+      _thumbStates[axis] ?? ThumbState.idle;
+
+  void setThumbState(ScrollbarAxis axis, ThumbState state) {
+    if (thumbState(axis) == state) {
+      return;
+    }
+    _thumbStates[axis] = state;
+    markNeedsPaint();
+  }
+
+  /// the scrollbars for the scroll as it is. the one that goes down is always
+  /// there, and the one that goes along when the text is wider than the view
+  List<ScrollbarLayout> scrollbarLayouts() {
+    if (!_showScrollbars || !hasSize) {
+      return const [];
+    }
+    final width = _scrollbarWidth;
+    final content = contentSize;
+    return [
+      ScrollbarLayout.compute(
+        axis: ScrollbarAxis.vertical,
+        track: Rect.fromLTWH(size.width - width, 0, width, size.height),
+        viewportSize: size.height,
+        // there is room to scroll until the last line is at the top
+        scrollRange: content.height + size.height,
+        glyph: _lineHeight,
+        scrollPosition: _controller.scrollY / _lineHeight,
+      ),
+      if (!_softWrap && content.width > _textWidth)
+        ScrollbarLayout.compute(
+          axis: ScrollbarAxis.horizontal,
+          track: Rect.fromLTWH(
+            0,
+            size.height - width,
+            size.width - width,
+            width,
+          ),
+          viewportSize: _textWidth,
+          scrollRange: content.width,
+          glyph: _charWidth,
+          scrollPosition: _controller.scrollX / _charWidth,
+          contentOffset: textLeft,
+        ),
+    ];
+  }
+
+  /// the scrollbar that [position], in the editor's own coordinates, is in
+  ScrollbarLayout? scrollbarAt(Offset position) {
+    for (final layout in scrollbarLayouts()) {
+      if (layout.track.contains(position)) {
+        return layout;
+      }
+    }
+    return null;
+  }
+
+  /// the scrollbar that goes [axis], if there is one
+  ScrollbarLayout? scrollbar(ScrollbarAxis axis) {
+    for (final layout in scrollbarLayouts()) {
+      if (layout.axis == axis) {
+        return layout;
+      }
+    }
+    return null;
+  }
+
+  /// scrolls to [units] along [axis]: rows for the one that goes down, and
+  /// columns for the one that goes along
+  void scrollToUnits(ScrollbarAxis axis, double units) {
+    if (axis == ScrollbarAxis.vertical) {
+      _controller.setScroll(y: units * _lineHeight);
+    } else {
+      _controller.setScroll(x: units * _charWidth);
+    }
+  }
+
+  void _paintScrollbars(Canvas canvas) {
+    for (final layout in scrollbarLayouts()) {
+      canvas.drawRect(layout.track, Paint()..color = _style.scrollbarTrack);
+      if (layout.axis == ScrollbarAxis.vertical) {
+        // the line between the text and the scrollbar
+        canvas.drawRect(
+          Rect.fromLTWH(
+            layout.track.left,
+            layout.track.top,
+            ScrollbarLayout.borderWidth,
+            layout.track.height,
+          ),
+          Paint()..color = _style.scrollbarTrackBorder,
+        );
+      }
+      final thumb = layout.thumb;
+      if (thumb == null) {
+        continue;
+      }
+      final color = switch (thumbState(layout.axis)) {
+        ThumbState.dragging => _style.scrollbarThumbActive,
+        ThumbState.hovered => _style.scrollbarThumbHover,
+        ThumbState.idle => _style.scrollbarThumb,
+      };
+      canvas.drawRect(thumb, Paint()..color = color);
+    }
+  }
+
   // painting
 
   @override
@@ -340,7 +468,12 @@ class RenderEditor extends RenderBox {
     for (final row in cursorRows) {
       if (row >= firstRow && row <= lastRow) {
         canvas.drawRect(
-          Rect.fromLTWH(0, _rowTop(row), size.width, _lineHeight),
+          Rect.fromLTWH(
+            0,
+            _rowTop(row),
+            size.width - _scrollbarWidth,
+            _lineHeight,
+          ),
           Paint()..color = _style.currentLine,
         );
       }
@@ -377,7 +510,14 @@ class RenderEditor extends RenderBox {
 
     // the text
     canvas.save();
-    canvas.clipRect(Rect.fromLTWH(_gutterWidth, 0, size.width, size.height));
+    canvas.clipRect(
+      Rect.fromLTWH(
+        _gutterWidth,
+        0,
+        size.width - _gutterWidth - _scrollbarWidth,
+        size.height,
+      ),
+    );
     for (var row = firstRow; row <= lastRow; row++) {
       if (_snapshot.isBlockLine(row)) {
         continue;
@@ -439,6 +579,7 @@ class RenderEditor extends RenderBox {
         number.dispose();
       }
     }
+    _paintScrollbars(canvas);
     canvas.restore();
   }
 

@@ -22,6 +22,12 @@ class EditorStyle {
     this.gutterPadding = 12,
     this.textPadding = 8,
     this.cursorWidth = 2,
+    this.scrollbarWidth = 15,
+    this.scrollbarTrack = const Color(0xFF11111B),
+    this.scrollbarTrackBorder = const Color(0x12CDD6F4),
+    this.scrollbarThumb = const Color(0x80585B70),
+    this.scrollbarThumbHover = const Color(0xFF6C7086),
+    this.scrollbarThumbActive = const Color(0xFF6C7086),
   });
 
   /// the font of the text, whose width is the width of a column
@@ -38,6 +44,14 @@ class EditorStyle {
   final double gutterPadding;
   final double textPadding;
   final double cursorWidth;
+
+  /// the width of a scrollbar, and the colors of its track and its thumb
+  final double scrollbarWidth;
+  final Color scrollbarTrack;
+  final Color scrollbarTrackBorder;
+  final Color scrollbarThumb;
+  final Color scrollbarThumbHover;
+  final Color scrollbarThumbActive;
 
   /// [style] as it is to be drawn on top of the text style
   TextStyle apply(HighlightStyle? style) {

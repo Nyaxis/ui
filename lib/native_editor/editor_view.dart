@@ -9,6 +9,7 @@ import 'editor_keys.dart';
 import 'editor_style.dart';
 import 'editor_text_input.dart';
 import 'render_editor.dart';
+import 'scrollbar_layout.dart';
 
 /// shows the text of an [EditorController], and takes what is typed, clicked
 /// and dragged on it
@@ -19,6 +20,7 @@ class EditorView extends StatefulWidget {
     this.style = const EditorStyle(),
     this.softWrap = true,
     this.showLineNumbers = true,
+    this.showScrollbars = true,
     this.focusNode,
     this.autofocus = false,
     this.readOnly = false,
@@ -32,6 +34,9 @@ class EditorView extends StatefulWidget {
   final EditorStyle style;
   final bool softWrap;
   final bool showLineNumbers;
+
+  /// whether the text has scrollbars
+  final bool showScrollbars;
   final FocusNode? focusNode;
   final bool autofocus;
 
@@ -182,6 +187,9 @@ class EditorViewState extends State<EditorView> {
       return;
     }
     focusNode.requestFocus();
+    if (_scrollbarDown(render, event.localPosition)) {
+      return;
+    }
     final controller = widget.controller;
     final offset = render.offsetForPosition(event.localPosition);
     final quick =
@@ -203,11 +211,115 @@ class EditorViewState extends State<EditorView> {
     _dragging = true;
   }
 
+  // the scrollbars
+
+  /// the scrollbar whose thumb is being dragged
+  ScrollbarAxis? _scrollbarDrag;
+
+  /// where the pointer was when it last moved in a drag of a thumb
+  Offset _scrollbarPointer = Offset.zero;
+  bool _overScrollbar = false;
+
+  /// whether [position] is on a scrollbar, which then takes the press: on the
+  /// thumb it starts a drag, and elsewhere on the track it scrolls to put what
+  /// is shown around that place
+  bool _scrollbarDown(RenderEditor render, Offset position) {
+    final hit = render.scrollbarAt(position);
+    if (hit == null) {
+      return false;
+    }
+    final thumb = hit.thumb;
+    if (thumb == null) {
+      return true;
+    }
+    if (thumb.contains(position)) {
+      _scrollbarDrag = hit.axis;
+      _scrollbarPointer = position;
+      render.setThumbState(hit.axis, ThumbState.dragging);
+      setState(() {});
+    } else {
+      render.scrollToUnits(hit.axis, hit.clickedPosition(position));
+    }
+    return true;
+  }
+
+  void _dragScrollbar(RenderEditor render, Offset position) {
+    final axis = _scrollbarDrag;
+    final layout = axis == null ? null : render.scrollbar(axis);
+    if (axis == null || layout == null) {
+      return;
+    }
+    final vertical = axis == ScrollbarAxis.vertical;
+    final before = vertical ? _scrollbarPointer.dy : _scrollbarPointer.dx;
+    final now = vertical ? position.dy : position.dx;
+    final start = vertical ? layout.track.top : layout.track.left;
+    final end = vertical ? layout.track.bottom : layout.track.right;
+    // a drag only scrolls while it was on the track before it moved
+    if (before >= start && before <= end) {
+      render.scrollToUnits(axis, layout.draggedPosition(now - before));
+    }
+    _scrollbarPointer = position;
+  }
+
+  void _endScrollbarDrag(Offset position) {
+    final render = _render;
+    final axis = _scrollbarDrag;
+    if (render == null || axis == null) {
+      return;
+    }
+    _scrollbarDrag = null;
+    _hoverScrollbars(render, position);
+    setState(() {});
+  }
+
+  /// the thumb the pointer is on is lit, and the pointer over a scrollbar is an
+  /// arrow
+  void _hoverScrollbars(RenderEditor render, Offset position) {
+    final hit = render.scrollbarAt(position);
+    for (final axis in ScrollbarAxis.values) {
+      render.setThumbState(
+        axis,
+        hit != null && hit.axis == axis && hit.thumbHovered(position)
+            ? ThumbState.hovered
+            : ThumbState.idle,
+      );
+    }
+    final over = hit != null;
+    if (over != _overScrollbar) {
+      setState(() => _overScrollbar = over);
+    }
+  }
+
+  void _onHover(PointerHoverEvent event) {
+    final render = _render;
+    if (render != null && _scrollbarDrag == null) {
+      _hoverScrollbars(render, event.localPosition);
+    }
+  }
+
+  void _onExit(PointerExitEvent event) {
+    final render = _render;
+    if (render != null && _scrollbarDrag == null) {
+      for (final axis in ScrollbarAxis.values) {
+        render.setThumbState(axis, ThumbState.idle);
+      }
+    }
+    if (_overScrollbar) {
+      setState(() => _overScrollbar = false);
+    }
+  }
+
   void _onPointerMove(PointerMoveEvent event) {
+    final render = _render;
+    if (_scrollbarDrag != null) {
+      if (render != null) {
+        _dragScrollbar(render, event.localPosition);
+      }
+      return;
+    }
     if (!_dragging) {
       return;
     }
-    final render = _render;
     if (render == null) {
       return;
     }
@@ -236,7 +348,10 @@ class EditorViewState extends State<EditorView> {
     return (text.lineStart(row), text.lineEnd(row) + 1);
   }
 
-  void _onPointerUp(PointerUpEvent event) => _dragging = false;
+  void _onPointerUp(PointerUpEvent event) {
+    _dragging = false;
+    _endScrollbarDrag(event.localPosition);
+  }
 
   void _onScroll(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) {
@@ -271,7 +386,11 @@ class EditorViewState extends State<EditorView> {
       autofocus: widget.autofocus,
       onKeyEvent: _onKey,
       child: MouseRegion(
-        cursor: SystemMouseCursors.text,
+        cursor: _overScrollbar || _scrollbarDrag != null
+            ? SystemMouseCursors.basic
+            : SystemMouseCursors.text,
+        onHover: _onHover,
+        onExit: _onExit,
         child: Listener(
           onPointerDown: _onPointerDown,
           onPointerMove: _onPointerMove,
@@ -283,6 +402,7 @@ class EditorViewState extends State<EditorView> {
             style: widget.style,
             softWrap: widget.softWrap,
             showLineNumbers: widget.showLineNumbers,
+            showScrollbars: widget.showScrollbars,
           ),
         ),
       ),
@@ -297,12 +417,14 @@ class _EditorRenderWidget extends LeafRenderObjectWidget {
     required this.style,
     required this.softWrap,
     required this.showLineNumbers,
+    required this.showScrollbars,
   });
 
   final EditorController controller;
   final EditorStyle style;
   final bool softWrap;
   final bool showLineNumbers;
+  final bool showScrollbars;
 
   @override
   RenderEditor createRenderObject(BuildContext context) => RenderEditor(
@@ -310,6 +432,7 @@ class _EditorRenderWidget extends LeafRenderObjectWidget {
     style: style,
     softWrap: softWrap,
     showLineNumbers: showLineNumbers,
+    showScrollbars: showScrollbars,
   );
 
   @override
@@ -318,6 +441,7 @@ class _EditorRenderWidget extends LeafRenderObjectWidget {
       ..controller = controller
       ..style = style
       ..softWrap = softWrap
-      ..showLineNumbers = showLineNumbers;
+      ..showLineNumbers = showLineNumbers
+      ..showScrollbars = showScrollbars;
   }
 }
