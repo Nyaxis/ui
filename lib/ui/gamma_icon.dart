@@ -130,9 +130,13 @@ class _GammaIconState extends State<GammaIcon> {
       final info = await vg.loadPicture(loader, null);
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
-      canvas.scale(pixels / info.size.width, pixels / info.size.height);
+      // Zed draws the mask of an icon at twice its size and has the screen
+      // take it down by sampling, which is what makes the edges soft
+      const smooth = 2;
+      final large = pixels * smooth;
+      canvas.scale(large / info.size.width, large / info.size.height);
       canvas.drawPicture(info.picture);
-      final raw = await recorder.endRecording().toImage(pixels, pixels);
+      final raw = await recorder.endRecording().toImage(large, large);
       final data = await raw.toByteData(
         format: ui.ImageByteFormat.rawStraightRgba,
       );
@@ -141,11 +145,21 @@ class _GammaIconState extends State<GammaIcon> {
         return;
       }
       final bytes = data.buffer.asUint8List();
-      final corrected = Uint8List(bytes.length);
+      final corrected = Uint8List(pixels * pixels * 4);
       // the gamma and the contrast that the system draws text with
       final rendering = TextRendering.system;
-      for (var i = 0; i < bytes.length; i += 4) {
-        final coverage = bytes[i + 3] / 255;
+      for (var i = 0; i < corrected.length; i += 4) {
+        final x = (i ~/ 4) % pixels;
+        final y = (i ~/ 4) ~/ pixels;
+        // the sample at the corner of four texels of the mask is their mean
+        var sum = 0;
+        for (var dy = 0; dy < smooth; dy++) {
+          for (var dx = 0; dx < smooth; dx++) {
+            final texel = (y * smooth + dy) * large + x * smooth + dx;
+            sum += bytes[texel * 4 + 3];
+          }
+        }
+        final coverage = sum / (smooth * smooth * 255);
         final alpha =
             (correctCoverage(
                       coverage,
