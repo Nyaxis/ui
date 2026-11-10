@@ -932,8 +932,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                       name: 'add',
                       extent: _tabBarHeight,
                       size: _tabBarHeight * 0.55,
-                      hoverInset: 5,
-                      hoverRadius: 4,
+                      hoverInset: _BarButton.insetFor(
+                        _tabBarHeight,
+                        _tabBarHeight * 0.55,
+                      ),
+                      hoverRadius: _BarButton.radius,
                       active: _newMenuOpen,
                       theme: theme,
                       onPressed: () => _showNewMenu(context, theme),
@@ -951,8 +954,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
                       name: name,
                       extent: _tabBarHeight,
                       size: _tabBarHeight * 0.55,
-                      hoverInset: 5,
-                      hoverRadius: 4,
+                      hoverInset: _BarButton.insetFor(
+                        _tabBarHeight,
+                        _tabBarHeight * 0.55,
+                      ),
+                      hoverRadius: _BarButton.radius,
                       theme: theme,
                       onPressed: onPressed,
                     ),
@@ -1407,8 +1413,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           // the small icon size, which is 14 pixels, and in the text color, like
           // the text of the bar that it is in
           size: 14,
-          hoverInset: 2,
-          hoverRadius: 4,
+          hoverInset: _BarButton.insetFor(_bottomBarHeight, 14),
+          hoverRadius: _BarButton.radius,
           theme: theme,
           onPressed: _sidebar.onPressed!,
         ),
@@ -1627,8 +1633,8 @@ class _TabState extends State<_Tab> {
                     name: 'close',
                     extent: _closeExtent,
                     size: _closeSize,
-                    hoverInset: 1,
-                    hoverRadius: 4,
+                    hoverInset: _BarButton.insetFor(_closeExtent, _closeSize),
+                    hoverRadius: _BarButton.radius,
                     theme: theme,
                     onPressed: widget.onClose,
                   ),
@@ -1744,6 +1750,17 @@ class _BarButton extends StatefulWidget {
     this.tipBelow = true,
     this.cursor = SystemMouseCursors.click,
   });
+
+  /// the space between an icon and the edge of the fill that shows when its
+  /// button is hovered, and the radius of the fill's corners: the same for
+  /// every icon button
+  static const double padding = 2;
+  static const double radius = 2;
+
+  /// the inset of the fill, in a button [extent] high, that leaves [padding]
+  /// around an icon of [size]
+  static double insetFor(double extent, double size) =>
+      (extent - (size + 2 * padding)) / 2;
 
   /// what the button does
   final String label;
