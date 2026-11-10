@@ -1404,11 +1404,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           tipBelow: false,
           name: _sidebarOpen ? 'sidebar-open' : 'sidebar-closed',
           extent: _bottomBarHeight,
-          // the icon's own grid, so its lines land on whole pixels
-          size: 16,
+          // the small icon size, which is 14 pixels, and in the text color, like
+          // the text of the bar that it is in
+          size: 14,
           hoverInset: 2,
           hoverRadius: 4,
-          dim: true,
           theme: theme,
           onPressed: _sidebar.onPressed!,
         ),
@@ -1739,7 +1739,6 @@ class _BarButton extends StatefulWidget {
     this.hoverInset = 0,
     this.hoverRadius = 0,
     this.destructive = false,
-    this.dim = false,
     this.active = false,
     this.keys,
     this.tipBelow = true,
@@ -1771,9 +1770,6 @@ class _BarButton extends StatefulWidget {
 
   /// hovers in the theme's red instead of the border color
   final bool destructive;
-
-  /// draws the icon in the dim text color until the button is hovered
-  final bool dim;
 
   /// draws the icon in the accent color, while a menu opened from the button
   /// is showing
@@ -1829,9 +1825,7 @@ class _BarButtonState extends State<_BarButton> {
               ? theme.background
               : widget.active
               ? theme.accent
-              : (widget.dim && !_hovered && !_pressed
-                    ? theme.textDim
-                    : theme.textPrimary),
+              : theme.textPrimary,
         ),
       ),
     );
