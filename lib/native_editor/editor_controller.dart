@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -8,6 +9,7 @@ import '../editor_core/buffer.dart';
 import '../editor_core/display_map.dart';
 import '../editor_core/patch.dart' show Bias;
 import '../editor_core/point.dart';
+import '../editor_core/rope.dart' show Rope;
 import '../editor_core/selections_collection.dart';
 import '../editor_core/text_metrics.dart';
 import '../syntax/syntax_layer.dart';
@@ -181,7 +183,142 @@ class EditorController extends ChangeNotifier {
   @override
   void notifyListeners() {
     _dropAutocloseRegions();
+    _refreshOccurrences(notify: false);
     super.notifyListeners();
+  }
+
+  // the other places in the text where the selected text is
+
+  /// whether those are highlighted
+  bool highlightSelectedText = true;
+
+  /// how they are drawn behind the text: `0xAARRGGBB`
+  int get occurrenceBackground => _occurrenceBackground;
+
+  int _occurrenceBackground = 0x17CBA6F7;
+
+  set occurrenceBackground(int value) {
+    if (value == _occurrenceBackground) {
+      return;
+    }
+    _occurrenceBackground = value;
+    final ranges = occurrences;
+    if (ranges.isNotEmpty) {
+      _setOccurrences(ranges);
+      _changed();
+    }
+  }
+
+  /// the highlights go under this key, which no other highlight has
+  static const int _occurrencesKey = 1;
+
+  /// as many as are looked for at most
+  static const int _occurrenceLimit = 10000;
+
+  /// a text that is longer is searched a moment after the selection is made,
+  /// and not at once
+  static const int _quickSearchLength = 100000;
+
+  /// the places the selected text is, other than where it is selected
+  List<AnchorRange> get occurrences =>
+      _highlights.textHighlights[_occurrencesKey]?.ranges ?? const [];
+
+  /// what the occurrences are of, and the text they were found in
+  String? _occurrencesOf;
+  Rope? _occurrencesIn;
+  (int, int)? _occurrencesAt;
+  Timer? _occurrenceSearch;
+
+  void _setOccurrences(List<AnchorRange> ranges) {
+    _highlights = _highlights.withTextHighlight(
+      _occurrencesKey,
+      ranges.isEmpty
+          ? null
+          : TextHighlight(
+              HighlightStyle(background: _occurrenceBackground),
+              ranges,
+            ),
+    );
+  }
+
+  /// looks for the selected text when it is one that is looked for: one
+  /// selection, of something that is not blank, in one row
+  void _refreshOccurrences({required bool notify}) {
+    final all = selections.all;
+    String? query;
+    (int, int)? at;
+    if (highlightSelectedText && all.length == 1) {
+      final s = all.first;
+      final text = buffer.text;
+      if (!s.isEmpty && text.rowAt(s.start) == text.rowAt(s.end)) {
+        final selected = text.substring(s.start, s.end);
+        if (selected.trim().isNotEmpty) {
+          query = selected;
+          at = (s.start, s.end);
+        }
+      }
+    }
+    if (query == null || at == null) {
+      _occurrenceSearch?.cancel();
+      _occurrencesOf = null;
+      _occurrencesIn = null;
+      _occurrencesAt = null;
+      if (occurrences.isNotEmpty) {
+        _setOccurrences(const []);
+        if (notify) {
+          _changed();
+        }
+      }
+      return;
+    }
+    final text = buffer.text;
+    if (_occurrencesOf == query &&
+        _occurrencesAt == at &&
+        identical(_occurrencesIn, text)) {
+      return;
+    }
+    _occurrencesOf = query;
+    _occurrencesAt = at;
+    _occurrencesIn = text;
+    _occurrenceSearch?.cancel();
+    if (text.length <= _quickSearchLength) {
+      _findOccurrences(query, at, text, notify: notify);
+    } else {
+      _occurrenceSearch = Timer(const Duration(milliseconds: 100), () {
+        _findOccurrences(query!, at!, text, notify: true);
+      });
+    }
+  }
+
+  void _findOccurrences(
+    String query,
+    (int, int) at,
+    Rope text, {
+    required bool notify,
+  }) {
+    // the text is another one by now
+    if (!identical(buffer.text, text)) {
+      return;
+    }
+    final snapshot = buffer.snapshot;
+    final found = text.toString();
+    final ranges = <AnchorRange>[];
+    var from = 0;
+    while (ranges.length < _occurrenceLimit) {
+      final index = found.indexOf(query, from);
+      if (index < 0) {
+        break;
+      }
+      from = index + query.length;
+      // the selection itself is not one of them
+      if (index != at.$1) {
+        ranges.add(snapshot.anchorRangeInside(index, index + query.length));
+      }
+    }
+    _setOccurrences(ranges);
+    if (notify) {
+      _changed();
+    }
   }
 
   /// forgets the regions that no selection touches any more, or that the
@@ -1083,6 +1220,7 @@ class EditorController extends ChangeNotifier {
   @override
   void dispose() {
     buffer.removeListener(_onBufferChange);
+    _occurrenceSearch?.cancel();
     _syntax?.dispose();
     _syntax = null;
     display.dispose();

@@ -85,11 +85,15 @@ class RenderEditor extends RenderBox {
       _scrollbars == ScrollbarVisibility.never ? 0 : _style.scrollbarWidth;
 
   /// whether the scrollbars are drawn: when they are always, when they are
-  /// shown, and with auto while a cursor is out of sight
+  /// shown, and with auto while a cursor is out of sight or there are other
+  /// places that the selected text is
   bool get scrollbarsVisible => switch (_scrollbars) {
     ScrollbarVisibility.always => true,
     ScrollbarVisibility.never => false,
-    ScrollbarVisibility.auto => _scrollbarsShown || _cursorsOutOfSight(),
+    ScrollbarVisibility.auto =>
+      _scrollbarsShown ||
+          _cursorsOutOfSight() ||
+          _controller.occurrences.isNotEmpty,
   };
 
   /// whether a cursor is on a row that is not on the screen
@@ -458,36 +462,77 @@ class RenderEditor extends RenderBox {
   /// the marks in the track that go down, at the rows of the cursors: two
   /// pixels high, and one where the rows are next to each other
   List<Rect> cursorMarkers() {
-    final bar = scrollbar(ScrollbarAxis.vertical);
     final cursors = _controller.selections.all;
     // there are none when there are too many to tell apart
-    if (bar == null || cursors.length > 100) {
+    if (cursors.length > 100) {
       return const [];
     }
-    const height = 2.0;
-    final rows = {
-      for (final s in cursors) _snapshot.offsetToDisplayPoint(s.head).row,
-    }.toList()..sort();
+    return _markerRects([
+      for (final s in cursors)
+        (
+          _snapshot.offsetToDisplayPoint(s.head).row,
+          _snapshot.offsetToDisplayPoint(s.head).row,
+        ),
+    ]);
+  }
+
+  /// the marks in the middle third of the track, for the other places that
+  /// the selected text is: at least five pixels high, and one where they are
+  /// next to each other
+  List<Rect> occurrenceMarkers() {
+    final buffer = _controller.buffer.snapshot;
+    return _markerRects([
+      for (final range in _controller.occurrences)
+        (
+          _snapshot
+              .offsetToDisplayPoint(buffer.offsetForAnchor(range.start))
+              .row,
+          _snapshot.offsetToDisplayPoint(buffer.offsetForAnchor(range.end)).row,
+        ),
+    ], column: 1);
+  }
+
+  /// the marks of rows of the text in the track that goes down. without a
+  /// [column] they are two pixels high and across the track, and with one
+  /// they are in that third of it, at least five pixels high. marks that are
+  /// next to each other are one.
+  List<Rect> _markerRects(List<(int, int)> rowRanges, {int? column}) {
+    final bar = scrollbar(ScrollbarAxis.vertical);
+    if (bar == null || rowRanges.isEmpty) {
+      return const [];
+    }
+    final sorted = [...rowRanges]..sort((a, b) => a.$1.compareTo(b.$1));
+    final minHeight = column == null ? 2.0 : 5.0;
+    final maxHeight = column == null ? 2.0 : double.infinity;
+    final height = bar.unitSize.clamp(minHeight, maxHeight);
     final ranges = <(double, double)>[];
-    for (final row in rows) {
-      final top = bar.track.top + row * bar.unitSize;
+    for (final (start, end) in sorted) {
+      final top = bar.track.top + start * bar.unitSize;
+      final bottom = bar.track.top + end * bar.unitSize + height;
       if (ranges.isNotEmpty && ranges.last.$2 >= top - 1) {
         ranges[ranges.length - 1] = (
           ranges.last.$1,
-          math.max(ranges.last.$2, top + height),
+          math.max(ranges.last.$2, bottom),
         );
       } else {
-        ranges.add((top, top + height));
+        ranges.add((top, bottom));
       }
+    }
+    final double left;
+    final double right;
+    if (column == null) {
+      left = bar.track.left + ScrollbarLayout.borderWidth;
+      right = bar.track.right;
+    } else {
+      final columnWidth = ((bar.track.width - ScrollbarLayout.borderWidth) / 3)
+          .floorToDouble();
+      left =
+          bar.track.left + ScrollbarLayout.borderWidth + column * columnWidth;
+      right = left + columnWidth;
     }
     return [
       for (final (top, bottom) in ranges)
-        Rect.fromLTRB(
-          bar.track.left + ScrollbarLayout.borderWidth,
-          top,
-          bar.track.right,
-          bottom,
-        ),
+        Rect.fromLTRB(left, top, right, bottom),
     ];
   }
 
@@ -508,6 +553,9 @@ class RenderEditor extends RenderBox {
           ),
           Paint()..color = _style.scrollbarTrackBorder,
         );
+        for (final marker in occurrenceMarkers()) {
+          canvas.drawRect(marker, Paint()..color = _style.scrollbarMarker);
+        }
         for (final marker in cursorMarkers()) {
           canvas.drawRect(marker, Paint()..color = _style.cursor);
         }

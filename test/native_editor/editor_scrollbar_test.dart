@@ -256,6 +256,56 @@ void main() {
     });
   });
 
+  group('marks of the other places the selected text is', () {
+    String text() => 'alpha\n${'x\n' * 50}alpha\n${'x\n' * 50}alpha';
+
+    testWidgets('each is a mark in the middle third of the track', (
+      tester,
+    ) async {
+      final controller = EditorController(text: text());
+      final render = await _pump(tester, controller);
+      expect(render.occurrenceMarkers(), isEmpty);
+      controller.selections.selectRanges([(0, 5)]);
+      controller.notifyListeners();
+      await tester.pump();
+      final marks = render.occurrenceMarkers();
+      expect(marks, hasLength(2));
+      final bar = render.scrollbar(ScrollbarAxis.vertical)!;
+      // a third of the track after its line, less the line
+      expect(marks.first.left, bar.track.left + 1 + 4);
+      expect(marks.first.right, bar.track.left + 1 + 8);
+      expect(marks.first.height, greaterThanOrEqualTo(5));
+      expect(marks.first.top, closeTo(51 * bar.unitSize, 1e-6));
+      expect(marks.last.top, closeTo(102 * bar.unitSize, 1e-6));
+      await _finish(tester, controller);
+    });
+
+    testWidgets('they keep the scrollbars while there are some', (
+      tester,
+    ) async {
+      final controller = EditorController(text: text());
+      final render = await _pump(
+        tester,
+        controller,
+        scrollbars: ScrollbarVisibility.auto,
+      );
+      // the cursor is in sight, and the text is scrolled a little
+      controller.selections.selectRanges([(0, 5)]);
+      controller.setScroll(y: 10);
+      controller.notifyListeners();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1100));
+      expect(render.scrollbarsVisible, isTrue);
+      // with nothing selected, they go
+      controller.selections.selectRanges([(0, 0)]);
+      controller.notifyListeners();
+      await tester.pump();
+      expect(controller.occurrences, isEmpty);
+      expect(render.scrollbarsVisible, isFalse);
+      await _finish(tester, controller);
+    });
+  });
+
   group('showing and hiding', () {
     testWidgets('with auto they go a moment after the text was scrolled', (
       tester,

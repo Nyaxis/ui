@@ -119,6 +119,22 @@ class Highlights {
     semanticTokens: semanticTokens,
     syntax: syntax,
   );
+
+  /// the same, with [highlight] under [key], or without what is under it when
+  /// it is null
+  Highlights withTextHighlight(int key, TextHighlight? highlight) {
+    final highlights = Map.of(textHighlights);
+    if (highlight == null) {
+      highlights.remove(key);
+    } else {
+      highlights[key] = highlight;
+    }
+    return Highlights(
+      textHighlights: highlights,
+      semanticTokens: semanticTokens,
+      syntax: syntax,
+    );
+  }
 }
 
 /// below the key of every other highlight

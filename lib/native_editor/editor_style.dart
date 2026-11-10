@@ -28,6 +28,7 @@ class EditorStyle {
     this.scrollbarThumb = const Color(0x80585B70),
     this.scrollbarThumbHover = const Color(0xFF6C7086),
     this.scrollbarThumbActive = const Color(0x23FBFBEB),
+    this.scrollbarMarker = const Color(0xFF94E2D5),
   });
 
   /// the font of the text, whose width is the width of a column
@@ -52,6 +53,10 @@ class EditorStyle {
   final Color scrollbarThumb;
   final Color scrollbarThumbHover;
   final Color scrollbarThumbActive;
+
+  /// the color of the marks in the track for the other places a selected text
+  /// is
+  final Color scrollbarMarker;
 
   /// [style] as it is to be drawn on top of the text style
   TextStyle apply(HighlightStyle? style) {

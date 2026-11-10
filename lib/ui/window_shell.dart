@@ -303,6 +303,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     widget.controller.removeListener(_applyEditorOptions);
     widget.controller.removeListener(_applyEditorFont);
     widget.controller.removeListener(_applySyntax);
+    widget.controller.removeListener(_applyOccurrenceColor);
+    _tabs.removeListener(_applyOccurrenceColor);
     _syntaxStyles.removeListener(_applySyntax);
     _tabs.removeListener(_applySyntax);
     _editorSettings.removeListener(_applyEditorOptions);
@@ -431,7 +433,22 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   /// not put it back
   int? _nativeTabSize;
 
+  /// the other places a selected text is, are the accent behind the text
+  void _applyOccurrenceColor() {
+    if (_nativeEditor != true) {
+      return;
+    }
+    final color = widget.controller.value.accent
+        .withValues(alpha: 0x17 / 255)
+        .toARGB32();
+    for (final tab in _tabs.tabs) {
+      tab.native?.controller.occurrenceBackground = color;
+    }
+  }
+
   Future<void> _attachNativeEditor() async {
+    _tabs.addListener(_applyOccurrenceColor);
+    widget.controller.addListener(_applyOccurrenceColor);
     _bindKeymap();
     await _keymap.attachNative(() => _tabs.activeController?.hasFocus ?? false);
     if (mounted) {
@@ -743,6 +760,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       scrollbarTrackBorder: theme.textPrimary.withValues(alpha: 0.07),
       scrollbarThumb: theme.active.withValues(alpha: 0.5),
       scrollbarThumbHover: theme.disabled,
+      scrollbarMarker: theme.info,
       // the palettes do not have one for a thumb that is pressed, so it is the
       // faint light or dark that the default themes use
       scrollbarThumbActive: dark
