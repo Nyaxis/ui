@@ -553,7 +553,9 @@ class RenderEditor extends RenderBox {
           Rect.fromLTWH(
             0,
             _rowTop(row),
-            size.width - _scrollbarWidth,
+            // the scrollbar is drawn over it, and when it is not there the
+            // line goes to the edge
+            size.width,
             _lineHeight,
           ),
           Paint()..color = _style.currentLine,
@@ -596,7 +598,8 @@ class RenderEditor extends RenderBox {
       Rect.fromLTWH(
         _gutterWidth,
         0,
-        size.width - _gutterWidth - _scrollbarWidth,
+        // the whole width: the scrollbar is drawn over the text
+        size.width - _gutterWidth,
         size.height,
       ),
     );
