@@ -29,6 +29,7 @@ class EditorStyle {
     this.scrollbarThumbHover = const Color(0xFF6C7086),
     this.scrollbarThumbActive = const Color(0x23FBFBEB),
     this.scrollbarMarker = const Color(0xFF94E2D5),
+    this.roundedSelection = true,
   });
 
   /// the font of the text, whose width is the width of a column
@@ -57,6 +58,9 @@ class EditorStyle {
   /// the color of the marks in the track for the other places a selected text
   /// is
   final Color scrollbarMarker;
+
+  /// whether the corners of a selection are rounded
+  final bool roundedSelection;
 
   /// [style] as it is to be drawn on top of the text style
   TextStyle apply(HighlightStyle? style) {

@@ -8,6 +8,7 @@ import '../editor_core/point.dart';
 import 'editor_controller.dart';
 import 'editor_style.dart';
 import 'scrollbar_layout.dart';
+import 'selection_path.dart';
 
 /// a row of the screen, laid out as one line of text, with where each of its
 /// columns is
@@ -611,32 +612,40 @@ class RenderEditor extends RenderBox {
       }
     }
 
-    // the selections
+    // the selections, which are one shape with rounded corners, and go a little
+    // past the end of the rows that they go on from
     final selectionPaint = Paint()..color = _style.selection;
+    final radius = _style.roundedSelection ? 0.15 * _lineHeight : 0.0;
     for (final s in selections) {
       if (s.isEmpty) {
         continue;
       }
       final from = _snapshot.offsetToDisplayPoint(s.start, Bias.right);
       final to = _snapshot.offsetToDisplayPoint(s.end, Bias.left);
-      for (
-        var row = math.max(from.row, firstRow);
-        row <= math.min(to.row, lastRow);
-        row++
-      ) {
-        final left = row == from.row ? _columnX(row, from.column) : textLeft;
-        final right = row == to.row
-            ? _columnX(row, to.column)
-            : _columnX(row, _snapshot.lineLen(row)) + _charWidth;
-        canvas.drawRect(
-          Rect.fromLTRB(
-            left - (row == from.row ? 0 : _controller.scrollX),
-            _rowTop(row),
-            right,
-            _rowTop(row) + _lineHeight,
+      // the row after the end is not one of them when it ends at its start
+      final firstShown = math.max(from.row, firstRow);
+      final lastShown = math.min(to.column == 0 ? to.row - 1 : to.row, lastRow);
+      if (lastShown < firstShown) {
+        continue;
+      }
+      final lines = <SelectionLine>[
+        for (var row = firstShown; row <= lastShown; row++)
+          (
+            row == from.row
+                ? _columnX(row, from.column)
+                : textLeft - _controller.scrollX,
+            row == to.row
+                ? _columnX(row, to.column)
+                : _columnX(row, _snapshot.lineLen(row)) + radius * 2,
           ),
-          selectionPaint,
-        );
+      ];
+      for (final path in selectionPaths(
+        _rowTop(firstShown),
+        lines,
+        _lineHeight,
+        radius,
+      )) {
+        canvas.drawPath(path, selectionPaint);
       }
     }
 
