@@ -8,7 +8,6 @@ import 'editor_controller.dart';
 import 'editor_keys.dart';
 import 'editor_style.dart';
 import 'editor_text_input.dart';
-import 'input_debug.dart';
 import 'render_editor.dart';
 
 /// shows the text of an [EditorController], and takes what is typed, clicked
@@ -129,13 +128,6 @@ class EditorViewState extends State<EditorView> {
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is! KeyUpEvent) {
-      inputLog(
-        'key ${event.runtimeType} ${event.logicalKey.debugName} '
-        'character ${event.character == null ? 'none' : 'length ${event.character!.length}'} '
-        'input attached ${_input.attached}',
-      );
-    }
     if (widget.readOnly) {
       final keyboard = HardwareKeyboard.instance;
       final command = keyboard.isControlPressed || keyboard.isMetaPressed;

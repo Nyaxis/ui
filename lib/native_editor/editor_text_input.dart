@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 
 import '../editor_core/buffer.dart' show Replacement;
 import 'editor_controller.dart';
-import 'input_debug.dart';
 
 /// connects an [EditorController] to the input method of the system, which
 /// is how text is typed, and how text of other scripts is composed.
@@ -45,13 +44,11 @@ class EditorTextInput implements DeltaTextInputClient {
       ),
     );
     _connection!.show();
-    inputLog('attached ${_connection!.attached}');
     _sent = null;
     sync();
   }
 
   void detach() {
-    inputLog('detach');
     _connection?.close();
     _connection = null;
     _composing = null;
@@ -122,10 +119,6 @@ class EditorTextInput implements DeltaTextInputClient {
     // some platforms do not send deltas, and send the whole value of the line
     // instead; what changed in it is found by comparing it with what the
     // input method was told
-    inputLog(
-      'value length ${value.text.length} '
-      'selection ${value.selection.baseOffset}-${value.selection.extentOffset}',
-    );
     final old = _sent ?? currentTextEditingValue;
     updateEditingValueWithDeltas(_deltasBetween(old, value));
   }
@@ -177,7 +170,6 @@ class EditorTextInput implements DeltaTextInputClient {
 
   @override
   void updateEditingValueWithDeltas(List<TextEditingDelta> deltas) {
-    inputLog('deltas ${deltas.map((d) => d.runtimeType).join(',')}');
     _applying = true;
     try {
       for (final delta in deltas) {
@@ -303,7 +295,6 @@ class EditorTextInput implements DeltaTextInputClient {
 
   @override
   void connectionClosed() {
-    inputLog('connection closed by the system');
     _connection = null;
     _composing = null;
     _sent = null;
