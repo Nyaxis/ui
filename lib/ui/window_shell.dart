@@ -34,6 +34,7 @@ import 'dialog.dart';
 import 'picker.dart';
 import 'settings_view.dart';
 import 'sidebar.dart';
+import 'gamma_icon.dart';
 import 'skinnable_icon.dart';
 import 'superellipse.dart';
 
@@ -1409,6 +1410,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           size: 14,
           hoverInset: 2,
           hoverRadius: 4,
+          softEdges: true,
           theme: theme,
           onPressed: _sidebar.onPressed!,
         ),
@@ -1740,10 +1742,14 @@ class _BarButton extends StatefulWidget {
     this.hoverRadius = 0,
     this.destructive = false,
     this.active = false,
+    this.softEdges = false,
     this.keys,
     this.tipBelow = true,
     this.cursor = SystemMouseCursors.click,
   });
+
+  /// whether the icon is drawn with the soft edges of Zed's icons
+  final bool softEdges;
 
   /// what the button does
   final String label;
@@ -1818,15 +1824,25 @@ class _BarButtonState extends State<_BarButton> {
           color: _fillColor(theme),
           borderRadius: BorderRadius.circular(widget.hoverRadius),
         ),
-        child: SkinnableIcon(
-          name: widget.name,
-          size: widget.size,
-          color: onRed
-              ? theme.background
-              : widget.active
-              ? theme.accent
-              : theme.textPrimary,
-        ),
+        child: widget.softEdges
+            ? GammaIcon(
+                name: widget.name,
+                size: widget.size,
+                color: onRed
+                    ? theme.background
+                    : widget.active
+                    ? theme.accent
+                    : theme.textPrimary,
+              )
+            : SkinnableIcon(
+                name: widget.name,
+                size: widget.size,
+                color: onRed
+                    ? theme.background
+                    : widget.active
+                    ? theme.accent
+                    : theme.textPrimary,
+              ),
       ),
     );
     final tipped = _tip(

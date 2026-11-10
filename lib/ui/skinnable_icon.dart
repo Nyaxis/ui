@@ -33,7 +33,12 @@ class SkinnableIcon extends StatelessWidget {
   final double size;
   final Color color;
 
-  File? get _file {
+  /// whether the theme has a file of its own for the icon [name]
+  static bool hasSkin(String name) => _skin(name) != null;
+
+  File? get _file => _skin(name);
+
+  static File? _skin(String name) {
     final dir = ThemeController.directory;
     if (dir == null) {
       return null;
