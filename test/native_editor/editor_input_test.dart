@@ -249,6 +249,36 @@ void main() {
       await _finish(tester, controller);
     });
 
+    testWidgets('a whole value without deltas changes the text as well', (
+      tester,
+    ) async {
+      final controller = EditorController(text: 'first\nsecond');
+      await _pump(tester, controller);
+      controller.clickAt(8);
+      await tester.pump();
+      final input = tester
+          .state<EditorViewState>(find.byType(EditorView))
+          .input;
+      input.updateEditingValue(
+        const TextEditingValue(
+          text: 'seXcond',
+          selection: TextSelection.collapsed(offset: 3),
+        ),
+      );
+      await tester.pump();
+      expect(controller.text, 'first\nseXcond');
+      expect(controller.selections.first.head, 9);
+      input.updateEditingValue(
+        const TextEditingValue(
+          text: 'second',
+          selection: TextSelection.collapsed(offset: 2),
+        ),
+      );
+      await tester.pump();
+      expect(controller.text, 'first\nsecond');
+      await _finish(tester, controller);
+    });
+
     testWidgets('the input method is told of the line of the cursor', (
       tester,
     ) async {

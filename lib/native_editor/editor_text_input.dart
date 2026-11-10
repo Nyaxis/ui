@@ -116,7 +116,56 @@ class EditorTextInput implements DeltaTextInputClient {
 
   @override
   void updateEditingValue(TextEditingValue value) {
-    // the delta model is used, so this is not called
+    // some platforms do not send deltas, and send the whole value of the line
+    // instead; what changed in it is found by comparing it with what the
+    // input method was told
+    final old = _sent ?? currentTextEditingValue;
+    updateEditingValueWithDeltas(_deltasBetween(old, value));
+  }
+
+  List<TextEditingDelta> _deltasBetween(
+    TextEditingValue old,
+    TextEditingValue now,
+  ) {
+    final before = old.text;
+    final after = now.text;
+    var start = 0;
+    final shortest = math.min(before.length, after.length);
+    while (start < shortest &&
+        before.codeUnitAt(start) == after.codeUnitAt(start)) {
+      start++;
+    }
+    var endBefore = before.length;
+    var endAfter = after.length;
+    while (endBefore > start &&
+        endAfter > start &&
+        before.codeUnitAt(endBefore - 1) == after.codeUnitAt(endAfter - 1)) {
+      endBefore--;
+      endAfter--;
+    }
+    if (start == endBefore && start == endAfter) {
+      return [
+        TextEditingDeltaNonTextUpdate(
+          oldText: before,
+          selection: now.selection,
+          composing: now.composing,
+        ),
+      ];
+    }
+    return [
+      TextEditingDelta.fromJSON({
+        'oldText': before,
+        'deltaText': after.substring(start, endAfter),
+        'deltaStart': start,
+        'deltaEnd': endBefore,
+        'selectionBase': now.selection.baseOffset,
+        'selectionExtent': now.selection.extentOffset,
+        'selectionAffinity': 'TextAffinity.downstream',
+        'selectionIsDirectional': false,
+        'composingBase': now.composing.start,
+        'composingExtent': now.composing.end,
+      }),
+    ];
   }
 
   @override
