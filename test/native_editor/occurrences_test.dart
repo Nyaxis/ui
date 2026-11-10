@@ -96,6 +96,23 @@ void main() {
       controller.dispose();
     });
 
+    test('a change of them is a change of what is drawn, for the view', () {
+      final controller = EditorController(text: 'ab ab');
+      controller.selections.selectRanges([(0, 2)]);
+      var before = controller.revision;
+      // the cursor was moved, which tells the view to look at the cursor
+      controller.requestRevealCursor();
+      expect(_found(controller), ['3-5']);
+      expect(controller.revision, greaterThan(before));
+      // and so is the end of them
+      controller.selections.selectRanges([(0, 0)]);
+      before = controller.revision;
+      controller.requestRevealCursor();
+      expect(_found(controller), isEmpty);
+      expect(controller.revision, greaterThan(before));
+      controller.dispose();
+    });
+
     test('when they are off there are none', () {
       final controller = EditorController(text: 'ab ab')
         ..highlightSelectedText = false;

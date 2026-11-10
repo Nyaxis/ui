@@ -239,6 +239,10 @@ class EditorController extends ChangeNotifier {
               ranges,
             ),
     );
+    // the rows that were laid out have the old highlights in them, which they
+    // keep when the cursor moves, as nothing else tells the view that they
+    // changed
+    _revision++;
   }
 
   /// looks for the selected text when it is one that is looked for: one
