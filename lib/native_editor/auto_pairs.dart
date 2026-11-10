@@ -39,7 +39,7 @@ const List<BracketPair> luauBrackets = [
 
 /// the characters before which a closer is typed, besides white space and the
 /// end of the text
-const String autocloseBefore = ')]}';
+const String autocloseBefore = ';:.,=}])>';
 
 /// whether a closer is typed in front of the character [unit], which is -1 at
 /// the end of the text

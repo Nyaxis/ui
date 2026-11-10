@@ -56,10 +56,15 @@ void main() {
       _type(inside, '[');
       expect(_show(inside), 'f([|])');
       inside.dispose();
+      // what the languages of code allow a closer before
       final comma = _editor('f(|, x)');
       _type(comma, '{');
-      expect(_show(comma), 'f({|, x)');
+      expect(_show(comma), 'f({|}, x)');
       comma.dispose();
+      final letter = _editor('f(|x)');
+      _type(letter, '{');
+      expect(_show(letter), 'f({|x)');
+      letter.dispose();
     });
 
     test('quotes do not come after a word, and not when they end a string', () {
