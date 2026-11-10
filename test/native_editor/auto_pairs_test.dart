@@ -1,6 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ui/native_editor/editor_controller.dart';
+import 'package:ui/syntax/syntax_layer.dart';
+import 'package:ui/syntax/syntax_tree.dart';
+import 'package:ui/syntax/ts_bindings.dart';
 
 /// an editor with [text], where `|` marks the cursor, and `[` `]` a selection
 EditorController _editor(String text) {
@@ -192,6 +197,67 @@ void main() {
       expect(controller.text, '"\n"');
       controller.dispose();
     });
+  });
+
+  group('enter between keywords', () {
+    test('a line is opened up when the end is there already', () {
+      final controller = _editor('if x then| end');
+      controller.insertNewline();
+      expect(controller.text, 'if x then\n    \n end');
+      controller.dispose();
+      final repeat = _editor('repeat|until done');
+      repeat.insertNewline();
+      expect(repeat.text, 'repeat\n    \nuntil done');
+      repeat.dispose();
+    });
+
+    test('and nothing is typed when it is not', () {
+      final controller = _editor('if x then|');
+      controller.insertNewline();
+      expect(controller.text, 'if x then\n');
+      controller.dispose();
+    });
+  });
+
+  group('strings and comments', () {
+    EditorController withSyntax(String text) {
+      final controller = _editor(text);
+      controller.setSyntax(
+        SyntaxLayer.attach(
+          controller.buffer,
+          SyntaxTheme({}),
+          File('native/tree_sitter/queries/luau/highlights.scm')
+              .readAsStringSync(),
+        ),
+      );
+      return controller;
+    }
+
+    test('a quote is not paired in a string or a comment', () {
+      final string = withSyntax('print("it |")');
+      _type(string, "'");
+      expect(_show(string), 'print("it \'|")');
+      string.dispose();
+      final comment = withSyntax('-- note |');
+      _type(comment, '"');
+      expect(_show(comment), '-- note "|');
+      comment.dispose();
+    }, skip: TreeSitter.instance == null);
+
+    test('and is outside of them', () {
+      final controller = withSyntax('print(|)');
+      _type(controller, '"');
+      expect(_show(controller), 'print("|")');
+      controller.dispose();
+    }, skip: TreeSitter.instance == null);
+
+    test('the closer that came with a quote is typed over in a string', () {
+      final controller = withSyntax('x = |');
+      _type(controller, '"abc"');
+      expect(controller.text, 'x = "abc"');
+      expect(_show(controller), 'x = "abc"|');
+      controller.dispose();
+    }, skip: TreeSitter.instance == null);
   });
 
   group('several cursors', () {

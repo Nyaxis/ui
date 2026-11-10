@@ -8,7 +8,11 @@ class BracketPair {
     this.close = true,
     this.surround = true,
     this.newline = false,
+    this.notIn = const [],
   });
+
+  /// the kinds of text in which the pair is not used, `string` and `comment`
+  final List<String> notIn;
 
   /// what opens it
   final String start;
@@ -32,9 +36,42 @@ const List<BracketPair> luauBrackets = [
   BracketPair('{', '}', newline: true),
   BracketPair('[', ']', newline: true),
   BracketPair('(', ')', newline: true),
-  BracketPair('"', '"'),
-  BracketPair("'", "'"),
-  BracketPair('`', '`'),
+  BracketPair('"', '"', notIn: ['comment', 'string']),
+  BracketPair("'", "'", notIn: ['comment', 'string']),
+  BracketPair('`', '`', notIn: ['comment', 'string']),
+  // these only open a line up when the end is there already
+  BracketPair(
+    'then',
+    'end',
+    close: false,
+    surround: false,
+    newline: true,
+    notIn: ['comment', 'string'],
+  ),
+  BracketPair(
+    'do',
+    'end',
+    close: false,
+    surround: false,
+    newline: true,
+    notIn: ['comment', 'string'],
+  ),
+  BracketPair(
+    'function',
+    'end',
+    close: false,
+    surround: false,
+    newline: true,
+    notIn: ['comment', 'string'],
+  ),
+  BracketPair(
+    'repeat',
+    'until',
+    close: false,
+    surround: false,
+    newline: true,
+    notIn: ['comment', 'string'],
+  ),
 ];
 
 /// the characters before which a closer is typed, besides white space and the

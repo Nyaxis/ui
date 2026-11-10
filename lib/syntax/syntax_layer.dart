@@ -50,6 +50,15 @@ class SyntaxLayer implements SyntaxHighlights {
     return _tree.spans(start, end, theme);
   }
 
+  /// whether [offset] is in a comment or a string, which it is not when the
+  /// layer is not of the text of [buffer] now
+  ({bool comment, bool string}) scopeAt(BufferSnapshot buffer, int offset) {
+    if (!identical(buffer.text, _tree.text)) {
+      return (comment: false, string: false);
+    }
+    return _tree.scopeAt(offset);
+  }
+
   void dispose() {
     _buffer.removeListener(_onChange);
     _buffer.unsubscribe(_subscription);

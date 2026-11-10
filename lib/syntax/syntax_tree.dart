@@ -171,6 +171,38 @@ class SyntaxTree {
     }
   }
 
+  static final SyntaxTheme _scopeTheme = SyntaxTheme({
+    'comment': const HighlightStyle(color: 1),
+    'string': const HighlightStyle(color: 2),
+  });
+
+  /// whether the place between the characters before and after [offset] is in
+  /// a comment, or in a string, which is not so at the end of one
+  ({bool comment, bool string}) scopeAt(int offset) {
+    final length = _text.length;
+    int kindOf(int from, int to) {
+      if (from < 0 || to > length) {
+        return 0;
+      }
+      final found = spans(from, to, _scopeTheme);
+      return found.length == 1 &&
+              found.first.start <= from &&
+              found.first.end >= to
+          ? found.first.style.color!
+          : 0;
+    }
+
+    final before = kindOf(offset - 1, offset);
+    final after = kindOf(offset, offset + 1);
+    return (
+      // a comment goes on to the end of its line
+      comment:
+          before == 1 &&
+          (after == 1 || offset == length || _text.codeUnitAt(offset) == 0x0a),
+      string: before == 2 && after == 2,
+    );
+  }
+
   /// whether the text has a part that does not follow the grammar
   bool get hasErrors => _ts.nodeHasError(_ts.treeRootNode(_tree));
 

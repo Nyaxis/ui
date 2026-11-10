@@ -254,21 +254,21 @@ class EditorController extends ChangeNotifier {
     }
     _dropAutocloseRegions();
     // the pair that the text opens, and else the one that it closes
-    BracketPair? opened;
+    BracketPair? openedPair;
     BracketPair? closed;
     for (final pair in brackets) {
       if (!pair.close && !pair.surround) {
         continue;
       }
       if (pair.start == text) {
-        opened = pair;
+        openedPair = pair;
         break;
       }
       if (pair.end == text) {
         closed ??= pair;
       }
     }
-    final pair = opened ?? closed;
+    final pair = openedPair ?? closed;
     if (pair == null) {
       replaceSelections(text);
       return;
@@ -284,6 +284,17 @@ class EditorController extends ChangeNotifier {
     for (final s in current) {
       final next = s.end < rope.length ? rope.codeUnitAt(s.end) : -1;
       final previous = s.start > 0 ? rope.codeUnitAt(s.start - 1) : -1;
+      // a pair that is not used in a string or a comment is not opened there,
+      // but its closer is still typed over
+      var opened = openedPair;
+      if (opened != null && opened.notIn.isNotEmpty) {
+        final scope = _syntax?.scopeAt(snapshot, s.reversed ? s.start : s.end);
+        if (scope != null &&
+            ((scope.comment && opened.notIn.contains('comment')) ||
+                (scope.string && opened.notIn.contains('string')))) {
+          opened = null;
+        }
+      }
       if (s.isEmpty) {
         if (opened != null) {
           final row = rope.rowAt(s.start);
