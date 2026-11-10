@@ -137,6 +137,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   var _view = _View.editor;
   final _config = ConfigFile.user();
   late final _editorSettings = EditorSettings(_config);
+  late final _syntaxStyles = SyntaxStyleSettings(_config);
 
   bool _maximized = false;
   bool _newMenuOpen = false;
@@ -302,6 +303,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     widget.controller.removeListener(_applyEditorOptions);
     widget.controller.removeListener(_applyEditorFont);
     widget.controller.removeListener(_applySyntax);
+    _syntaxStyles.removeListener(_applySyntax);
     _tabs.removeListener(_applySyntax);
     _editorSettings.removeListener(_applyEditorOptions);
     _editorSettings.dispose();
@@ -347,7 +349,6 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   Future<void> _chooseEditor() async {
     final json = await _config.read();
     final native = json?['nativeEditor'] == true;
-    _fontStyles = fontStylesFromConfig(json?['syntaxStyles']);
     if (!mounted) {
       return;
     }
@@ -364,11 +365,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   /// set when the parser cannot be used, which is not tried again
   bool _syntaxUnavailable = false;
   AppTheme? _syntaxFor;
+  Map<String, String>? _syntaxStylesFor;
   SyntaxTheme? _syntaxTheme;
-
-  /// which names of the syntax are bold, italic or underlined, as
-  /// `syntaxStyles` of `config.json` says
-  Map<String, String> _fontStyles = const {};
 
   Future<void> _loadSyntaxQuery() async {
     try {
@@ -380,8 +378,10 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       _syntaxUnavailable = true;
       return;
     }
+    await _syntaxStyles.load();
     _tabs.addListener(_applySyntax);
     widget.controller.addListener(_applySyntax);
+    _syntaxStyles.addListener(_applySyntax);
     _applySyntax();
   }
 
@@ -392,9 +392,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       return;
     }
     final theme = widget.controller.value;
-    if (!identical(_syntaxFor, theme)) {
+    final styles = _syntaxStyles.value;
+    if (!identical(_syntaxFor, theme) || !identical(_syntaxStylesFor, styles)) {
       _syntaxFor = theme;
-      _syntaxTheme = syntaxThemeFor(theme, fontStyles: _fontStyles);
+      _syntaxStylesFor = styles;
+      _syntaxTheme = syntaxThemeFor(theme, fontStyles: styles);
     }
     final syntaxTheme = _syntaxTheme!;
     for (final tab in _tabs.tabs) {
@@ -539,6 +541,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         for (final tab in _tabs.tabs) {
           tab.native?.controller.setTabSize(size);
         }
+      }
+      final autoClose = _editorSettings.value.autoClosingBrackets;
+      _tabs.autoClose = autoClose;
+      for (final tab in _tabs.tabs) {
+        tab.native?.controller.autoClose = autoClose;
       }
       if (mounted) {
         setState(() {});
@@ -692,12 +699,15 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   Widget _settingsView(AppTheme theme) {
     return ListenableBuilder(
-      listenable: Listenable.merge([_editorSettings, _tabs]),
+      listenable: Listenable.merge([_editorSettings, _syntaxStyles, _tabs]),
       builder: (context, _) => SettingsView(
         theme: theme,
         controller: widget.controller,
         prefs: _editorSettings.value,
         onPrefs: _editorSettings.change,
+        // the colors of code are the editor that flutter draws
+        syntaxStyles: _nativeEditor == true ? _syntaxStyles.value : null,
+        onSyntaxStyles: _syntaxStyles.change,
         autoSave: _tabs.autoSave,
         onAutoSave: _setAutoSave,
         autoSaveDelay: _tabs.autoSaveDelay,

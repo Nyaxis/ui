@@ -347,7 +347,7 @@ reportLanguage();''';
         // the scripts are Luau, whatever the file is called
         native.controller
           ..completeBlocks = true
-          ..autoClose = true;
+          ..autoClose = autoClose;
         document = native;
       } else {
         document = MonacoTabDocument(
@@ -415,6 +415,10 @@ reportLanguage();''';
 
   /// the tab size new documents of the editor that flutter draws start with
   int tabSize = 4;
+
+  /// whether new documents of the editor that flutter draws type brackets and
+  /// quotes in pairs
+  bool autoClose = true;
 
   /// the text of a tab changed: it is dirty or not, and saved a moment later
   /// when auto save says so

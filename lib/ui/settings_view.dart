@@ -21,6 +21,8 @@ class SettingsView extends StatelessWidget {
     required this.onAutoSave,
     required this.autoSaveDelay,
     required this.onAutoSaveDelay,
+    this.syntaxStyles,
+    this.onSyntaxStyles,
   });
 
   static const _maxWidth = 760.0;
@@ -38,6 +40,66 @@ class SettingsView extends StatelessWidget {
   final ValueChanged<AutoSave> onAutoSave;
   final Duration autoSaveDelay;
   final ValueChanged<Duration> onAutoSaveDelay;
+
+  /// which kinds of code are drawn bold or italic, by the names the queries
+  /// give them; null when the editor does not color code, which leaves out
+  /// the section
+  final Map<String, String>? syntaxStyles;
+  final ValueChanged<Map<String, String>>? onSyntaxStyles;
+
+  /// the kinds of code a style can be given, and what the queries call them
+  static const _syntaxKinds = [
+    ('Comments', 'comment'),
+    ('Keywords', 'keyword'),
+    ('Strings', 'string'),
+    ('Numbers', 'number'),
+    ('Constants', 'constant'),
+    ('Functions', 'function'),
+    ('Types', 'type'),
+    ('self and built-ins', 'variable.builtin'),
+    ('Parameters', 'variable.parameter'),
+    ('Fields', 'variable.member'),
+    ('Operators', 'operator'),
+    ('Brackets and punctuation', 'punctuation'),
+  ];
+
+  static const _fontStyleOptions = [
+    ('regular', 'Regular'),
+    ('bold', 'Bold'),
+    ('italic', 'Italic'),
+    ('bold italic', 'Bold italic'),
+  ];
+
+  /// how [name] is drawn now: comments are italic until it is said otherwise
+  String _fontStyleOf(String name) {
+    final spec = syntaxStyles?[name];
+    if (spec == null) {
+      return name == 'comment' ? 'italic' : 'regular';
+    }
+    final words = spec.toLowerCase().split(RegExp(r'[\s,]+'));
+    final bold = words.contains('bold');
+    final italic = words.contains('italic');
+    return bold && italic
+        ? 'bold italic'
+        : bold
+        ? 'bold'
+        : italic
+        ? 'italic'
+        : 'regular';
+  }
+
+  /// the styles with [name] drawn as [style]. what is the default is not kept.
+  Map<String, String> _withFontStyle(String name, String style) {
+    final styles = Map.of(syntaxStyles ?? const <String, String>{});
+    final standard = name == 'comment' ? 'italic' : 'regular';
+    if (style == standard) {
+      styles.remove(name);
+    } else {
+      // regular is said as none, as that takes the default style away
+      styles[name] = style == 'regular' ? 'none' : style;
+    }
+    return styles;
+  }
 
   static String _number(num value) =>
       value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
@@ -222,6 +284,38 @@ class SettingsView extends StatelessWidget {
                   ),
                 ],
               ),
+              if (syntaxStyles != null && onSyntaxStyles != null) ...[
+                const SizedBox(height: 24),
+                SettingsSection(
+                  theme: theme,
+                  title: 'Code styles',
+                  rows: [
+                    for (final (label, name) in _syntaxKinds)
+                      SettingRow(
+                        theme: theme,
+                        label: label,
+                        control: ChoiceControl<String>(
+                          theme: theme,
+                          value: _fontStyleOf(name),
+                          options: _fontStyleOptions,
+                          onChanged: (style) =>
+                              onSyntaxStyles!(_withFontStyle(name, style)),
+                        ),
+                      ),
+                    if (syntaxStyles!.isNotEmpty)
+                      SettingRow(
+                        theme: theme,
+                        label: 'Reset',
+                        description: 'Back to the defaults',
+                        control: LinkButton(
+                          theme: theme,
+                          label: 'Reset all',
+                          onTap: () => onSyntaxStyles!(const {}),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 24),
               SettingsSection(
                 theme: theme,

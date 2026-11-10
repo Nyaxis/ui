@@ -132,6 +132,33 @@ void main() {
       );
     });
 
+    test(
+      'the styles of code are saved, read back, and dropped when empty',
+      () async {
+        file.parent.createSync(recursive: true);
+        file.writeAsStringSync('{"theme": "mine"}');
+        final styles = SyntaxStyleSettings(config);
+        await styles.load();
+        expect(styles.value, isEmpty);
+
+        styles.change({'keyword': 'bold', 'comment': 'none'});
+        await config.update((_) {});
+        var saved = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+        expect(saved['theme'], 'mine');
+        expect(saved['syntaxStyles'], {'keyword': 'bold', 'comment': 'none'});
+
+        final next = SyntaxStyleSettings(config);
+        await next.load();
+        expect(next.value, {'keyword': 'bold', 'comment': 'none'});
+
+        next.change({});
+        await config.update((_) {});
+        saved = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+        expect(saved.containsKey('syntaxStyles'), isFalse);
+        expect(saved['theme'], 'mine');
+      },
+    );
+
     test('a file that cannot be read is not overwritten', () async {
       file.parent.createSync(recursive: true);
       file.writeAsStringSync('{ not json');

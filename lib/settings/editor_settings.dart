@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 
+import '../syntax/syntax_palette.dart' show fontStylesFromConfig;
 import 'config_file.dart';
 
 /// the editor's settings, under `"editor"` in `config.json`. what each one is
@@ -180,6 +181,36 @@ class EditorPrefs {
     bracketPairColorization,
     autoClosingBrackets,
   );
+}
+
+/// which names of the syntax are drawn bold or italic, by `syntaxStyles` in
+/// `config.json`: the name of what the grammar finds, and the words that say
+/// how it is drawn. saved whenever it changes
+class SyntaxStyleSettings extends ValueNotifier<Map<String, String>> {
+  SyntaxStyleSettings(this._config) : super(const {});
+
+  final ConfigFile _config;
+
+  Future<void> load() async {
+    final json = await _config.read();
+    if (json != null) {
+      value = fontStylesFromConfig(json['syntaxStyles']);
+    }
+  }
+
+  void change(Map<String, String> styles) {
+    if (mapEquals(styles, value)) {
+      return;
+    }
+    value = Map.unmodifiable(styles);
+    _config.update((json) {
+      if (styles.isEmpty) {
+        json.remove('syntaxStyles');
+      } else {
+        json['syntaxStyles'] = styles;
+      }
+    });
+  }
 }
 
 /// the current [EditorPrefs], saved to `config.json` whenever they change
