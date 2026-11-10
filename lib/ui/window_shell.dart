@@ -347,6 +347,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   Future<void> _chooseEditor() async {
     final json = await _config.read();
     final native = json?['nativeEditor'] == true;
+    _fontStyles = fontStylesFromConfig(json?['syntaxStyles']);
     if (!mounted) {
       return;
     }
@@ -364,6 +365,10 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   bool _syntaxUnavailable = false;
   AppTheme? _syntaxFor;
   SyntaxTheme? _syntaxTheme;
+
+  /// which names of the syntax are bold, italic or underlined, as
+  /// `syntaxStyles` of `config.json` says
+  Map<String, String> _fontStyles = const {};
 
   Future<void> _loadSyntaxQuery() async {
     try {
@@ -389,7 +394,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     final theme = widget.controller.value;
     if (!identical(_syntaxFor, theme)) {
       _syntaxFor = theme;
-      _syntaxTheme = syntaxThemeFor(theme);
+      _syntaxTheme = syntaxThemeFor(theme, fontStyles: _fontStyles);
     }
     final syntaxTheme = _syntaxTheme!;
     for (final tab in _tabs.tabs) {
