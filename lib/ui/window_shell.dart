@@ -743,7 +743,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       scrollbarTrackBorder: theme.textPrimary.withValues(alpha: 0.07),
       scrollbarThumb: theme.active.withValues(alpha: 0.5),
       scrollbarThumbHover: theme.disabled,
-      scrollbarThumbActive: theme.disabled,
+      // the palettes do not have one for a thumb that is pressed, so it is the
+      // faint light or dark that the default themes use
+      scrollbarThumbActive: dark
+          ? const Color(0x23FBFBEB)
+          : const Color(0x211F1800),
     );
   }
 

@@ -27,7 +27,7 @@ class EditorStyle {
     this.scrollbarTrackBorder = const Color(0x12CDD6F4),
     this.scrollbarThumb = const Color(0x80585B70),
     this.scrollbarThumbHover = const Color(0xFF6C7086),
-    this.scrollbarThumbActive = const Color(0xFF6C7086),
+    this.scrollbarThumbActive = const Color(0x23FBFBEB),
   });
 
   /// the font of the text, whose width is the width of a column
