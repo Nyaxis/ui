@@ -345,7 +345,9 @@ reportLanguage();''';
           onChanged: _nativeChanged,
         );
         // the scripts are Luau, whatever the file is called
-        native.controller.completeBlocks = true;
+        native.controller
+          ..completeBlocks = true
+          ..autoClose = true;
         document = native;
       } else {
         document = MonacoTabDocument(

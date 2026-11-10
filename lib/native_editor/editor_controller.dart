@@ -11,6 +11,7 @@ import '../editor_core/point.dart';
 import '../editor_core/selections_collection.dart';
 import '../editor_core/text_metrics.dart';
 import '../syntax/syntax_layer.dart';
+import 'auto_pairs.dart';
 import 'block_completion.dart';
 
 /// an editor's text and everything that is done to it: the buffer, how it is
@@ -165,6 +166,202 @@ class EditorController extends ChangeNotifier {
     requestRevealCursor();
   }
 
+  /// whether brackets and quotes are typed in pairs: the closer comes with
+  /// the opener when what follows allows it, selected text is put between
+  /// them, the closer that came is typed over, and the pair is removed with
+  /// one backspace while nothing has been typed in it
+  bool autoClose = false;
+
+  /// the closers that were typed with their openers, and are not left yet
+  final List<AutocloseRegion> _autocloseRegions = [];
+
+  /// the pairs of the language, which are looked at when a character is typed
+  List<BracketPair> brackets = luauBrackets;
+
+  @override
+  void notifyListeners() {
+    _dropAutocloseRegions();
+    super.notifyListeners();
+  }
+
+  /// forgets the regions that no selection touches any more, or that the
+  /// text took away
+  void _dropAutocloseRegions() {
+    if (_autocloseRegions.isEmpty) {
+      return;
+    }
+    final snapshot = buffer.snapshot;
+    final all = selections.all;
+    _autocloseRegions.removeWhere((region) {
+      if (!snapshot.isValid(region.start) || !snapshot.isValid(region.end)) {
+        return true;
+      }
+      final start = snapshot.offsetForAnchor(region.start);
+      final end = snapshot.offsetForAnchor(region.end);
+      return !all.any((s) => s.end >= start && s.start <= end);
+    });
+  }
+
+  /// the closest region that [s] is in
+  AutocloseRegion? _regionAround(Selection s) {
+    final snapshot = buffer.snapshot;
+    AutocloseRegion? found;
+    var foundSize = 1 << 62;
+    for (final region in _autocloseRegions) {
+      final start = snapshot.offsetForAnchor(region.start);
+      final end = snapshot.offsetForAnchor(region.end);
+      if (s.end >= start && s.start <= end && end - start < foundSize) {
+        found = region;
+        foundSize = end - start;
+      }
+    }
+    return found;
+  }
+
+  /// the opener and the closer of the pair that the cursor [s] is at the start
+  /// of, when it is the region of a closer that came with its opener
+  (int, int)? _autocloseRangeAt(Selection s) {
+    final region = _regionAround(s);
+    if (region == null) {
+      return null;
+    }
+    final snapshot = buffer.snapshot;
+    final start = snapshot.offsetForAnchor(region.start);
+    final end = snapshot.offsetForAnchor(region.end);
+    final opener = region.pair.start;
+    final closer = region.pair.end;
+    if (s.start != start || start < opener.length) {
+      return null;
+    }
+    final rope = buffer.text;
+    if (end + closer.length > rope.length ||
+        rope.substring(start - opener.length, start) != opener ||
+        rope.substring(end, end + closer.length) != closer) {
+      return null;
+    }
+    return (start - opener.length, end + closer.length);
+  }
+
+  /// types [text], which is a character that was pressed. with [autoClose] a
+  /// bracket or quote brings its closer when the text around allows it, wraps
+  /// what is selected, and the closer that it brought is passed over instead
+  /// of typed again.
+  void typeText(String text) {
+    final current = selections.all;
+    if (!autoClose || current.isEmpty || text.length != 1) {
+      replaceSelections(text);
+      return;
+    }
+    _dropAutocloseRegions();
+    // the pair that the text opens, and else the one that it closes
+    BracketPair? opened;
+    BracketPair? closed;
+    for (final pair in brackets) {
+      if (!pair.close && !pair.surround) {
+        continue;
+      }
+      if (pair.start == text) {
+        opened = pair;
+        break;
+      }
+      if (pair.end == text) {
+        closed ??= pair;
+      }
+    }
+    final pair = opened ?? closed;
+    if (pair == null) {
+      replaceSelections(text);
+      return;
+    }
+
+    final rope = buffer.text;
+    final snapshot = buffer.snapshot;
+    final edits = <Replacement>[];
+    // each cursor as it will be, and where a region starts when it is to have one
+    final cursors = <(int, int)>[];
+    final newRegions = <(int, BracketPair)>[];
+    var delta = 0;
+    for (final s in current) {
+      final next = s.end < rope.length ? rope.codeUnitAt(s.end) : -1;
+      final previous = s.start > 0 ? rope.codeUnitAt(s.start - 1) : -1;
+      if (s.isEmpty) {
+        if (opened != null) {
+          final row = rope.rowAt(s.start);
+          final lineStart = rope.lineStart(row);
+          // a quote after a word is not the start of a string
+          final precedingAllows =
+              s.start == lineStart ||
+              opened.start != opened.end ||
+              !isWordUnit(previous);
+          // an odd number of the quote before it means it ends a string
+          final closing =
+              opened.start == opened.end &&
+              opened.start.length == 1 &&
+              opened.start
+                  .allMatches(rope.substring(lineStart, s.start))
+                  .length
+                  .isOdd;
+          if (opened.close &&
+              autocloseBeforeUnit(next) &&
+              precedingAllows &&
+              !closing) {
+            edits.add(Replacement(s.start, s.start, '$text${opened.end}'));
+            cursors.add((s.start + delta + 1, s.start + delta + 1));
+            newRegions.add((s.start + delta + 1, opened));
+            delta += 1 + opened.end.length;
+            continue;
+          }
+        }
+        final region = _regionAround(s);
+        if (region != null &&
+            text == region.pair.end &&
+            s.start == snapshot.offsetForAnchor(region.end) &&
+            next == text.codeUnitAt(0)) {
+          // the closer that came with the opener, typed over
+          cursors.add((s.start + delta + 1, s.start + delta + 1));
+          continue;
+        }
+      } else if (opened != null &&
+          opened.surround &&
+          opened.start.length == 1) {
+        // what is selected stays selected, between the pair
+        edits.add(
+          Replacement(
+            s.start,
+            s.end,
+            '$text${rope.substring(s.start, s.end)}${opened.end}',
+          ),
+        );
+        cursors.add((s.start + delta + 1, s.end + delta + 1));
+        delta += 1 + opened.end.length;
+        continue;
+      }
+      edits.add(Replacement(s.start, s.end, text));
+      cursors.add((s.start + delta + 1, s.start + delta + 1));
+      delta += 1 - (s.end - s.start);
+    }
+    if (edits.isEmpty) {
+      selections.select([for (final (a, b) in cursors) selections.make(a, b)]);
+      requestRevealCursor();
+      return;
+    }
+    buffer.beginTransaction(selections.anchors);
+    buffer.edit(edits);
+    selections.select([for (final (a, b) in cursors) selections.make(a, b)]);
+    buffer.endTransaction(selections.anchors);
+    final after = buffer.snapshot;
+    for (final (position, newPair) in newRegions) {
+      _autocloseRegions.add(
+        AutocloseRegion(
+          after.anchorBefore(position),
+          after.anchorAfter(position),
+          newPair,
+        ),
+      );
+    }
+    requestRevealCursor();
+  }
+
   /// deletes each selection, or when it is a cursor the character before it
   void backspace() => _delete(forward: false);
 
@@ -182,6 +379,10 @@ class EditorController extends ChangeNotifier {
         if (to > s.start) {
           ranges.add((s.start, to));
         }
+      } else if (autoClose && _autocloseRangeAt(s) != null) {
+        // at the start of the closer that came with an opener, backspace takes
+        // the pair
+        ranges.add(_autocloseRangeAt(s)!);
       } else {
         final from = _previous(s.start);
         if (from < s.start) {
@@ -573,6 +774,34 @@ class EditorController extends ChangeNotifier {
     return completeBlock(text.substring(lineStart, offset), nextLine: nextLine);
   }
 
+  /// whether [start] to [end], with the blanks around it, is between the two
+  /// brackets of a pair that wants a line of its own for what goes between
+  bool _betweenBrackets(int start, int end) {
+    final text = buffer.text;
+    var before = start;
+    while (before > 0 && _isSpace(text.codeUnitAt(before - 1))) {
+      before--;
+    }
+    var after = end;
+    while (after < text.length && _isSpace(text.codeUnitAt(after))) {
+      after++;
+    }
+    for (final pair in brackets) {
+      if (!pair.newline) {
+        continue;
+      }
+      final opener = pair.start.trimRight();
+      final closer = pair.end.trimLeft();
+      if (before >= opener.length &&
+          after + closer.length <= text.length &&
+          text.substring(before - opener.length, before) == opener &&
+          text.substring(after, after + closer.length) == closer) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// puts in a new line, with the indent of the line it is made in
   void insertNewline() {
     final current = selections.all;
@@ -592,6 +821,12 @@ class EditorController extends ChangeNotifier {
         indentEnd++;
       }
       final indent = text.substring(lineStart, indentEnd);
+      // between the brackets of a pair, which go on a line of their own
+      if (autoClose && _betweenBrackets(s.start, s.end)) {
+        inserted.add('\n$indent$unit\n$indent');
+        cursorAt.add(1 + indent.length + unit.length);
+        continue;
+      }
       final completion = completeBlocks && s.isEmpty
           ? _completionAt(s.start, row, lineStart)
           : null;

@@ -26,7 +26,7 @@ KeyEventResult handleEditorKey(EditorController controller, KeyEvent event) {
         _isPrintable(character) &&
         !keyboard.isMetaPressed &&
         keyboard.isControlPressed == keyboard.isAltPressed) {
-      controller.replaceSelections(character);
+      controller.typeText(character);
       controller.setCursorVisible(true);
       return KeyEventResult.handled;
     }
