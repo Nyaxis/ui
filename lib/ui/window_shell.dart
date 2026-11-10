@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../editor/editor_font.dart';
 import '../editor/editor_tabs.dart';
+import '../native_editor/cursor_summary.dart';
 import '../native_editor/editor_style.dart';
 import '../native_editor/editor_view.dart';
 import '../editor/file_icon_theme.dart';
@@ -981,10 +982,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         final controller = _tabs.activeController;
         String? cursor;
         if (controller != null) {
-          final point = controller.buffer.offsetToPoint(
-            controller.selections.newest.head,
+          cursor = cursorSummary(
+            controller.buffer.text,
+            controller.selections.all,
+            controller.selections.newest,
           );
-          cursor = 'Ln ${point.row + 1}, Col ${point.column + 1}';
         }
         return Row(
           children: [
