@@ -67,6 +67,10 @@ class Keymap {
     _handlers[action] = handler;
   }
 
+  /// set when the editor is drawn by flutter: whether it has the focus, since
+  /// it reports its keys to flutter like any other widget
+  bool Function()? _nativeFocus;
+
   Future<void> attach(MonacoController controller) async {
     _controller = controller;
     _events = controller.events.listen((event) {
@@ -80,7 +84,19 @@ class Keymap {
     HardwareKeyboard.instance.addHandler(_onKey);
     await controller.runJavaScript(_script);
     await _reload();
+    _watchUserFile();
+  }
 
+  /// the keymap for an editor that flutter draws: every key comes to flutter,
+  /// and [editorFocused] says which context it is pressed in
+  Future<void> attachNative(bool Function() editorFocused) async {
+    _nativeFocus = editorFocused;
+    HardwareKeyboard.instance.addHandler(_onKey);
+    await _reload();
+    _watchUserFile();
+  }
+
+  void _watchUserFile() {
     // the file is polled, since watching its folder takes the app down
     final file = _userFile;
     if (file != null) {
@@ -224,7 +240,10 @@ class Keymap {
   /// the editor's page gets its keys first, so flutter only sees the ones
   /// pressed elsewhere
   bool _onKey(KeyEvent event) {
-    final key = _editorFocused || event is! KeyDownEvent
+    final nativeFocus = _nativeFocus;
+    final inEditor = nativeFocus != null ? nativeFocus() : _editorFocused;
+    // a page that has the focus has had the key already
+    final key = (nativeFocus == null && inEditor) || event is! KeyDownEvent
         ? null
         : _logicalName(event.logicalKey);
     if (key == null) {
@@ -239,7 +258,7 @@ class Keymap {
         if (keyboard.isMetaPressed) 'win',
         key,
       ].join('-'),
-      _workspace,
+      inEditor ? _editor : _workspace,
     );
   }
 

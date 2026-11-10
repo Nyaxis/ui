@@ -8,6 +8,8 @@ import 'package:window_manager/window_manager.dart';
 
 import '../editor/editor_font.dart';
 import '../editor/editor_tabs.dart';
+import '../native_editor/editor_style.dart';
+import '../native_editor/editor_view.dart';
 import '../editor/file_icon_theme.dart';
 import '../editor/keymap.dart';
 import '../editor/language_extensions.dart';
@@ -267,6 +269,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     super.initState();
     _loadSettings();
     _loadEditorCss();
+    _chooseEditor();
     _editorSettings.load();
     _editorSettings.addListener(_applyEditorOptions);
     _tabs.confirmClose = _confirmClose;
@@ -328,8 +331,40 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   @override
   void onWindowUnmaximize() => setState(() => _maximized = false);
 
-  /// the documents have to exist before the server connects, so it sees them
-  Future<void> _attachEditor(MonacoController controller) async {
+  /// whether flutter draws the editor, which is set by `"nativeEditor": true`
+  /// in `config.json`; null until the file is read. the monaco page is the
+  /// editor otherwise.
+  bool? _nativeEditor;
+
+  Future<void> _chooseEditor() async {
+    final json = await _config.read();
+    final native = json?['nativeEditor'] == true;
+    if (!mounted) {
+      return;
+    }
+    setState(() => _nativeEditor = native);
+    if (native) {
+      await _attachNativeEditor();
+    }
+  }
+
+  /// the tab size the editor was last given, so that a change of theme does
+  /// not put it back
+  int? _nativeTabSize;
+
+  Future<void> _attachNativeEditor() async {
+    _bindKeymap();
+    await _keymap.attachNative(() => _tabs.activeController?.hasFocus ?? false);
+    if (mounted) {
+      setState(() {});
+    }
+    await _editorSettings.load();
+    _applyEditorOptions();
+    await _tabs.attachNative();
+  }
+
+  /// what each action does, which is the same for either editor
+  void _bindKeymap() {
     _keymap.on('workspace::Save', _tabs.save);
     _keymap.on('workspace::Open', _openFile);
     _keymap.on('go_to_line::Toggle', _openGoToLine);
@@ -357,6 +392,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       'workspace::ShowSettings',
       () async => _showView(_View.settings),
     );
+  }
+
+  /// the documents have to exist before the server connects, so it sees them
+  Future<void> _attachEditor(MonacoController controller) async {
+    _bindKeymap();
     await _keymap.attach(controller);
     // the sidebar names the keys of its items, which are known by now
     if (mounted) {
@@ -414,6 +454,20 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   /// sends the editor settings to the editor, which has the theme's font size
   /// until one is set
   Future<void> _applyEditorOptions() async {
+    if (_nativeEditor == true) {
+      final size = _editorSettings.value.tabSize;
+      if (size != _nativeTabSize) {
+        _nativeTabSize = size;
+        _tabs.tabSize = size;
+        for (final tab in _tabs.tabs) {
+          tab.native?.controller.setTabSize(size);
+        }
+      }
+      if (mounted) {
+        setState(() {});
+      }
+      return;
+    }
     final monaco = _monaco;
     if (monaco == null) {
       return;
@@ -575,7 +629,62 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     );
   }
 
+  /// the colors and the font of the editor that flutter draws
+  EditorStyle _nativeStyle(AppTheme theme) {
+    final dark = theme.background.computeLuminance() < 0.5;
+    final prefs = _editorSettings.value;
+    return EditorStyle(
+      textStyle: TextStyle(
+        fontFamily: theme.monospaceFontFamily,
+        fontSize: prefs.fontSize ?? theme.fontSizeBody,
+        height: 1.5,
+        color: theme.textPrimary,
+        fontFeatures: prefs.fontLigatures
+            ? null
+            : const [FontFeature.disable('liga'), FontFeature.disable('calt')],
+      ),
+      // the window paints the background, so its opacity applies
+      background: const Color(0x00000000),
+      selection: theme.selection.withValues(alpha: dark ? 0.25 : 0.3),
+      cursor: theme.accent,
+      currentLine: theme.textPrimary.withValues(alpha: 0.07),
+      gutterText: theme.lineNumber,
+      currentGutterText: theme.accent,
+      invisible: theme.textDim,
+    );
+  }
+
+  Widget _nativeEditorView(AppTheme theme) {
+    final controller = _tabs.activeController;
+    if (controller == null) {
+      return const SizedBox.expand();
+    }
+    final prefs = _editorSettings.value;
+    return EditorView(
+      key: ObjectKey(controller),
+      controller: controller,
+      style: _nativeStyle(theme),
+      softWrap: prefs.wordWrap,
+      showLineNumbers: prefs.lineNumbers,
+      autofocus: true,
+      onFocusChanged: (focused) {
+        if (!focused) {
+          _tabs.editorFocusLost();
+        }
+      },
+    );
+  }
+
   Widget _editor(AppTheme theme) {
+    if (_nativeEditor == null) {
+      return const SizedBox.expand();
+    }
+    if (_nativeEditor == true) {
+      return ListenableBuilder(
+        listenable: Listenable.merge([_tabs, _editorSettings]),
+        builder: (context, _) => _nativeEditorView(theme),
+      );
+    }
     return
     // the webview is slow to resize, so it waits for the
     // window to stop being dragged
@@ -863,6 +972,47 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     );
   }
 
+  /// cursor position, encoding and language of the active document, when
+  /// flutter draws the editor
+  Widget _nativeStatus(AppTheme theme) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([_tabs, ?_tabs.activeController]),
+      builder: (context, _) {
+        final controller = _tabs.activeController;
+        String? cursor;
+        if (controller != null) {
+          final point = controller.buffer.offsetToPoint(
+            controller.selections.newest.head,
+          );
+          cursor = 'Ln ${point.row + 1}, Col ${point.column + 1}';
+        }
+        return Row(
+          children: [
+            for (final (button, text) in [
+              if (cursor != null) (_cursor, cursor),
+              if (_tabs.indentation.isNotEmpty)
+                (_indentation, _tabs.indentation),
+              if (_tabs.active < _tabs.tabs.length)
+                (_encoding, _tabs.tabs[_tabs.active].encoding.label),
+              if (_tabs.lineEnding.isNotEmpty) (_lineEnding, _tabs.lineEnding),
+              if (_tabs.languageName != null) (_language, _tabs.languageName!),
+            ])
+              if (!button.hidden)
+                _StatusItem(
+                  label: button.label,
+                  keys: _keysOf(button),
+                  onPressed: button.onPressed,
+                  text: text,
+                  theme: theme,
+                  onMenu: (position) =>
+                      _showButtonMenu(theme, button, position),
+                ),
+          ],
+        );
+      },
+    );
+  }
+
   /// pickers open under the title bar
   static const _pickerTop = _titleBarHeight + 8;
 
@@ -877,12 +1027,27 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   }
 
   Future<void> _openGoToLine() async {
-    final stats = _monaco?.stats.value;
-    if (stats == null || _tabs.tabs.isEmpty) {
+    if (_tabs.tabs.isEmpty) {
       return;
     }
-    final cursor = stats.cursorPosition;
-    final lines = stats.lineCount;
+    final ({int line, int column})? cursor;
+    final int lines;
+    final native = _tabs.activeController;
+    if (native != null) {
+      final point = native.buffer.offsetToPoint(native.selections.newest.head);
+      cursor = (line: point.row + 1, column: point.column + 1);
+      lines = native.buffer.lineCount;
+    } else {
+      final stats = _monaco?.stats.value;
+      if (stats == null) {
+        return;
+      }
+      final position = stats.cursorPosition;
+      cursor = position == null
+          ? null
+          : (line: position.line, column: position.column);
+      lines = stats.lineCount;
+    }
     showInputPicker(
       context,
       theme: widget.controller.value,
@@ -966,6 +1131,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   Future<void> _openLanguagePicker() async {
     final monaco = _monaco;
+    // the editor that flutter draws has no language support yet
     if (monaco == null || _tabs.tabs.isEmpty) {
       return;
     }
@@ -1117,6 +1283,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
             if (dock == _Dock.left) ...[sidebarButton, divider],
             const Spacer(),
             if (monaco != null && _view == _View.editor) _status(theme, monaco),
+            if (_nativeEditor == true && _view == _View.editor)
+              _nativeStatus(theme),
             if (dock == _Dock.right) ...[divider, sidebarButton],
           ],
         ),

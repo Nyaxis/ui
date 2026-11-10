@@ -22,7 +22,11 @@ class EditorView extends StatefulWidget {
     this.focusNode,
     this.autofocus = false,
     this.readOnly = false,
+    this.onFocusChanged,
   });
+
+  /// told when the editor gains or loses the focus
+  final void Function(bool focused)? onFocusChanged;
 
   final EditorController controller;
   final EditorStyle style;
@@ -40,7 +44,6 @@ class EditorView extends StatefulWidget {
 
 class EditorViewState extends State<EditorView> {
   final GlobalKey _renderKey = GlobalKey();
-  FocusNode? _ownFocusNode;
   Timer? _blink;
   late EditorTextInput _input;
 
@@ -54,8 +57,7 @@ class EditorViewState extends State<EditorView> {
   Offset _lastClickPosition = Offset.zero;
   bool _dragging = false;
 
-  FocusNode get focusNode =>
-      widget.focusNode ?? (_ownFocusNode ??= FocusNode(debugLabel: 'editor'));
+  FocusNode get focusNode => widget.focusNode ?? widget.controller.focusNode;
 
   RenderEditor? get _render =>
       _renderKey.currentContext?.findRenderObject() as RenderEditor?;
@@ -71,8 +73,9 @@ class EditorViewState extends State<EditorView> {
   @override
   void didUpdateWidget(EditorView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.focusNode != widget.focusNode) {
-      (oldWidget.focusNode ?? _ownFocusNode)?.removeListener(_onFocusChange);
+    final oldNode = oldWidget.focusNode ?? oldWidget.controller.focusNode;
+    if (oldNode != focusNode) {
+      oldNode.removeListener(_onFocusChange);
       focusNode.addListener(_onFocusChange);
     }
     if (oldWidget.controller != widget.controller) {
@@ -88,6 +91,7 @@ class EditorViewState extends State<EditorView> {
 
   void _onFocusChange() {
     widget.controller.setFocus(focusNode.hasFocus);
+    widget.onFocusChanged?.call(focusNode.hasFocus);
     _blink?.cancel();
     if (focusNode.hasFocus) {
       if (!widget.readOnly) {
@@ -232,8 +236,7 @@ class EditorViewState extends State<EditorView> {
     _blink?.cancel();
     _input.detach();
     widget.controller.removeListener(_onControllerChange);
-    (widget.focusNode ?? _ownFocusNode)?.removeListener(_onFocusChange);
-    _ownFocusNode?.dispose();
+    focusNode.removeListener(_onFocusChange);
     super.dispose();
   }
 

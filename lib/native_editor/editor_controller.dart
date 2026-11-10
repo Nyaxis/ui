@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/widgets.dart' show FocusNode;
 
 import '../editor_core/buffer.dart';
 import '../editor_core/display_map.dart';
@@ -340,6 +341,61 @@ class EditorController extends ChangeNotifier {
 
   /// whether Tab puts in a tab character, and not the spaces to the next stop
   bool useTabs = false;
+
+  /// the focus of the view that shows this text, which is kept here so that
+  /// whatever opens the editor can give it the focus back
+  final FocusNode focusNode = FocusNode(debugLabel: 'editor');
+
+  void focus() => focusNode.requestFocus();
+
+  /// puts the cursor at [line] and [column], which are counted from 1, as
+  /// far as the text has them
+  void goToLineColumn(int line, [int column = 1]) {
+    final text = buffer.text;
+    final row = (line - 1).clamp(0, text.lineCount - 1);
+    final at = text.pointToOffset(Point(row, math.max(0, column - 1)));
+    selections.selectRanges([(at, at)]);
+    requestRevealCursor();
+  }
+
+  /// indents the text with [spaces] or tabs, [size] wide. the indentation it
+  /// has keeps its levels, each as wide as the tab size was, and a remainder
+  /// that is not a whole level stays as spaces
+  void setIndentation({required bool spaces, required int size}) {
+    final old = display.tabSize;
+    final text = buffer.text;
+    final edits = <Replacement>[];
+    for (var row = 0; row < text.lineCount; row++) {
+      final start = text.lineStart(row);
+      final end = text.lineEnd(row);
+      var lead = start;
+      while (lead < end && _isSpace(text.codeUnitAt(lead))) {
+        lead++;
+      }
+      if (lead == start) {
+        continue;
+      }
+      var columns = 0;
+      for (var i = start; i < lead; i++) {
+        columns += text.codeUnitAt(i) == 0x09 ? old - columns % old : 1;
+      }
+      final levels = columns ~/ old;
+      final replacement =
+          (spaces ? ' ' * (levels * size) : '\t' * levels) +
+          ' ' * (columns % old);
+      if (replacement != text.substring(start, lead)) {
+        edits.add(Replacement(start, lead, replacement));
+      }
+    }
+    useTabs = !spaces;
+    setTabSize(size);
+    if (edits.isNotEmpty) {
+      buffer.finalizeLastTransaction();
+      buffer.edit(edits);
+      buffer.finalizeLastTransaction();
+    }
+    notifyListeners();
+  }
 
   static bool _isSpace(int unit) => unit == 0x20 || unit == 0x09;
 
@@ -716,6 +772,7 @@ class EditorController extends ChangeNotifier {
   void dispose() {
     buffer.removeListener(_onBufferChange);
     display.dispose();
+    focusNode.dispose();
     super.dispose();
   }
 }
