@@ -335,6 +335,33 @@ void main() {
       await _finish(tester, controller);
     });
 
+    testWidgets('asking to scroll past the ends does not bring them back', (
+      tester,
+    ) async {
+      final controller = EditorController(text: _long);
+      final render = await _pump(
+        tester,
+        controller,
+        scrollbars: ScrollbarVisibility.auto,
+      );
+      controller.setScroll(y: 10);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1100));
+      expect(render.scrollbarsVisible, isFalse);
+      // back to the top is a scroll
+      controller.setScroll(y: 0);
+      await tester.pump();
+      expect(render.scrollbarsVisible, isTrue);
+      await tester.pump(const Duration(milliseconds: 1100));
+      expect(render.scrollbarsVisible, isFalse);
+      // above the top is not: the text does not move
+      controller.setScroll(y: -50);
+      await tester.pump();
+      expect(controller.scrollY, 0);
+      expect(render.scrollbarsVisible, isFalse);
+      await _finish(tester, controller);
+    });
+
     testWidgets('and they stay while a cursor is out of sight', (tester) async {
       final controller = EditorController(text: _long);
       final render = await _pump(

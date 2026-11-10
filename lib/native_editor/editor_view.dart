@@ -94,6 +94,7 @@ class EditorViewState extends State<EditorView> {
   Timer? _hideScrollbars;
   double _scrollX = 0;
   double _scrollY = 0;
+  bool _scrollCheck = false;
 
   void _showScrollbars() {
     if (widget.scrollbars != ScrollbarVisibility.auto) {
@@ -152,10 +153,23 @@ class EditorViewState extends State<EditorView> {
 
   void _onControllerChange() {
     final controller = widget.controller;
-    if (controller.scrollX != _scrollX || controller.scrollY != _scrollY) {
-      _scrollX = controller.scrollX;
-      _scrollY = controller.scrollY;
-      _showScrollbars();
+    if (!_scrollCheck &&
+        (controller.scrollX != _scrollX || controller.scrollY != _scrollY)) {
+      // the layout puts the text back when it was asked to go past its ends,
+      // which is not a scroll, so the scroll is looked at once it is laid out
+      _scrollCheck = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollCheck = false;
+        if (!mounted) {
+          return;
+        }
+        final now = widget.controller;
+        if (now.scrollX != _scrollX || now.scrollY != _scrollY) {
+          _scrollX = now.scrollX;
+          _scrollY = now.scrollY;
+          _showScrollbars();
+        }
+      });
     }
     if (!_input.attached) {
       return;
