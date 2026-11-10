@@ -10,6 +10,31 @@
   "export"
 ] @keyword
 
+; Text that does not parse yet, such as a function that has no end: its
+; keywords are drawn as they are in text that does parse
+(ERROR
+  [
+    "function"
+    "local"
+    "if"
+    "then"
+    "elseif"
+    "else"
+    "for"
+    "while"
+    "do"
+    "repeat"
+    "until"
+    "in"
+    "return"
+    "end"
+  ] @keyword)
+
+(ERROR
+  "function"
+  .
+  (identifier) @function)
+
 (do_statement
   [
     "do"

@@ -96,6 +96,26 @@ void main() {
       tree.dispose();
     }, skip: _library == null);
 
+    test('a block that has no end yet is drawn as one that has', () {
+      for (final text in [
+        'function foo()\n',
+        'local function foo(a: number)\n\tprint(a)\n',
+        'if x then\n\tprint(1)\n',
+      ]) {
+        final tree = _tree(text);
+        expect(tree.hasErrors, isTrue, reason: text);
+        final first = text.startsWith('local')
+            ? 'local'
+            : text.split(' ').first;
+        expect(
+          _styleAt(tree, text.indexOf(first.replaceAll('(', ''))),
+          _keyword,
+          reason: text,
+        );
+        tree.dispose();
+      }
+    }, skip: _library == null);
+
     test('the spans are in order, and one style covers a part of text', () {
       final text = 'for i = 1, 10 do\n\tprint(i, "text")\nend\n';
       final tree = _tree(text);

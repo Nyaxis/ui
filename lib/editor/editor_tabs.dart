@@ -338,12 +338,15 @@ reportLanguage();''';
       final uri = Uri.parse('file:///nyaxis/script${_nextUri++}$extension');
       final TabDocument document;
       if (controller == null) {
-        document = NativeTabDocument(
+        final native = NativeTabDocument(
           encoding.decode(bytes),
           uri,
           tabSize: tabSize,
           onChanged: _nativeChanged,
         );
+        // the scripts are Luau, whatever the file is called
+        native.controller.completeBlocks = true;
+        document = native;
       } else {
         document = MonacoTabDocument(
           await controller.openDocument(

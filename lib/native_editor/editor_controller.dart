@@ -11,6 +11,7 @@ import '../editor_core/point.dart';
 import '../editor_core/selections_collection.dart';
 import '../editor_core/text_metrics.dart';
 import '../syntax/syntax_layer.dart';
+import 'block_completion.dart';
 
 /// an editor's text and everything that is done to it: the buffer, how it is
 /// laid out on the screen, the selections, and where the view is scrolled to
@@ -548,6 +549,30 @@ class EditorController extends ChangeNotifier {
     _deleteRanges(ranges);
   }
 
+  /// whether enter at the end of a line that opens a block of Luau indents
+  /// the next line, and puts in what the block is missing: `then`, `do` and
+  /// its `end`
+  bool completeBlocks = false;
+
+  /// what the line the cursor at [offset] is at the end of asks for, or null
+  BlockCompletion? _completionAt(int offset, int row, int lineStart) {
+    final text = buffer.text;
+    final lineEnd = text.lineEnd(row);
+    // only at the end of a line, not in the middle of it
+    if (text.substring(offset, lineEnd).trim().isNotEmpty) {
+      return null;
+    }
+    String? nextLine;
+    for (var next = row + 1; next <= text.rowAt(text.length); next++) {
+      final candidate = text.lineText(next);
+      if (candidate.trim().isNotEmpty) {
+        nextLine = candidate;
+        break;
+      }
+    }
+    return completeBlock(text.substring(lineStart, offset), nextLine: nextLine);
+  }
+
   /// puts in a new line, with the indent of the line it is made in
   void insertNewline() {
     final current = selections.all;
@@ -556,6 +581,9 @@ class EditorController extends ChangeNotifier {
     }
     final text = buffer.text;
     final inserted = <String>[];
+    // where the cursor is in each of them
+    final cursorAt = <int>[];
+    final unit = useTabs ? '\t' : ' ' * display.tabSize;
     for (final s in current) {
       final row = text.rowAt(s.start);
       final lineStart = text.lineStart(row);
@@ -563,7 +591,25 @@ class EditorController extends ChangeNotifier {
       while (indentEnd < s.start && _isSpace(text.codeUnitAt(indentEnd))) {
         indentEnd++;
       }
-      inserted.add('\n${text.substring(lineStart, indentEnd)}');
+      final indent = text.substring(lineStart, indentEnd);
+      final completion = completeBlocks && s.isEmpty
+          ? _completionAt(s.start, row, lineStart)
+          : null;
+      if (completion == null) {
+        inserted.add('\n$indent');
+        cursorAt.add(inserted.last.length);
+        continue;
+      }
+      var suffix = completion.suffix;
+      // no second space when the line ends with one
+      if (s.start > lineStart && _isSpace(text.codeUnitAt(s.start - 1))) {
+        suffix = suffix.trimLeft();
+      }
+      final body = '\n$indent$unit';
+      cursorAt.add(suffix.length + body.length);
+      inserted.add(
+        '$suffix$body${completion.closer == null ? '' : '\n$indent${completion.closer}'}',
+      );
     }
     buffer.beginTransaction(selections.anchors);
     buffer.edit([
@@ -573,7 +619,7 @@ class EditorController extends ChangeNotifier {
     var delta = 0;
     final cursors = <Selection>[];
     for (var i = 0; i < current.length; i++) {
-      final at = current[i].start + delta + inserted[i].length;
+      final at = current[i].start + delta + cursorAt[i];
       cursors.add(selections.make(at, at));
       delta += inserted[i].length - (current[i].end - current[i].start);
     }
