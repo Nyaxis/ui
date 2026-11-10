@@ -8,6 +8,7 @@ import 'editor_controller.dart';
 import 'editor_keys.dart';
 import 'editor_style.dart';
 import 'editor_text_input.dart';
+import 'modifier_keys.dart';
 import 'render_editor.dart';
 import 'scrollbar_layout.dart';
 
@@ -71,6 +72,7 @@ class EditorViewState extends State<EditorView> {
   void initState() {
     super.initState();
     _input = EditorTextInput(widget.controller);
+    ModifierKeys.instance.start();
     focusNode.addListener(_onFocusChange);
     widget.controller.addListener(_onControllerChange);
     _scrollX = widget.controller.scrollX;
@@ -170,7 +172,7 @@ class EditorViewState extends State<EditorView> {
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (widget.readOnly) {
-      final keyboard = HardwareKeyboard.instance;
+      final keyboard = ModifierKeys.instance;
       final command = keyboard.isControlPressed || keyboard.isMetaPressed;
       if (!(command && event.logicalKey == LogicalKeyboardKey.keyC) &&
           !(command && event.logicalKey == LogicalKeyboardKey.keyA) &&
@@ -194,27 +196,7 @@ class EditorViewState extends State<EditorView> {
     if (event.buttons != kPrimaryButton) {
       return;
     }
-    // a key that went up while the window was not looking, as with alt and
-    // alt tab, can stay pressed as far as flutter knows, which would make
-    // every click add a cursor. the system is asked what is pressed when alt
-    // seems to be
-    if (HardwareKeyboard.instance.isAltPressed) {
-      _syncKeyboard().then((_) {
-        if (mounted) {
-          _pointerDown(event);
-        }
-      });
-      return;
-    }
     _pointerDown(event);
-  }
-
-  Future<void> _syncKeyboard() async {
-    try {
-      await HardwareKeyboard.instance.syncKeyboardState();
-    } on Object {
-      // no system to ask, as in a test
-    }
   }
 
   void _pointerDown(PointerDownEvent event) {
@@ -235,7 +217,9 @@ class EditorViewState extends State<EditorView> {
     _lastClickAt = event.timeStamp;
     _lastClickPosition = event.localPosition;
 
-    final keyboard = HardwareKeyboard.instance;
+    // the keys as the editor follows them: alt that was down when the window
+    // was left, as with alt tab, is not down any more
+    final keyboard = ModifierKeys.instance;
     final add = keyboard.isAltPressed;
     if (_clicks == 1) {
       controller.clickAt(offset, extend: keyboard.isShiftPressed, add: add);
@@ -401,7 +385,7 @@ class EditorViewState extends State<EditorView> {
     final controller = widget.controller;
     var dx = event.scrollDelta.dx;
     var dy = event.scrollDelta.dy;
-    if (HardwareKeyboard.instance.isShiftPressed && dx == 0) {
+    if (ModifierKeys.instance.isShiftPressed && dx == 0) {
       dx = dy;
       dy = 0;
     }

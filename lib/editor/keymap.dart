@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_monaco/flutter_monaco.dart';
 
+import '../native_editor/modifier_keys.dart';
 import 'key_context.dart';
 
 /// a key sequence, in the context it applies in, and the action it runs; a
@@ -91,6 +92,8 @@ class Keymap {
   /// and [editorFocused] says which context it is pressed in
   Future<void> attachNative(bool Function() editorFocused) async {
     _nativeFocus = editorFocused;
+    // the modifiers are followed before the strokes are looked at
+    ModifierKeys.instance.start();
     HardwareKeyboard.instance.addHandler(_onKey);
     await _reload();
     _watchUserFile();
@@ -249,13 +252,18 @@ class Keymap {
     if (key == null) {
       return false;
     }
-    final keyboard = HardwareKeyboard.instance;
+    // with the editor that flutter draws, the modifiers are the ones that are
+    // followed, which are not down after the window was left with one down
+    final native = nativeFocus != null;
+    final hardware = HardwareKeyboard.instance;
+    final followed = ModifierKeys.instance;
     return _press(
       [
-        if (keyboard.isControlPressed) 'ctrl',
-        if (keyboard.isAltPressed) 'alt',
-        if (keyboard.isShiftPressed) 'shift',
-        if (keyboard.isMetaPressed) 'win',
+        if (native ? followed.isControlPressed : hardware.isControlPressed)
+          'ctrl',
+        if (native ? followed.isAltPressed : hardware.isAltPressed) 'alt',
+        if (native ? followed.isShiftPressed : hardware.isShiftPressed) 'shift',
+        if (native ? followed.isMetaPressed : hardware.isMetaPressed) 'win',
         key,
       ].join('-'),
       inEditor ? _editor : _workspace,

@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' show KeyEventResult;
 
 import 'editor_controller.dart';
+import 'modifier_keys.dart';
 
 /// does what the key [event] asks of the editor, if it is one the editor has
 /// a use for; text that is typed is not handled here, as it comes from the
@@ -10,7 +11,7 @@ KeyEventResult handleEditorKey(EditorController controller, KeyEvent event) {
   if (event is KeyUpEvent) {
     return KeyEventResult.ignored;
   }
-  final keyboard = HardwareKeyboard.instance;
+  final keyboard = ModifierKeys.instance;
   final handled = _handle(
     controller,
     event.logicalKey,
