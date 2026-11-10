@@ -14,6 +14,18 @@ class Point implements Comparable<Point> {
     return byRow != 0 ? byRow : column.compareTo(other.column);
   }
 
+  /// the place that is [other] further on, [other] being counted from here:
+  /// its rows are gone down, and its column is counted from this one only
+  /// when it stays on the row
+  Point operator +(Point other) => other.row == 0
+      ? Point(row, column + other.column)
+      : Point(row + other.row, other.column);
+
+  /// how far this is from [other], which is not after it
+  Point operator -(Point other) => row == other.row
+      ? Point(0, column - other.column)
+      : Point(row - other.row, column);
+
   bool operator <(Point other) => compareTo(other) < 0;
   bool operator <=(Point other) => compareTo(other) <= 0;
   bool operator >(Point other) => compareTo(other) > 0;

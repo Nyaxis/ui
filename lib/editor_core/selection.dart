@@ -1,4 +1,6 @@
-import 'patch.dart';
+import 'anchor.dart';
+import 'buffer.dart' show BufferSnapshot;
+import 'patch.dart' show Bias;
 
 /// where a selection tries to stay as it is moved up and down, so that a short
 /// line does not move the column it came from
@@ -144,98 +146,63 @@ bool shouldMerge(int aStart, int aEnd, int bStart, int bEnd) {
   return overlapping || sameStart || cursorAtEdge;
 }
 
-/// the selections of an editor: one or more, in order, and none that
-/// overlaps another
-class SelectionsCollection {
-  SelectionsCollection() {
-    _selections = [Selection(id: _nextId++, start: 0, end: 0)];
-  }
+/// a selection that stays with its text as the buffer is edited. like a
+/// [Selection], it is resolved against a buffer snapshot to say where it is.
+/// it does not take in text put in at its edges, and a cursor goes after the
+/// text put in at it.
+class AnchorSelection {
+  const AnchorSelection({
+    required this.id,
+    required this.start,
+    required this.end,
+    this.reversed = false,
+    this.goal = SelectionGoal.none,
+  });
 
-  late List<Selection> _selections;
-  int _nextId = 0;
-
-  List<Selection> get all => List.unmodifiable(_selections);
-
-  int get length => _selections.length;
-
-  /// the selection that was made last, which is the one to scroll to
-  Selection get newest => _selections.reduce((a, b) => b.id > a.id ? b : a);
-
-  /// the selection that was made first
-  Selection get oldest => _selections.reduce((a, b) => b.id < a.id ? b : a);
-
-  Selection get first => _selections.first;
-  Selection get last => _selections.last;
-
-  /// a selection of [start] to [end] that has an id of its own, to be given to
-  /// [select]; [end] before [start] makes a reversed one
-  Selection make(int start, int end, {SelectionGoal? goal}) {
-    final reversed = start > end;
-    return Selection(
-      id: _nextId++,
-      start: reversed ? end : start,
-      end: reversed ? start : end,
-      reversed: reversed,
-      goal: goal ?? SelectionGoal.none,
+  /// [selection] made into anchors of [buffer]
+  factory AnchorSelection.of(Selection selection, BufferSnapshot buffer) {
+    final endBias = selection.isEmpty ? Bias.right : Bias.left;
+    return AnchorSelection(
+      id: selection.id,
+      start: buffer.anchorAfter(selection.start),
+      end: buffer.anchorAt(selection.end, endBias),
+      reversed: selection.reversed,
+      goal: selection.goal,
     );
   }
 
-  /// replaces the selections; they are put in order, and the ones that
-  /// should be one are made one. there is always at least one.
-  void select(Iterable<Selection> selections) {
-    final sorted = selections.toList()
-      ..sort((a, b) {
-        final byStart = a.start.compareTo(b.start);
-        return byStart != 0 ? byStart : a.end.compareTo(b.end);
-      });
-    if (sorted.isEmpty) {
-      sorted.add(Selection(id: _nextId++, start: 0, end: 0));
-    }
-    final merged = <Selection>[sorted.first];
-    for (var i = 1; i < sorted.length; i++) {
-      final prev = merged.last;
-      final current = sorted[i];
-      if (shouldMerge(prev.start, prev.end, current.start, current.end)) {
-        if (current.end > prev.end) {
-          merged[merged.length - 1] = prev.copyWith(end: current.end);
-        }
-      } else {
-        merged.add(current);
-      }
-    }
-    _selections = merged;
+  final int id;
+  final Anchor start;
+  final Anchor end;
+  final bool reversed;
+  final SelectionGoal goal;
+
+  /// where it is in [buffer]; what was all replaced is left a cursor
+  Selection resolve(BufferSnapshot buffer) {
+    final from = buffer.offsetForAnchor(start);
+    final to = buffer.offsetForAnchor(end);
+    final isCursor = to <= from;
+    return Selection(
+      id: id,
+      start: from,
+      end: isCursor ? from : to,
+      reversed: reversed && !isCursor,
+      goal: goal,
+    );
   }
 
-  /// the selections [ranges] of start and end, each a cursor when they are
-  /// the same
-  void selectRanges(Iterable<(int, int)> ranges) {
-    select([for (final (start, end) in ranges) make(start, end)]);
-  }
+  @override
+  bool operator ==(Object other) =>
+      other is AnchorSelection &&
+      other.id == id &&
+      other.start == start &&
+      other.end == end &&
+      other.reversed == reversed &&
+      other.goal == goal;
 
-  /// puts a cursor in the selections, which is one more cursor to type with
-  void addCursor(int offset) {
-    select([..._selections, make(offset, offset)]);
-  }
+  @override
+  int get hashCode => Object.hash(id, start, end, reversed, goal);
 
-  /// follows the text through [patch]. a selection does not take in what is
-  /// put in at its edges, and a cursor goes after what is put in at it.
-  void mapEdits(Patch patch) {
-    if (patch.isEmpty) {
-      return;
-    }
-    select([
-      for (final s in _selections)
-        if (s.isEmpty)
-          s.collapseTo(patch.mapOffset(s.start, Bias.right), s.goal)
-        else
-          _mapRange(s, patch),
-    ]);
-  }
-
-  Selection _mapRange(Selection s, Patch patch) {
-    final start = patch.mapOffset(s.start, Bias.right);
-    final end = patch.mapOffset(s.end, Bias.left);
-    // a range that was all replaced has nothing left of it
-    return s.copyWith(start: start, end: end < start ? start : end);
-  }
+  @override
+  String toString() => 'AnchorSelection#$id($start..$end)';
 }

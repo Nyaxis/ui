@@ -1,51 +1,89 @@
 import 'dart:math' as math;
 
 import 'point.dart';
+import 'sum_tree.dart';
+import 'text_summary.dart';
 
-/// the most a leaf of the rope holds, in UTF-16 code units
-const int _maxLeaf = 1024;
+/// the most a chunk of the rope holds, in UTF-16 code units
+const int _maxChunk = 1024;
+
+/// what some chunks of text come to
+class ChunkSummary {
+  const ChunkSummary(this.text, this.chunks);
+
+  static const zero = ChunkSummary(TextSummary.zero, 0);
+
+  final TextSummary text;
+  final int chunks;
+
+  int get length => text.len;
+  int get newlines => text.lines.row;
+}
+
+class _TextOps extends SummaryOps<String, ChunkSummary> {
+  const _TextOps();
+
+  @override
+  ChunkSummary get zero => ChunkSummary.zero;
+
+  @override
+  ChunkSummary add(ChunkSummary a, ChunkSummary b) =>
+      ChunkSummary(a.text + b.text, a.chunks + b.chunks);
+
+  @override
+  ChunkSummary summarize(String item) => ChunkSummary(TextSummary.of(item), 1);
+}
+
+const _ops = _TextOps();
+const _whole = SummaryDimension<String, ChunkSummary>(_ops);
 
 /// text that never changes: an edit makes a new rope that shares what it can
 /// with the old one, so a snapshot can be held while editing goes on. lines
 /// end in `\n` only; the buffer takes the other line endings out first.
 ///
-/// the text is kept as a balanced tree of chunks. each node knows how long its
-/// text is and how many lines it has, which is how a line or an offset is
-/// found without reading the text before it.
+/// the text is kept as chunks in a [SumTree], which knows how long the text
+/// before a chunk is and how many lines it has, which is how a line or an
+/// offset is found without reading the text before it.
 class Rope {
-  const Rope._(this._root);
+  Rope._(this._tree);
 
-  factory Rope(String text) => Rope._(_build(text));
+  factory Rope(String text) {
+    if (text.isEmpty) {
+      return empty;
+    }
+    final chunks = <String>[];
+    var start = 0;
+    while (start < text.length) {
+      var end = math.min(start + _maxChunk, text.length);
+      // a pair of surrogates is kept in one chunk
+      if (end < text.length && _isLowSurrogate(text.codeUnitAt(end))) {
+        end--;
+      }
+      chunks.add(text.substring(start, end));
+      start = end;
+    }
+    return Rope._(SumTree.fromIterable(_ops, chunks));
+  }
 
-  static const empty = Rope._(null);
+  static final empty = Rope._(SumTree(_ops));
 
-  final _Node? _root;
+  final SumTree<String, ChunkSummary> _tree;
 
-  int get length => _root?.length ?? 0;
+  int get length => _tree.summary.length;
   bool get isEmpty => length == 0;
 
   /// the number of lines, which is one more than the number of `\n`; an empty
   /// text has one empty line
-  int get lineCount => (_root?.newlines ?? 0) + 1;
+  int get lineCount => _tree.summary.newlines + 1;
+
+  /// what the whole text comes to
+  TextSummary get summary => _tree.summary.text;
+
+  /// the place of the end of the text
+  Point get maxPoint => _tree.summary.text.lines;
 
   /// the text of the chunks, in order
-  Iterable<String> get chunks sync* {
-    final root = _root;
-    if (root == null) {
-      return;
-    }
-    final stack = <_Node>[root];
-    while (stack.isNotEmpty) {
-      final node = stack.removeLast();
-      if (node is _Leaf) {
-        yield node.text;
-      } else {
-        final branch = node as _Branch;
-        stack.add(branch.right);
-        stack.add(branch.left);
-      }
-    }
-  }
+  Iterable<String> get chunks => _tree.items;
 
   @override
   String toString() => substring(0, length);
@@ -58,69 +96,123 @@ class Rope {
       return '';
     }
     final out = StringBuffer();
-    _write(_root!, start, end, out);
+    chunksInRange(start, end).forEach(out.write);
     return out.toString();
   }
 
-  static void _write(_Node node, int start, int end, StringBuffer out) {
-    if (start <= 0 && end >= node.length) {
-      _writeAll(node, out);
+  /// the text from [start] to [end] in pieces, each read only when it is
+  /// asked for, so that what reads a little of a long range does not read
+  /// it all
+  Iterable<String> chunksInRange(int start, int end) sync* {
+    RangeError.checkValidRange(start, end, length);
+    if (start == end) {
       return;
     }
-    if (node is _Leaf) {
-      out.write(
-        node.text.substring(math.max(start, 0), math.min(end, node.length)),
+    final cursor = _tree.cursor(_whole)
+      ..seek((p) => start.compareTo(p.length), Bias.right);
+    while (true) {
+      final chunk = cursor.item;
+      if (chunk == null) {
+        return;
+      }
+      final chunkStart = cursor.start.length;
+      if (chunkStart >= end) {
+        return;
+      }
+      yield chunk.substring(
+        math.max(start - chunkStart, 0),
+        math.min(end - chunkStart, chunk.length),
       );
-      return;
-    }
-    final branch = node as _Branch;
-    final split = branch.left.length;
-    if (start < split) {
-      _write(branch.left, start, end, out);
-    }
-    if (end > split) {
-      _write(branch.right, start - split, end - split, out);
+      cursor.next();
     }
   }
 
-  static void _writeAll(_Node node, StringBuffer out) {
-    if (node is _Leaf) {
-      out.write(node.text);
-    } else {
-      final branch = node as _Branch;
-      _writeAll(branch.left, out);
-      _writeAll(branch.right, out);
+  /// what the text from [start] to [end] comes to, without reading the
+  /// chunks that are all in it
+  TextSummary textSummaryForRange(int start, int end) {
+    RangeError.checkValidRange(start, end, length);
+    if (start == end) {
+      return TextSummary.zero;
     }
+    final cursor = _tree.cursor(_whole)
+      ..seek((p) => start.compareTo(p.length), Bias.right);
+    final first = cursor.item!;
+    final firstStart = cursor.start.length;
+    if (end <= firstStart + first.length) {
+      return TextSummary.of(first, start - firstStart, end - firstStart);
+    }
+    var summary = TextSummary.of(first, start - firstStart);
+    cursor.next();
+    summary += cursor
+        .summary(_whole, (p) => end.compareTo(p.length), Bias.right)
+        .text;
+    final last = cursor.item;
+    if (last != null) {
+      summary += TextSummary.of(last, 0, end - cursor.start.length);
+    }
+    return summary;
   }
 
   int codeUnitAt(int offset) {
     RangeError.checkValidIndex(offset, this, 'offset', length);
-    var node = _root!;
-    var at = offset;
-    while (node is _Branch) {
-      final split = node.left.length;
-      if (at < split) {
-        node = node.left;
-      } else {
-        at -= split;
-        node = node.right;
-      }
-    }
-    return (node as _Leaf).text.codeUnitAt(at);
+    final (start, _, chunk) = _tree.find(
+      _whole,
+      (p) => offset.compareTo(p.length),
+      Bias.right,
+    );
+    return chunk!.codeUnitAt(offset - start.length);
   }
 
   /// the first [offset] code units, and what follows them
   (Rope, Rope) split(int offset) {
     RangeError.checkValueInInterval(offset, 0, length, 'offset');
-    final root = _root;
-    if (root == null) {
-      return (empty, empty);
+    final cursor = _tree.cursor(_whole);
+    var before = cursor.slice((p) => offset.compareTo(p.length), Bias.right);
+    var after = SumTree(_ops);
+    final chunk = cursor.item;
+    final at = offset - cursor.start.length;
+    if (chunk != null && at > 0) {
+      before = before.push(chunk.substring(0, at));
+      after = after.push(chunk.substring(at));
+      cursor.next();
     }
-    final (a, b) = _split(root, offset);
-    return (Rope._(a), Rope._(b));
+    return (Rope._(before), Rope._(after.append(cursor.suffix())));
   }
 
-  Rope operator +(Rope other) => Rope._(_concat(_root, other._root));
+  /// the text from [start] to [end] as a rope, which shares its chunks with
+  /// this one
+  Rope slice(int start, int end) {
+    RangeError.checkValidRange(start, end, length);
+    if (start == end) {
+      return empty;
+    }
+    if (start == 0 && end == length) {
+      return this;
+    }
+    return split(end).$1.split(start).$2;
+  }
+
+  Rope operator +(Rope other) {
+    if (isEmpty) {
+      return other;
+    }
+    if (other.isEmpty) {
+      return this;
+    }
+    final last = _tree.last!;
+    final first = other._tree.first!;
+    // small chunks are joined, so that edits do not leave a rope of crumbs
+    if (last.length + first.length > _maxChunk) {
+      return Rope._(_tree.append(other._tree));
+    }
+    final chunks = _tree.summary.chunks;
+    final head = _tree
+        .cursor(_whole)
+        .slice((p) => (chunks - 1).compareTo(p.chunks), Bias.right);
+    final rest = other._tree.cursor(_whole)
+      ..seek((p) => 1.compareTo(p.chunks), Bias.right);
+    return Rope._(head.push(last + first).append(rest.suffix()));
+  }
 
   /// this text with [start] to [end] replaced by [text]
   Rope replaceRange(int start, int end, String text) {
@@ -137,11 +229,19 @@ class Rope {
     if (row <= 0) {
       return 0;
     }
-    final root = _root;
-    if (root == null || row > root.newlines) {
+    if (row > _tree.summary.newlines) {
       return length;
     }
-    return _offsetAfterNewline(root, row);
+    final (start, _, chunk) = _tree.find(
+      _whole,
+      (p) => row.compareTo(p.newlines),
+      Bias.left,
+    );
+    var index = -1;
+    for (var i = start.newlines; i < row; i++) {
+      index = chunk!.indexOf('\n', index + 1);
+    }
+    return start.length + index + 1;
   }
 
   /// the offset where line [row] ends, before its `\n`
@@ -159,8 +259,15 @@ class Rope {
   /// the line that has [offset], which at the end of a line is that line
   int rowAt(int offset) {
     RangeError.checkValueInInterval(offset, 0, length, 'offset');
-    final root = _root;
-    return root == null ? 0 : _newlinesBefore(root, offset);
+    final (start, _, chunk) = _tree.find(
+      _whole,
+      (p) => offset.compareTo(p.length),
+      Bias.left,
+    );
+    if (chunk == null) {
+      return start.newlines;
+    }
+    return start.newlines + _countNewlines(chunk, offset - start.length);
   }
 
   Point offsetToPoint(int offset) {
@@ -179,43 +286,27 @@ class Rope {
         math.min(math.max(point.column, 0), lineEnd(point.row) - start);
   }
 
-  static int _offsetAfterNewline(_Node node, int n) {
-    var at = 0;
-    var node0 = node;
-    var left = n;
-    while (node0 is _Branch) {
-      final inLeft = node0.left.newlines;
-      if (left <= inLeft) {
-        node0 = node0.left;
-      } else {
-        left -= inLeft;
-        at += node0.left.length;
-        node0 = node0.right;
-      }
+  /// [offset] moved off the middle of a pair of surrogates, and into the text
+  int clipOffset(int offset, Bias bias) {
+    final at = math.min(math.max(offset, 0), length);
+    if (at > 0 &&
+        at < length &&
+        _isLowSurrogate(codeUnitAt(at)) &&
+        _isHighSurrogate(codeUnitAt(at - 1))) {
+      return bias == Bias.left ? at - 1 : at + 1;
     }
-    final text = (node0 as _Leaf).text;
-    var index = -1;
-    for (var i = 0; i < left; i++) {
-      index = text.indexOf('\n', index + 1);
-    }
-    return at + index + 1;
+    return at;
   }
 
-  static int _newlinesBefore(_Node node, int offset) {
-    var count = 0;
-    var node0 = node;
-    var at = offset;
-    while (node0 is _Branch) {
-      final split = node0.left.length;
-      if (at <= split) {
-        node0 = node0.left;
-      } else {
-        count += node0.left.newlines;
-        at -= split;
-        node0 = node0.right;
-      }
+  /// [point] moved to a place that the text has
+  Point clipPoint(Point point, Bias bias) {
+    final max = maxPoint;
+    if (point.row > max.row) {
+      return max;
     }
-    return count + _countNewlines((node0 as _Leaf).text, at);
+    final row = math.max(point.row, 0);
+    final column = math.min(math.max(point.column, 0), lineLength(row));
+    return offsetToPoint(clipOffset(lineStart(row) + column, bias));
   }
 
   @override
@@ -232,46 +323,6 @@ class Rope {
   int get hashCode => Object.hash(length, toString());
 }
 
-abstract class _Node {
-  int get length;
-  int get newlines;
-  int get height;
-}
-
-class _Leaf implements _Node {
-  _Leaf(this.text) : newlines = _countNewlines(text, text.length);
-
-  final String text;
-
-  @override
-  final int newlines;
-
-  @override
-  int get length => text.length;
-
-  @override
-  int get height => 0;
-}
-
-class _Branch implements _Node {
-  _Branch(this.left, this.right)
-    : length = left.length + right.length,
-      newlines = left.newlines + right.newlines,
-      height = 1 + math.max(left.height, right.height);
-
-  final _Node left;
-  final _Node right;
-
-  @override
-  final int length;
-
-  @override
-  final int newlines;
-
-  @override
-  final int height;
-}
-
 int _countNewlines(String text, int end) {
   var count = 0;
   for (var i = 0; i < end; i++) {
@@ -282,102 +333,5 @@ int _countNewlines(String text, int end) {
   return count;
 }
 
-_Node? _build(String text) {
-  if (text.isEmpty) {
-    return null;
-  }
-  final leaves = <_Node>[];
-  var start = 0;
-  while (start < text.length) {
-    var end = math.min(start + _maxLeaf, text.length);
-    // a pair of surrogates is kept in one chunk
-    if (end < text.length && _isLowSurrogate(text.codeUnitAt(end))) {
-      end--;
-    }
-    leaves.add(_Leaf(text.substring(start, end)));
-    start = end;
-  }
-  return _balanced(leaves, 0, leaves.length);
-}
-
 bool _isLowSurrogate(int unit) => unit >= 0xDC00 && unit <= 0xDFFF;
-
-_Node _balanced(List<_Node> nodes, int start, int end) {
-  if (end - start == 1) {
-    return nodes[start];
-  }
-  final middle = (start + end) ~/ 2;
-  return _Branch(
-    _balanced(nodes, start, middle),
-    _balanced(nodes, middle, end),
-  );
-}
-
-(_Node?, _Node?) _split(_Node node, int offset) {
-  if (offset <= 0) {
-    return (null, node);
-  }
-  if (offset >= node.length) {
-    return (node, null);
-  }
-  if (node is _Leaf) {
-    return (
-      _Leaf(node.text.substring(0, offset)),
-      _Leaf(node.text.substring(offset)),
-    );
-  }
-  final branch = node as _Branch;
-  final at = branch.left.length;
-  if (offset == at) {
-    return (branch.left, branch.right);
-  }
-  if (offset < at) {
-    final (a, b) = _split(branch.left, offset);
-    return (a, _concat(b, branch.right));
-  }
-  final (a, b) = _split(branch.right, offset - at);
-  return (_concat(branch.left, a), b);
-}
-
-_Node? _concat(_Node? a, _Node? b) {
-  if (a == null) {
-    return b;
-  }
-  if (b == null) {
-    return a;
-  }
-  // small leaves are merged, so that edits do not leave a rope of crumbs
-  if (a is _Leaf && b is _Leaf && a.length + b.length <= _maxLeaf) {
-    return _Leaf(a.text + b.text);
-  }
-  if (a.height > b.height + 1) {
-    final branch = a as _Branch;
-    return _node(branch.left, _concat(branch.right, b)!);
-  }
-  if (b.height > a.height + 1) {
-    final branch = b as _Branch;
-    return _node(_concat(a, branch.left)!, branch.right);
-  }
-  return _node(a, b);
-}
-
-/// a branch over [left] and [right], turned about when one is too much taller
-_Node _node(_Node left, _Node right) {
-  if (left.height > right.height + 1) {
-    final l = left as _Branch;
-    if (l.left.height >= l.right.height) {
-      return _Branch(l.left, _node(l.right, right));
-    }
-    final lr = l.right as _Branch;
-    return _Branch(_node(l.left, lr.left), _node(lr.right, right));
-  }
-  if (right.height > left.height + 1) {
-    final r = right as _Branch;
-    if (r.right.height >= r.left.height) {
-      return _Branch(_node(left, r.left), r.right);
-    }
-    final rl = r.left as _Branch;
-    return _Branch(_node(left, rl.left), _node(rl.right, r.right));
-  }
-  return _Branch(left, right);
-}
+bool _isHighSurrogate(int unit) => unit >= 0xD800 && unit <= 0xDBFF;

@@ -1,7 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:ui/editor_core/patch.dart';
-import 'package:ui/editor_core/selection.dart';
+import 'package:ui/editor_core/buffer.dart';
+import 'package:ui/editor_core/selections_collection.dart';
+
+SelectionsCollection _collection([TextBuffer? buffer]) =>
+    SelectionsCollection(buffer ?? TextBuffer('0123456789' * 4));
 
 void main() {
   group('Selection', () {
@@ -77,14 +80,14 @@ void main() {
 
   group('SelectionsCollection', () {
     test('it starts with one cursor at the start', () {
-      final selections = SelectionsCollection();
+      final selections = _collection();
       expect(selections.length, 1);
       expect(selections.first.isEmpty, isTrue);
       expect(selections.first.start, 0);
     });
 
     test('selections are put in order, and overlapping ones become one', () {
-      final selections = SelectionsCollection()
+      final selections = _collection()
         ..selectRanges([(10, 14), (0, 3), (12, 20), (30, 30)]);
       expect(
         [for (final s in selections.all) (s.start, s.end)],
@@ -93,7 +96,7 @@ void main() {
     });
 
     test('a range given backwards is a reversed selection', () {
-      final selections = SelectionsCollection()..selectRanges([(9, 4)]);
+      final selections = _collection()..selectRanges([(9, 4)]);
       expect(selections.first.start, 4);
       expect(selections.first.end, 9);
       expect(selections.first.reversed, isTrue);
@@ -101,7 +104,7 @@ void main() {
     });
 
     test('a cursor is added, and two in one place are one', () {
-      final selections = SelectionsCollection()
+      final selections = _collection()
         ..addCursor(5)
         ..addCursor(9)
         ..addCursor(5);
@@ -109,7 +112,7 @@ void main() {
     });
 
     test('the newest is the one made last and the oldest the first', () {
-      final selections = SelectionsCollection()
+      final selections = _collection()
         ..addCursor(5)
         ..addCursor(9);
       expect(selections.newest.start, 9);
@@ -117,15 +120,19 @@ void main() {
     });
 
     test('nothing selected leaves one cursor', () {
-      final selections = SelectionsCollection()..select([]);
+      final selections = _collection()..select([]);
       expect(selections.length, 1);
     });
 
     test('it follows the text through an edit', () {
-      final selections = SelectionsCollection()
+      final buffer = TextBuffer('0123456789' * 4);
+      final selections = _collection(buffer)
         ..selectRanges([(2, 2), (6, 10), (14, 14)]);
-      // four code units put in at 0, and the ones at 8..9 taken out
-      selections.mapEdits(const Patch([Edit(0, 0, 4), Edit(8, 1, 0)]));
+      // four code units put in at 0, and the one at 8 taken out
+      buffer.edit([
+        const Replacement.insert(0, 'abcd'),
+        const Replacement(8, 9, ''),
+      ]);
       expect(
         [for (final s in selections.all) (s.start, s.end)],
         [(6, 6), (10, 13), (17, 17)],
@@ -133,24 +140,45 @@ void main() {
     });
 
     test('a selection does not take in text put in at its edges', () {
-      final selections = SelectionsCollection()..selectRanges([(4, 8)]);
-      selections.mapEdits(const Patch([Edit(4, 0, 2), Edit(8, 0, 3)]));
+      final buffer = TextBuffer('0123456789' * 4);
+      final selections = _collection(buffer)..selectRanges([(4, 8)]);
+      buffer.edit([
+        const Replacement.insert(4, 'ab'),
+        const Replacement.insert(8, 'cde'),
+      ]);
       expect(selections.first.start, 6);
       expect(selections.first.end, 10);
     });
 
     test('a cursor goes after the text put in at it', () {
-      final selections = SelectionsCollection()..selectRanges([(4, 4)]);
-      selections.mapEdits(const Patch([Edit(4, 0, 2)]));
+      final buffer = TextBuffer('0123456789' * 4);
+      final selections = _collection(buffer)..selectRanges([(4, 4)]);
+      buffer.edit([const Replacement.insert(4, 'ab')]);
       expect(selections.first.start, 6);
       expect(selections.first.isEmpty, isTrue);
     });
 
     test('a selection that is all replaced is left a cursor', () {
-      final selections = SelectionsCollection()..selectRanges([(4, 8)]);
-      selections.mapEdits(const Patch([Edit(3, 7, 2)]));
+      final buffer = TextBuffer('0123456789' * 4);
+      final selections = _collection(buffer)..selectRanges([(4, 8)]);
+      buffer.edit([const Replacement(3, 10, 'ab')]);
       expect(selections.first.isEmpty, isTrue);
       expect(selections.first.start, 5);
+    });
+
+    test('selections come back with undo, whatever was edited since', () {
+      final buffer = TextBuffer('0123456789' * 4, Duration.zero);
+      final selections = _collection(buffer)..selectRanges([(6, 9)]);
+      buffer.beginTransaction(selections.anchors);
+      buffer.edit([const Replacement(6, 9, 'x')]);
+      selections.selectRanges([(7, 7)]);
+      buffer.endTransaction(selections.anchors);
+      buffer.edit([const Replacement.insert(0, 'abc')]);
+      final undone = buffer.undoStack.first;
+      buffer.undoOrRedo(undone);
+      selections.selectAnchors(undone.selectionsBefore!);
+      expect(buffer.text.toString().substring(0, 12), 'abc012345678');
+      expect([for (final s in selections.all) (s.start, s.end)], [(9, 12)]);
     });
   });
 }

@@ -50,13 +50,14 @@ void main() {
   group('edit', () {
     test('ranges are replaced at once, in the offsets of the old text', () {
       final buffer = _buffer('hello big world');
+      final before = buffer.version;
       final patch = buffer.edit([
         const Replacement(10, 15, 'there'),
         const Replacement(0, 5, 'HI'),
       ]);
       expect(buffer.text.toString(), 'HI big there');
       expect(patch.edits, const [Edit(0, 5, 2), Edit(10, 5, 5)]);
-      expect(buffer.version, 1);
+      expect(buffer.version, greaterThan(before));
     });
 
     test('ranges that overlap, or are outside the text, are refused', () {
@@ -81,9 +82,10 @@ void main() {
 
     test('an edit that does nothing is not one', () {
       final buffer = _buffer('abc');
+      final before = buffer.version;
       final patch = buffer.edit([const Replacement.insert(1, '')]);
       expect(patch.isEmpty, isTrue);
-      expect(buffer.version, 0);
+      expect(buffer.version, before);
       expect(buffer.canUndo, isFalse);
     });
 
@@ -162,10 +164,20 @@ void main() {
 
     test('undo gives back the selections of before, and redo of after', () {
       final buffer = _buffer('abc');
-      const before = [Selection(id: 0, start: 1, end: 1)];
-      const after = [Selection(id: 0, start: 2, end: 2)];
+      final before = [
+        AnchorSelection.of(
+          const Selection(id: 0, start: 1, end: 1),
+          buffer.snapshot,
+        ),
+      ];
       buffer.beginTransaction(before);
       buffer.edit([const Replacement.insert(1, 'x')]);
+      final after = [
+        AnchorSelection.of(
+          const Selection(id: 0, start: 2, end: 2),
+          buffer.snapshot,
+        ),
+      ];
       buffer.endTransaction(after);
       expect(buffer.undo()!.selectionsBefore, before);
       expect(buffer.redo()!.selectionsAfter, after);
