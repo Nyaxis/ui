@@ -37,6 +37,7 @@ flutter:
     - assets/file_icons/icons/frappe/
     - assets/file_icons/icons/macchiato/
     - assets/file_icons/icons/mocha/
+    - native/tree_sitter/queries/luau/
     - assets/icons/add/
     - assets/icons/checkmark/
     - assets/icons/close/
