@@ -312,8 +312,8 @@ void main() {
     testWidgets(
       'with auto they stay when the system does not hide scrollbars',
       (tester) async {
-        EditorViewState.systemAutoHide = false;
-        addTearDown(() => EditorViewState.systemAutoHide = true);
+        EditorController.systemAutoHide = false;
+        addTearDown(() => EditorController.systemAutoHide = true);
         final controller = EditorController(text: _long);
         final render = await _pump(
           tester,
@@ -517,7 +517,7 @@ void main() {
         scrollbars: const ScrollbarSettings(show: ScrollbarVisibility.auto),
       );
       // not shown for a moment, with the cursor in sight
-      render.scrollbarsShown = false;
+      controller.scrollbarsShown = false;
       expect(render.scrollbarsVisible, isFalse);
       controller.setDiagnostics(every(controller));
       await tester.pump();
@@ -542,9 +542,9 @@ void main() {
       );
       controller.setDiagnostics(every(controller));
       await tester.pump();
-      render.scrollbarsShown = false;
+      controller.scrollbarsShown = false;
       expect(render.scrollbarsVisible, isFalse);
-      render.scrollbarsShown = true;
+      controller.scrollbarsShown = true;
       expect(render.scrollbarsVisible, isTrue);
       await _finish(tester, controller);
     });
@@ -563,7 +563,7 @@ void main() {
       controller.selections.selectRanges([(0, 5)]);
       controller.notifyListeners();
       await tester.pump();
-      render.scrollbarsShown = false;
+      controller.scrollbarsShown = false;
       expect(render.occurrenceMarkers(), hasLength(2));
       expect(render.scrollbarsVisible, isTrue);
       render.scrollbars = const ScrollbarSettings(
@@ -597,6 +597,48 @@ void main() {
       render.scrollbars = const ScrollbarSettings(vertical: false);
       expect(render.scrollbar(ScrollbarAxis.vertical), isNull);
       expect(render.scrollbar(ScrollbarAxis.horizontal), isNotNull);
+      await _finish(tester, controller);
+    });
+  });
+
+  group('a tab that is switched to', () {
+    const auto = ScrollbarSettings(show: ScrollbarVisibility.auto);
+
+    testWidgets('keeps its scrollbars as they were when it was left', (
+      tester,
+    ) async {
+      final controller = EditorController(text: _long);
+      final render = await _pump(tester, controller, scrollbars: auto);
+      await tester.pump(const Duration(milliseconds: 1100));
+      expect(render.scrollbarsVisible, isFalse);
+      // the view is made again, as when another tab is shown and this one is
+      // switched back to
+      await tester.pumpWidget(const SizedBox());
+      final again = await _pump(tester, controller, scrollbars: auto);
+      expect(again.scrollbarsVisible, isFalse);
+      await _finish(tester, controller);
+    });
+
+    testWidgets('shows them for a moment when it is made, and then hides', (
+      tester,
+    ) async {
+      final controller = EditorController(text: _long);
+      final render = await _pump(tester, controller, scrollbars: auto);
+      expect(render.scrollbarsVisible, isTrue);
+      await tester.pump(const Duration(milliseconds: 1100));
+      expect(render.scrollbarsVisible, isFalse);
+      await _finish(tester, controller);
+    });
+
+    testWidgets('goes on hiding them while it is not shown', (tester) async {
+      final controller = EditorController(text: _long);
+      final render = await _pump(tester, controller, scrollbars: auto);
+      expect(render.scrollbarsVisible, isTrue);
+      // left within the moment, and come back to after it
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(milliseconds: 1100));
+      final again = await _pump(tester, controller, scrollbars: auto);
+      expect(again.scrollbarsVisible, isFalse);
       await _finish(tester, controller);
     });
   });
