@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    name: publish (github release)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download the build
+        run: gh run download ${{ github.run_id }} --name "nyaxis-ui-$TAG-win-x64" --dir dist
+
+      - name: Zip the build
+        run: (cd dist && zip -qr "../ui-$TAG-win-x64.zip" .)
+
+      - name: Publish the release
+        run: |
+          flags=()
+          if [[ "$TAG" == *-rc* ]]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$TAG" "ui-$TAG-win-x64.zip" compat.json --title "$TAG" --notes "" "${flags[@]}"
