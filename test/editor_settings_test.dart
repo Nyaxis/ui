@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ui/native_editor/scrollbar_layout.dart';
@@ -19,10 +18,7 @@ void main() {
       const defaults = EditorPrefs();
       expect(defaults.fontSize, isNull);
       expect(defaults.wordWrap, isTrue);
-      expect(defaults.minimap, isFalse);
       expect(defaults.tabSize, 4);
-      expect(defaults.smoothScrolling, isTrue);
-      expect(defaults.renderWhitespace, RenderWhitespace.selection);
     });
 
     test('the scrollbars are auto, and another is read by its name', () {
@@ -63,14 +59,10 @@ void main() {
         'fontSize': 500,
         'tabSize': 0,
         'wordWrap': 'yes',
-        'minimap': true,
-        'renderWhitespace': 'everything',
       });
       expect(prefs.fontSize, EditorPrefs.maxFontSize);
       expect(prefs.tabSize, EditorPrefs.minTabSize);
       expect(prefs.wordWrap, isTrue);
-      expect(prefs.minimap, isTrue);
-      expect(prefs.renderWhitespace, RenderWhitespace.selection);
     });
 
     test('they survive a round trip through json', () {
@@ -78,12 +70,8 @@ void main() {
         fontSize: 16,
         tabSize: 2,
         wordWrap: false,
-        minimap: true,
         lineNumbers: false,
-        renderWhitespace: RenderWhitespace.all,
         fontLigatures: true,
-        smoothScrolling: false,
-        bracketPairColorization: false,
         autoClosingBrackets: false,
       );
       expect(
@@ -92,27 +80,12 @@ void main() {
       );
     });
 
-    test('the theme size is used until a size is set, and reset goes back', () {
+    test('a size is kept within its limits, and reset goes back to none', () {
       const prefs = EditorPrefs();
-      expect(prefs.toOptions(13).fontSize, 13);
       final sized = prefs.withFontSize(18);
-      expect(sized.toOptions(13).fontSize, 18);
-      expect(sized.withFontSize(null).toOptions(13).fontSize, 13);
+      expect(sized.fontSize, 18);
+      expect(sized.withFontSize(null).fontSize, isNull);
       expect(prefs.withFontSize(2).fontSize, EditorPrefs.minFontSize);
-    });
-
-    test('the editor is told every option', () {
-      final options = const EditorPrefs(
-        wordWrap: false,
-        minimap: true,
-        lineNumbers: false,
-        autoClosingBrackets: false,
-      ).toOptions(13);
-      expect(options.wordWrap, MonacoWordWrap.off);
-      expect(options.minimap?.enabled, isTrue);
-      expect(options.lineNumbers, MonacoLineNumbers.off);
-      expect(options.autoClosingBrackets, AutoClosingBehavior.never);
-      expect(options.tabSize, 4);
     });
   });
 
@@ -135,13 +108,13 @@ void main() {
       final settings = EditorSettings(config);
       await settings.load();
 
-      settings.change(settings.value.copyWith(minimap: true));
+      settings.change(settings.value.copyWith(lineNumbers: false));
       await config.update((_) {});
 
       final saved = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
       expect(saved['theme'], 'mine');
       expect(saved['autoSave'], 'afterDelay');
-      expect((saved['editor'] as Map)['minimap'], isTrue);
+      expect((saved['editor'] as Map)['lineNumbers'], isFalse);
     });
 
     test('they are read back on the next start', () async {
@@ -198,7 +171,7 @@ void main() {
       file.writeAsStringSync('{ not json');
       final settings = EditorSettings(config);
       await settings.load();
-      settings.change(const EditorPrefs(minimap: true));
+      settings.change(const EditorPrefs(lineNumbers: false));
       await config.update((_) {});
       expect(file.readAsStringSync(), '{ not json');
     });

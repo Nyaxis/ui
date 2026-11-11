@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_monaco/flutter_monaco.dart' show RenderWhitespace;
 
 import '../editor/editor_tabs.dart' show AutoSave;
 import '../native_editor/scrollbar_layout.dart' show ScrollbarVisibility;
@@ -214,33 +213,11 @@ class SettingsView extends StatelessWidget {
                   ),
                   SettingRow(
                     theme: theme,
-                    label: 'Minimap',
-                    control: SwitchControl(
-                      theme: theme,
-                      value: prefs.minimap,
-                      onChanged: (v) => onPrefs(prefs.copyWith(minimap: v)),
-                    ),
-                  ),
-                  SettingRow(
-                    theme: theme,
                     label: 'Line numbers',
                     control: SwitchControl(
                       theme: theme,
                       value: prefs.lineNumbers,
                       onChanged: (v) => onPrefs(prefs.copyWith(lineNumbers: v)),
-                    ),
-                  ),
-                  SettingRow(
-                    theme: theme,
-                    label: 'Show whitespace',
-                    control: ChoiceControl<RenderWhitespace>(
-                      theme: theme,
-                      value: prefs.renderWhitespace,
-                      options: [
-                        for (final w in RenderWhitespace.values) (w, w.label),
-                      ],
-                      onChanged: (v) =>
-                          onPrefs(prefs.copyWith(renderWhitespace: v)),
                     ),
                   ),
                   SettingRow(
@@ -255,26 +232,6 @@ class SettingsView extends StatelessWidget {
                   ),
                   SettingRow(
                     theme: theme,
-                    label: 'Smooth scrolling',
-                    control: SwitchControl(
-                      theme: theme,
-                      value: prefs.smoothScrolling,
-                      onChanged: (v) =>
-                          onPrefs(prefs.copyWith(smoothScrolling: v)),
-                    ),
-                  ),
-                  SettingRow(
-                    theme: theme,
-                    label: 'Bracket pair colors',
-                    control: SwitchControl(
-                      theme: theme,
-                      value: prefs.bracketPairColorization,
-                      onChanged: (v) =>
-                          onPrefs(prefs.copyWith(bracketPairColorization: v)),
-                    ),
-                  ),
-                  SettingRow(
-                    theme: theme,
                     label: 'Close brackets automatically',
                     control: SwitchControl(
                       theme: theme,
@@ -283,36 +240,32 @@ class SettingsView extends StatelessWidget {
                           onPrefs(prefs.copyWith(autoClosingBrackets: v)),
                     ),
                   ),
-                  if (syntaxStyles != null)
-                    SettingRow(
+                  SettingRow(
+                    theme: theme,
+                    label: 'Mouse wheel zoom',
+                    description: 'Whether to zoom the editor font size with the mouse wheel while holding the primary modifier key.',
+                    control: SwitchControl(
                       theme: theme,
-                      label: 'Mouse wheel zoom',
-                      description: 'Whether to zoom the editor font size with the mouse wheel while holding the primary modifier key.',
-                      control: SwitchControl(
-                        theme: theme,
-                        value: prefs.mouseWheelZoom,
-                        onChanged: (v) =>
-                            onPrefs(prefs.copyWith(mouseWheelZoom: v)),
-                      ),
+                      value: prefs.mouseWheelZoom,
+                      onChanged: (v) =>
+                          onPrefs(prefs.copyWith(mouseWheelZoom: v)),
                     ),
-                  // the scrollbars of the editor that flutter draws
-                  if (syntaxStyles != null)
-                    SettingRow(
+                  ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Scrollbars',
+                    description: 'Auto hides them a moment after scrolling',
+                    control: ChoiceControl<ScrollbarVisibility>(
                       theme: theme,
-                      label: 'Scrollbars',
-                      description: 'Auto hides them a moment after scrolling',
-                      control: ChoiceControl<ScrollbarVisibility>(
-                        theme: theme,
-                        value: prefs.scrollbars,
-                        options: const [
-                          (ScrollbarVisibility.auto, 'Auto'),
-                          (ScrollbarVisibility.always, 'Always'),
-                          (ScrollbarVisibility.never, 'Never'),
-                        ],
-                        onChanged: (v) =>
-                            onPrefs(prefs.copyWith(scrollbars: v)),
-                      ),
+                      value: prefs.scrollbars,
+                      options: const [
+                        (ScrollbarVisibility.auto, 'Auto'),
+                        (ScrollbarVisibility.always, 'Always'),
+                        (ScrollbarVisibility.never, 'Never'),
+                      ],
+                      onChanged: (v) => onPrefs(prefs.copyWith(scrollbars: v)),
                     ),
+                  ),
                 ],
               ),
               if (syntaxStyles != null && onSyntaxStyles != null) ...[

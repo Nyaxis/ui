@@ -140,9 +140,7 @@ void main() {
       expect(chosen, <String, String>{});
     });
 
-    testWidgets('the scrollbars are chosen in the editor that flutter draws', (
-      tester,
-    ) async {
+    testWidgets('the scrollbars and the wheel zoom are chosen', (tester) async {
       EditorPrefs? chosen;
       tester.view.physicalSize = const Size(900, 4200);
       tester.view.devicePixelRatio = 1.0;
@@ -165,10 +163,6 @@ void main() {
           ),
         ),
       );
-      await show(null);
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('Scrollbars'), findsNothing);
-      expect(find.text('Mouse wheel zoom'), findsNothing);
       await show(const {});
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('Scrollbars'), findsOneWidget);

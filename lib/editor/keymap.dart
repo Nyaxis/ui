@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_monaco/flutter_monaco.dart';
 
 import '../native_editor/modifier_keys.dart';
 import 'key_context.dart';
@@ -27,11 +26,10 @@ class Binding {
 /// its bindings win, and a key set to null is unbound. the file is polled, so
 /// changes apply at once.
 ///
-/// keys are read where they are pressed: by a handler in the editor's page,
-/// which swallows the ones bound, and by flutter when the editor is not
-/// focused. both report to [_press], which is the only one that knows the
-/// bindings and contexts. what an action does is set with [on], and keys of
-/// actions without a handler are left alone
+/// keys are read by flutter wherever they are pressed, and go to [_press],
+/// which is the only one that knows the bindings and contexts. what an action
+/// does is set with [on], and keys of actions without a handler are left
+/// alone
 class Keymap {
   static const _defaults = 'assets/keymaps/default.json';
 
@@ -56,10 +54,7 @@ class Keymap {
 
   var _bindings = <Binding>[];
   final _handlers = <String, Future<void> Function()>{};
-  MonacoController? _controller;
-  StreamSubscription<MonacoEvent>? _events;
   Timer? _poll;
-  var _editorFocused = false;
 
   /// the first stroke of a chord that has been pressed
   String? _pending;
@@ -68,28 +63,12 @@ class Keymap {
     _handlers[action] = handler;
   }
 
-  /// set when the editor is drawn by flutter: whether it has the focus, since
-  /// it reports its keys to flutter like any other widget
+  /// whether the editor has the focus, which says in which context a key is
+  /// pressed; it reports its keys to flutter like any other widget
   bool Function()? _nativeFocus;
 
-  Future<void> attach(MonacoController controller) async {
-    _controller = controller;
-    _events = controller.events.listen((event) {
-      if (event is MonacoFocusChanged) {
-        _editorFocused = event.focused;
-        _pending = null;
-      } else if (event is MonacoUnknownEvent && event.name == 'nyaxis.stroke') {
-        _press('${event.data['stroke']}', _editor);
-      }
-    });
-    HardwareKeyboard.instance.addHandler(_onKey);
-    await controller.runJavaScript(_script);
-    await _reload();
-    _watchUserFile();
-  }
-
-  /// the keymap for an editor that flutter draws: every key comes to flutter,
-  /// and [editorFocused] says which context it is pressed in
+  /// every key comes to flutter, and [editorFocused] says which context it is
+  /// pressed in
   Future<void> attachNative(bool Function() editorFocused) async {
     _nativeFocus = editorFocused;
     // the modifiers are followed before the strokes are looked at
@@ -148,19 +127,6 @@ class Keymap {
       _bindings = resolve([defaults]);
     }
     _pending = null;
-
-    // the page only has to know which strokes to swallow
-    final keys = _active(_editor).keys.map((k) => k.split(' '));
-    final single = {
-      for (final k in keys)
-        if (k.length == 1) k.first,
-    };
-    final first = {for (final k in keys) k.first};
-    final strokes = jsonEncode({
-      'first': first.toList(),
-      'chords': first.difference(single).toList(),
-    });
-    await _controller?.runJavaScript('window.nyaxisKeys = $strokes;');
   }
 
   /// the actions bound in [context], by keys; of several bindings of the same
@@ -240,33 +206,26 @@ class Keymap {
     return false;
   }
 
-  /// the editor's page gets its keys first, so flutter only sees the ones
-  /// pressed elsewhere
   bool _onKey(KeyEvent event) {
-    final nativeFocus = _nativeFocus;
-    final inEditor = nativeFocus != null ? nativeFocus() : _editorFocused;
-    // a page that has the focus has had the key already
-    final key = (nativeFocus == null && inEditor) || event is! KeyDownEvent
+    final editorFocused = _nativeFocus;
+    final key = editorFocused == null || event is! KeyDownEvent
         ? null
         : _logicalName(event.logicalKey);
     if (key == null) {
       return false;
     }
-    // with the editor that flutter draws, the modifiers are the ones that are
-    // followed, which are not down after the window was left with one down
-    final native = nativeFocus != null;
-    final hardware = HardwareKeyboard.instance;
+    // the modifiers are the ones that are followed, which are not down after
+    // the window was left with one down
     final followed = ModifierKeys.instance;
     return _press(
       [
-        if (native ? followed.isControlPressed : hardware.isControlPressed)
-          'ctrl',
-        if (native ? followed.isAltPressed : hardware.isAltPressed) 'alt',
-        if (native ? followed.isShiftPressed : hardware.isShiftPressed) 'shift',
-        if (native ? followed.isMetaPressed : hardware.isMetaPressed) 'win',
+        if (followed.isControlPressed) 'ctrl',
+        if (followed.isAltPressed) 'alt',
+        if (followed.isShiftPressed) 'shift',
+        if (followed.isMetaPressed) 'win',
         key,
       ].join('-'),
-      inEditor ? _editor : _workspace,
+      editorFocused!() ? _editor : _workspace,
     );
   }
 
@@ -307,38 +266,6 @@ class Keymap {
     return _logicalNames[key] ??
         (id > 0x20 && id < 0x7f ? String.fromCharCode(id).toLowerCase() : null);
   }
-
-  /// the page swallows the strokes of bound keys, and reports them. it names a
-  /// key by what is on it, not by its character, so that shift and the layout
-  /// do not change it. a stroke that starts a chord is followed by the next
-  /// one, whatever it is
-  String get _script =>
-      '''
-(() => {
-  const names = ${jsonEncode({for (final e in _codes.entries) e.value: e.key})};
-  const keyName = (code) =>
-      /^Key[A-Z]\$/.test(code) ? code[3].toLowerCase()
-      : /^Digit[0-9]\$/.test(code) ? code[5]
-      : /^F[0-9]+\$/.test(code) ? code.toLowerCase()
-      : names[code];
-  window.nyaxisKeys = {first: [], chords: []};
-  let waiting = false;
-  window.addEventListener('keydown', (e) => {
-    const key = keyName(e.code);
-    if (!key) return;
-    const stroke = [e.ctrlKey && 'ctrl', e.altKey && 'alt',
-        e.shiftKey && 'shift', e.metaKey && 'win', key].filter(Boolean).join('-');
-    const swallow = waiting || window.nyaxisKeys.first.includes(stroke);
-    waiting = !waiting && window.nyaxisKeys.chords.includes(stroke);
-    if (!swallow) return;
-    e.preventDefault();
-    e.stopPropagation();
-    if (!e.repeat) {
-      window.flutterChannel.postMessage(JSON.stringify(
-          {kind: 'event', name: 'nyaxis.stroke', data: {stroke}}));
-    }
-  }, true);
-})();''';
 
   /// the bindings of keymaps, in the order they apply
   static List<Binding> resolve(Iterable<String> keymaps) {
@@ -424,38 +351,35 @@ class Keymap {
   /// the order modifiers are written in
   static const _modifierOrder = ['ctrl', 'alt', 'shift', 'win'];
 
-  /// keys that are not letters, digits or function keys, to the `code` the page
-  /// sees for them
-  static const _codes = {
-    'enter': 'Enter',
-    'escape': 'Escape',
-    'tab': 'Tab',
-    'space': 'Space',
-    'backspace': 'Backspace',
-    'delete': 'Delete',
-    'insert': 'Insert',
-    'home': 'Home',
-    'end': 'End',
-    'pageup': 'PageUp',
-    'pagedown': 'PageDown',
-    'up': 'ArrowUp',
-    'down': 'ArrowDown',
-    'left': 'ArrowLeft',
-    'right': 'ArrowRight',
-    '-': 'Minus',
-    '=': 'Equal',
-    // the plus that has its own key, as on the number pad; the one that is
-    // shift and = is `shift-=` for the page
-    '+': 'NumpadAdd',
-    ',': 'Comma',
-    '.': 'Period',
-    '/': 'Slash',
-    ';': 'Semicolon',
-    "'": 'Quote',
-    '[': 'BracketLeft',
-    ']': 'BracketRight',
-    r'\': 'Backslash',
-    '`': 'Backquote',
+  /// the names of keys that are not letters, digits or function keys
+  static const _otherKeys = {
+    'enter',
+    'escape',
+    'tab',
+    'space',
+    'backspace',
+    'delete',
+    'insert',
+    'home',
+    'end',
+    'pageup',
+    'pagedown',
+    'up',
+    'down',
+    'left',
+    'right',
+    '-',
+    '=',
+    '+',
+    ',',
+    '.',
+    '/',
+    ';',
+    "'",
+    '[',
+    ']',
+    r'\',
+    '`',
   };
 
   static final _plainKey = RegExp(r'^([a-z0-9]|f([1-9]|1[0-9]|2[0-4]))$');
@@ -474,7 +398,7 @@ class Keymap {
       modifiers.add(modifier);
       key = key.substring(dash + 1);
     }
-    if (!_plainKey.hasMatch(key) && !_codes.containsKey(key)) {
+    if (!_plainKey.hasMatch(key) && !_otherKeys.contains(key)) {
       return null;
     }
     return [
@@ -498,6 +422,5 @@ class Keymap {
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onKey);
     _poll?.cancel();
-    _events?.cancel();
   }
 }
