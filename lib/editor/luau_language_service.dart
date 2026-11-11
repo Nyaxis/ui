@@ -9,7 +9,8 @@ import '../lsp/document_sync.dart';
 import '../lsp/json_rpc.dart';
 import '../lsp/lsp_client.dart';
 import '../native/backend.dart';
-import '../native_editor/editor_controller.dart' show DiagnosticRanges;
+import '../native_editor/editor_controller.dart'
+    show DetailSeverity, DiagnosticDetail, DiagnosticRanges;
 import 'tab_document.dart';
 
 /// the language server of the backend, told of the documents that flutter
@@ -104,6 +105,7 @@ class LuauLanguageService {
         severity: <(int, int)>[],
     };
     final unused = <(int, int)>[];
+    final details = <DiagnosticDetail>[];
     for (final diagnostic in diagnostics) {
       final (start, end) = diagnosticOffsets(text, diagnostic.range);
       if (end > start) {
@@ -111,6 +113,24 @@ class LuauLanguageService {
         if (diagnostic.unnecessary) {
           unused.add((start, end));
         }
+        details.add(
+          DiagnosticDetail(
+            range: AnchorRange(
+              buffer.anchorAt(start, Bias.right),
+              buffer.anchorAt(end, Bias.left),
+            ),
+            level: switch (diagnostic.severity) {
+              DiagnosticSeverity.error => DetailSeverity.error,
+              DiagnosticSeverity.warning => DetailSeverity.warning,
+              DiagnosticSeverity.information => DetailSeverity.information,
+              DiagnosticSeverity.hint => DetailSeverity.hint,
+            },
+            message: diagnostic.message,
+            source: diagnostic.source,
+            code: diagnostic.code,
+            codeHref: diagnostic.codeHref,
+          ),
+        );
       }
     }
     List<AnchorRange> ranges(List<(int, int)> places) =>
@@ -129,6 +149,7 @@ class LuauLanguageService {
         information: ranges(bySeverity[DiagnosticSeverity.information]!),
         hints: ranges(bySeverity[DiagnosticSeverity.hint]!),
         unnecessary: ranges(unused),
+        details: details,
       ),
     );
   }

@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'diagnostic_hover.dart';
 import 'editor_controller.dart';
 import 'editor_keys.dart';
 import 'editor_style.dart';
@@ -22,6 +25,7 @@ class EditorView extends StatefulWidget {
     this.softWrap = true,
     this.showLineNumbers = true,
     this.scrollbars = const ScrollbarSettings(),
+    this.hover = const HoverSettings(),
     this.mouseWheelZoom = false,
     this.onZoom,
     this.focusNode,
@@ -29,6 +33,10 @@ class EditorView extends StatefulWidget {
     this.readOnly = false,
     this.onFocusChanged,
   });
+
+  /// when what the language server found is shown for the text that the
+  /// pointer rests on
+  final HoverSettings hover;
 
   /// told when the editor gains or loses the focus
   final void Function(bool focused)? onFocusChanged;
@@ -73,6 +81,139 @@ class EditorViewState extends State<EditorView> {
 
   FocusNode get focusNode => widget.focusNode ?? widget.controller.focusNode;
 
+  // what the language server found, shown for the text that the pointer rests
+  // on
+
+  /// what is shown now
+  DiagnosticDetail? _popover;
+  final GlobalKey _popoverKey = GlobalKey();
+  Timer? _showTimer;
+  Timer? _hideTimer;
+
+  /// how near the pointer has been to the popover, as it goes toward it
+  double? _closest;
+
+  /// where the selections were when the popover was shown, which it does not
+  /// outlast
+  int _selectionKey = 0;
+
+  /// whether a popover is shown
+  @visibleForTesting
+  DiagnosticDetail? get popover => _popover;
+
+  int _selectionsNow() => Object.hashAll([
+    for (final s in widget.controller.selections.all) ...[s.start, s.end],
+  ]);
+
+  /// takes the popover away, and what was about to show one
+  void _hideHover() {
+    _showTimer?.cancel();
+    _showTimer = null;
+    _hideTimer?.cancel();
+    _hideTimer = null;
+    _closest = null;
+    if (_popover == null) {
+      return;
+    }
+    // a change of the editor can come while the frame is built, when a view
+    // cannot be set
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _popover != null) {
+          setState(() => _popover = null);
+        }
+      });
+    } else {
+      setState(() => _popover = null);
+    }
+  }
+
+  /// the pointer is at [position] of the editor, and [global] on the screen;
+  /// [position] is null when it is not on text
+  void _updateHover(Offset? position, Offset? global) {
+    final settings = widget.hover;
+    if (!settings.enabled) {
+      return;
+    }
+    final render = _render;
+    final offset = position == null || render == null
+        ? null
+        : render.hoverOffsetAt(position);
+    if (offset != null && (render!.scrollbarAt(position!) == null)) {
+      _hideTimer?.cancel();
+      _hideTimer = null;
+      _closest = null;
+      if (_popover != null) {
+        return;
+      }
+      _showTimer?.cancel();
+      _selectionKey = _selectionsNow();
+      _showTimer = Timer(settings.delay, () => _showHover(offset));
+      return;
+    }
+    _showTimer?.cancel();
+    _showTimer = null;
+    if (_popover == null) {
+      return;
+    }
+    if (!settings.sticky) {
+      _hideHover();
+      return;
+    }
+    final closer = global != null && _gettingCloser(global);
+    if (!closer && _hideTimer != null) {
+      return;
+    }
+    _hideTimer?.cancel();
+    _hideTimer = Timer(settings.hidingDelay, _hideHover);
+  }
+
+  void _showHover(int offset) {
+    _showTimer = null;
+    if (!mounted) {
+      return;
+    }
+    final detail = widget.controller.diagnosticAt(offset);
+    if (detail == null) {
+      return;
+    }
+    _selectionKey = _selectionsNow();
+    setState(() => _popover = detail);
+  }
+
+  /// whether the pointer at [global] is not further from the popover than it
+  /// has been, by more than four pixels, as it is when it goes toward it
+  bool _gettingCloser(Offset global) {
+    final box = _popoverKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) {
+      return false;
+    }
+    final bounds = box.localToGlobal(Offset.zero) & box.size;
+    final dx = math.max(
+      0.0,
+      (global.dx - bounds.center.dx).abs() - bounds.width / 2,
+    );
+    final dy = math.max(
+      0.0,
+      (global.dy - bounds.center.dy).abs() - bounds.height / 2,
+    );
+    final distance = math.sqrt(dx * dx + dy * dy);
+    final closest = _closest;
+    if (closest != null && distance > closest + 4) {
+      return false;
+    }
+    _closest = closest == null ? distance : math.min(distance, closest);
+    return true;
+  }
+
+  /// the pointer is on the popover, which stays
+  void _onPopoverPointer() {
+    _hideTimer?.cancel();
+    _hideTimer = null;
+    _closest = 0;
+  }
+
   RenderEditor? get _render =>
       _renderKey.currentContext?.findRenderObject() as RenderEditor?;
 
@@ -106,6 +247,9 @@ class EditorViewState extends State<EditorView> {
     if (oldWidget.scrollbars.show != widget.scrollbars.show) {
       widget.controller.showScrollbars();
     }
+    if (!widget.hover.enabled && oldWidget.hover.enabled) {
+      _hideHover();
+    }
     final oldNode = oldWidget.focusNode ?? oldWidget.controller.focusNode;
     if (oldNode != focusNode) {
       oldNode.removeListener(_onFocusChange);
@@ -128,6 +272,9 @@ class EditorViewState extends State<EditorView> {
     widget.controller.setFocus(focusNode.hasFocus);
     widget.onFocusChanged?.call(focusNode.hasFocus);
     _blink?.cancel();
+    if (!focusNode.hasFocus) {
+      _hideHover();
+    }
     if (focusNode.hasFocus) {
       if (!widget.readOnly) {
         _input.attach();
@@ -142,6 +289,12 @@ class EditorViewState extends State<EditorView> {
 
   void _onControllerChange() {
     final controller = widget.controller;
+    // the popover does not outlast a change of where the selections are, which
+    // is also what typing does
+    if ((_popover != null || _showTimer != null) &&
+        _selectionsNow() != _selectionKey) {
+      _hideHover();
+    }
     if (!_scrollCheck &&
         (controller.scrollX != _scrollX || controller.scrollY != _scrollY)) {
       // the layout puts the text back when it was asked to go past its ends,
@@ -157,6 +310,7 @@ class EditorViewState extends State<EditorView> {
           _scrollX = now.scrollX;
           _scrollY = now.scrollY;
           _showScrollbars();
+          _hideHover();
         }
       });
     }
@@ -182,6 +336,12 @@ class EditorViewState extends State<EditorView> {
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (_popover != null &&
+        event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      _hideHover();
+      return KeyEventResult.handled;
+    }
     if (widget.readOnly) {
       final keyboard = ModifierKeys.instance;
       final command = keyboard.isControlPressed || keyboard.isMetaPressed;
@@ -330,6 +490,7 @@ class EditorViewState extends State<EditorView> {
     final render = _render;
     if (render != null && _scrollbarDrag == null) {
       _hoverScrollbars(render, event.localPosition);
+      _updateHover(event.localPosition, event.position);
     }
   }
 
@@ -419,6 +580,8 @@ class EditorViewState extends State<EditorView> {
   @override
   void dispose() {
     _blink?.cancel();
+    _showTimer?.cancel();
+    _hideTimer?.cancel();
     _input.detach();
     widget.controller.scrollbarHeld = null;
     widget.controller.removeListener(_onControllerChange);
@@ -426,33 +589,77 @@ class EditorViewState extends State<EditorView> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Focus(
-      focusNode: focusNode,
-      autofocus: widget.autofocus,
-      onKeyEvent: _onKey,
-      child: MouseRegion(
-        cursor: _overScrollbar || _scrollbarDrag != null
-            ? SystemMouseCursors.basic
-            : SystemMouseCursors.text,
-        onHover: _onHover,
-        onExit: _onExit,
-        child: Listener(
-          onPointerDown: _onPointerDown,
-          onPointerMove: _onPointerMove,
-          onPointerUp: _onPointerUp,
-          onPointerSignal: _onScroll,
-          child: _EditorRenderWidget(
-            key: _renderKey,
-            controller: widget.controller,
-            style: widget.style,
-            softWrap: widget.softWrap,
-            showLineNumbers: widget.showLineNumbers,
-            scrollbars: widget.scrollbars,
+  /// the popover, over the place that the diagnostic starts at, or null
+  Widget? _popoverLayer() {
+    final detail = _popover;
+    final render = _render;
+    if (detail == null || render == null || !render.hasSize) {
+      return null;
+    }
+    final controller = widget.controller;
+    final start = controller.buffer.snapshot.offsetForAnchor(
+      detail.range.start,
+    );
+    var target = render.caretRectForOffset(start);
+    // a place that is out of sight is at the nearest row that is in sight
+    final top = target.top
+        .clamp(0.0, math.max(0.0, render.size.height - render.lineHeight))
+        .toDouble();
+    target = Rect.fromLTWH(target.left, top, target.width, render.lineHeight);
+    return PopoverLayer(
+      target: target,
+      child: KeyedSubtree(
+        key: _popoverKey,
+        child: DiagnosticPopover(
+          key: ObjectKey(detail),
+          detail: detail,
+          colors: controller.diagnosticColors,
+          style: widget.style,
+          contentLimit: popoverContentLimit(
+            area: render.size,
+            charWidth: render.charWidth,
+            lineHeight: render.lineHeight,
           ),
+          onPointer: _onPopoverPointer,
         ),
       ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final popover = _popoverLayer();
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Focus(
+          focusNode: focusNode,
+          autofocus: widget.autofocus,
+          onKeyEvent: _onKey,
+          child: MouseRegion(
+            cursor: _overScrollbar || _scrollbarDrag != null
+                ? SystemMouseCursors.basic
+                : SystemMouseCursors.text,
+            onHover: _onHover,
+            onExit: _onExit,
+            child: Listener(
+              onPointerDown: _onPointerDown,
+              onPointerMove: _onPointerMove,
+              onPointerUp: _onPointerUp,
+              onPointerSignal: _onScroll,
+              child: _EditorRenderWidget(
+                key: _renderKey,
+                controller: widget.controller,
+                style: widget.style,
+                softWrap: widget.softWrap,
+                showLineNumbers: widget.showLineNumbers,
+                scrollbars: widget.scrollbars,
+              ),
+            ),
+          ),
+        ),
+        ?popover,
+      ],
     );
   }
 }

@@ -433,6 +433,27 @@ class RenderEditor extends RenderBox {
     return _snapshot.displayPointToOffset(clipped);
   }
 
+  /// the text offset that the pointer at [position] rests on, or null when it
+  /// is not on text: in the gutter, at a scrollbar, below the last row, or
+  /// further along a row than its end, by more than half a column
+  int? hoverOffsetAt(Offset position) {
+    if (!hasSize ||
+        position.dx < textLeft ||
+        position.dx >= size.width - _scrollbarWidth ||
+        position.dy < 0) {
+      return null;
+    }
+    final row = ((position.dy + _controller.scrollY) / _lineHeight).floor();
+    if (row < 0 || row >= _snapshot.rowCount) {
+      return null;
+    }
+    final x = position.dx - textLeft + _controller.scrollX;
+    if (x > _row(row).painter.width + _charWidth / 2) {
+      return null;
+    }
+    return offsetForPosition(position);
+  }
+
   // scrollbars
 
   final Map<ScrollbarAxis, ThumbState> _thumbStates = {};

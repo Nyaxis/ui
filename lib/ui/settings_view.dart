@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../editor/editor_tabs.dart' show AutoSave;
+import '../native_editor/diagnostic_hover.dart' show HoverSettings;
 import '../native_editor/scrollbar_layout.dart'
     show ScrollbarDiagnostics, ScrollbarSettings, ScrollbarVisibility;
 import '../settings/editor_settings.dart';
@@ -120,6 +121,38 @@ class SettingsView extends StatelessWidget {
     void setScrollbar(ScrollbarSettings value) =>
         onPrefs(prefs.copyWith(scrollbar: value));
     const gap = SizedBox(height: 24);
+    void setHover(HoverSettings value) => onPrefs(prefs.copyWith(hover: value));
+    const hoverStep = Duration(milliseconds: 50);
+    Widget milliseconds(Duration value, ValueChanged<Duration> onChanged) {
+      Duration within(Duration d) => Duration(
+        milliseconds: d.inMilliseconds.clamp(
+          0,
+          EditorPrefs.maxHoverDelay.inMilliseconds,
+        ),
+      );
+      return StepperControl(
+        theme: theme,
+        text: '${value.inMilliseconds}',
+        slider: SliderSpec(
+          value: value.inMilliseconds.toDouble(),
+          min: 0,
+          max: EditorPrefs.maxHoverDelay.inMilliseconds.toDouble(),
+          divisions:
+              EditorPrefs.maxHoverDelay.inMilliseconds ~/
+              hoverStep.inMilliseconds,
+          onChanged: (v) => onChanged(
+            within(hoverStep * ((v / hoverStep.inMilliseconds).round())),
+          ),
+        ),
+        onMinus: value > Duration.zero
+            ? () => onChanged(within(value - hoverStep))
+            : null,
+        onPlus: value < EditorPrefs.maxHoverDelay
+            ? () => onChanged(within(value + hoverStep))
+            : null,
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
       child: Align(
@@ -306,6 +339,79 @@ class SettingsView extends StatelessWidget {
                       value: prefs.mouseWheelZoom,
                       onChanged: (v) =>
                           onPrefs(prefs.copyWith(mouseWheelZoom: v)),
+                    ),
+                  ),
+                ],
+              ),
+              gap,
+              SettingsSection(
+                theme: theme,
+                title: 'Hover Popover',
+                rows: [
+                  SettingRow(
+                    theme: theme,
+                    label: 'Enabled',
+                    description: 'Show the informational hover box when moving the mouse over symbols in the editor.',
+                    control: SwitchControl(
+                      theme: theme,
+                      value: prefs.hover.enabled,
+                      onChanged: (v) => setHover(
+                        HoverSettings(
+                          enabled: v,
+                          delay: prefs.hover.delay,
+                          sticky: prefs.hover.sticky,
+                          hidingDelay: prefs.hover.hidingDelay,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Delay',
+                    description: 'Time to wait in milliseconds before showing the informational hover box.',
+                    control: milliseconds(
+                      prefs.hover.delay,
+                      (v) => setHover(
+                        HoverSettings(
+                          enabled: prefs.hover.enabled,
+                          delay: v,
+                          sticky: prefs.hover.sticky,
+                          hidingDelay: prefs.hover.hidingDelay,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Sticky',
+                    description: 'Whether the hover popover sticks when the mouse moves toward it, allowing interaction with its contents.',
+                    control: SwitchControl(
+                      theme: theme,
+                      value: prefs.hover.sticky,
+                      onChanged: (v) => setHover(
+                        HoverSettings(
+                          enabled: prefs.hover.enabled,
+                          delay: prefs.hover.delay,
+                          sticky: v,
+                          hidingDelay: prefs.hover.hidingDelay,
+                        ),
+                      ),
+                    ),
+                  ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Hiding Delay',
+                    description: 'Time to wait in milliseconds before hiding the hover popover after the mouse moves away.',
+                    control: milliseconds(
+                      prefs.hover.hidingDelay,
+                      (v) => setHover(
+                        HoverSettings(
+                          enabled: prefs.hover.enabled,
+                          delay: prefs.hover.delay,
+                          sticky: prefs.hover.sticky,
+                          hidingDelay: v,
+                        ),
+                      ),
                     ),
                   ),
                 ],

@@ -30,7 +30,27 @@ class EditorStyle {
     this.scrollbarThumbActive = const Color(0x23FBFBEB),
     this.scrollbarMarker = const Color(0xFF94E2D5),
     this.roundedSelection = true,
+    this.popoverText = const TextStyle(
+      fontSize: 13,
+      height: 1.4,
+      color: Color(0xFFCDD6F4),
+    ),
+    this.popoverSurface = const Color(0xFF181825),
+    this.popoverRadius = 8,
+    this.popoverMuted = const Color(0xFF9399B2),
+    this.popoverSuccess = const Color(0xFFA6E3A1),
   });
+
+  /// the color of a button in a popover, and of it once it has done its work
+  final Color popoverMuted;
+  final Color popoverSuccess;
+
+  /// the text of what pops up over the editor, in the font of the interface
+  final TextStyle popoverText;
+
+  /// what a popup is on, which a color of how bad a diagnostic is lies over
+  final Color popoverSurface;
+  final double popoverRadius;
 
   /// the font of the text, whose width is the width of a column
   final TextStyle textStyle;
