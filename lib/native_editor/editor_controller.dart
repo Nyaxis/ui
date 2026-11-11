@@ -24,12 +24,17 @@ class DiagnosticRanges {
     this.warnings = const [],
     this.information = const [],
     this.hints = const [],
+    this.unnecessary = const [],
   });
 
   final List<AnchorRange> errors;
   final List<AnchorRange> warnings;
   final List<AnchorRange> information;
   final List<AnchorRange> hints;
+
+  /// the code that the server says is not needed, which is drawn faded; it
+  /// is also in the list of how bad it is, which is where its underline is
+  final List<AnchorRange> unnecessary;
 }
 
 /// the colors that diagnostics are underlined in, `0xAARRGGBB`
@@ -320,6 +325,26 @@ class EditorController extends ChangeNotifier {
   static const int _warningsKey = 4;
   static const int _errorsKey = 5;
 
+  /// the fade of unused code has a key of its own, as it is not a color
+  static const int _unnecessaryKey = 6;
+
+  /// the most that unused code can be faded
+  static const double maxUnnecessaryCodeFade = 0.9;
+
+  double _unnecessaryCodeFade = 0.3;
+
+  /// how much unused code is faded, from 0 to [maxUnnecessaryCodeFade]
+  double get unnecessaryCodeFade => _unnecessaryCodeFade;
+
+  set unnecessaryCodeFade(double value) {
+    final fade = value.clamp(0.0, maxUnnecessaryCodeFade);
+    if (fade == _unnecessaryCodeFade) {
+      return;
+    }
+    _unnecessaryCodeFade = fade;
+    _applyDiagnostics();
+  }
+
   /// what the language server found wrong, by how bad it is
   var _diagnostics = const DiagnosticRanges();
 
@@ -377,6 +402,15 @@ class EditorController extends ChangeNotifier {
         .withTextHighlight(
           _errorsKey,
           underline(_diagnostics.errors, colors.error),
+        )
+        .withTextHighlight(
+          _unnecessaryKey,
+          _diagnostics.unnecessary.isEmpty
+              ? null
+              : TextHighlight(
+                  HighlightStyle(fadeOut: _unnecessaryCodeFade),
+                  _diagnostics.unnecessary,
+                ),
         );
     _changed();
   }

@@ -92,6 +92,7 @@ class LspDiagnostic {
     required this.message,
     this.source,
     this.code,
+    this.unnecessary = false,
   });
 
   final LspRange range;
@@ -99,6 +100,13 @@ class LspDiagnostic {
   final String message;
   final String? source;
   final String? code;
+
+  /// whether the server tagged it as code that is not needed, such as a local
+  /// that is never used
+  final bool unnecessary;
+
+  /// the number of the tag for unnecessary code in the protocol
+  static const unnecessaryTag = 1;
 
   static LspDiagnostic? fromJson(Object? json) {
     if (json is! Map) {
@@ -115,6 +123,10 @@ class LspDiagnostic {
       message: message,
       source: json['source'] as String?,
       code: json['code']?.toString(),
+      unnecessary: switch (json['tags']) {
+        final List tags => tags.contains(unnecessaryTag),
+        _ => false,
+      },
     );
   }
 }
@@ -217,6 +229,10 @@ class LspClient {
       'publishDiagnostics': {
         'relatedInformation': false,
         'versionSupport': true,
+        // unnecessary and deprecated
+        'tagSupport': {
+          'valueSet': [1, 2],
+        },
       },
     },
     'workspace': {'configuration': true, 'workspaceFolders': false},

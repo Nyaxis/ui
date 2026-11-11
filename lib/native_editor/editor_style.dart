@@ -67,8 +67,16 @@ class EditorStyle {
     if (style == null) {
       return textStyle;
     }
+    // the color is taken first and then faded, so that the text keeps the
+    // color of its syntax
+    var color = style.color == null ? null : Color(style.color!);
+    final fade = style.fadeOut;
+    if (fade != null) {
+      final base = color ?? textStyle.color ?? const Color(0xFF000000);
+      color = base.withValues(alpha: base.a * (1 - fade.clamp(0.0, 1.0)));
+    }
     return textStyle.copyWith(
-      color: style.color == null ? null : Color(style.color!),
+      color: color,
       backgroundColor: style.background == null
           ? null
           : Color(style.background!),

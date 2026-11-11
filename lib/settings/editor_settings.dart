@@ -19,6 +19,7 @@ class EditorPrefs {
     this.autoClosingBrackets = true,
     this.scrollbar = const ScrollbarSettings(show: ScrollbarVisibility.auto),
     this.mouseWheelZoom = false,
+    this.unnecessaryCodeFade = defaultUnnecessaryCodeFade,
   });
 
   /// unknown or malformed values fall back to their defaults
@@ -34,7 +35,11 @@ class EditorPrefs {
 
     final size = json['fontSize'];
     final tab = json['tabSize'];
+    final fade = json['unnecessaryCodeFade'];
     return EditorPrefs(
+      unnecessaryCodeFade: fade is num
+          ? fade.toDouble().clamp(0.0, maxUnnecessaryCodeFade).toDouble()
+          : defaults.unnecessaryCodeFade,
       fontSize: size is num
           ? size.toDouble().clamp(minFontSize, maxFontSize).toDouble()
           : null,
@@ -61,6 +66,10 @@ class EditorPrefs {
   static const minTabSize = 1;
   static const maxTabSize = 8;
 
+  /// how much unused code is faded, and the most it can be
+  static const defaultUnnecessaryCodeFade = 0.3;
+  static const maxUnnecessaryCodeFade = 0.9;
+
   /// null follows the theme's body size
   final double? fontSize;
   final int tabSize;
@@ -78,6 +87,9 @@ class EditorPrefs {
   /// editor
   final bool mouseWheelZoom;
 
+  /// how much unused code is faded out, from 0 to [maxUnnecessaryCodeFade]
+  final double unnecessaryCodeFade;
+
   EditorPrefs copyWith({
     int? tabSize,
     bool? wordWrap,
@@ -86,8 +98,10 @@ class EditorPrefs {
     bool? autoClosingBrackets,
     ScrollbarSettings? scrollbar,
     bool? mouseWheelZoom,
+    double? unnecessaryCodeFade,
   }) {
     return EditorPrefs(
+      unnecessaryCodeFade: unnecessaryCodeFade ?? this.unnecessaryCodeFade,
       fontSize: fontSize,
       tabSize: tabSize ?? this.tabSize,
       wordWrap: wordWrap ?? this.wordWrap,
@@ -102,6 +116,7 @@ class EditorPrefs {
   /// [size] is kept within the limits, and null goes back to the theme's
   EditorPrefs withFontSize(double? size) {
     return EditorPrefs(
+      unnecessaryCodeFade: unnecessaryCodeFade,
       fontSize: size?.clamp(minFontSize, maxFontSize).toDouble(),
       tabSize: tabSize,
       wordWrap: wordWrap,
@@ -122,6 +137,7 @@ class EditorPrefs {
     'autoClosingBrackets': autoClosingBrackets,
     'scrollbar': scrollbar.toJson(),
     'mouseWheelZoom': mouseWheelZoom,
+    'unnecessaryCodeFade': unnecessaryCodeFade,
   };
 
   @override
@@ -134,7 +150,8 @@ class EditorPrefs {
       other.fontLigatures == fontLigatures &&
       other.autoClosingBrackets == autoClosingBrackets &&
       other.scrollbar == scrollbar &&
-      other.mouseWheelZoom == mouseWheelZoom;
+      other.mouseWheelZoom == mouseWheelZoom &&
+      other.unnecessaryCodeFade == unnecessaryCodeFade;
 
   @override
   int get hashCode => Object.hash(
@@ -146,6 +163,7 @@ class EditorPrefs {
     autoClosingBrackets,
     scrollbar,
     mouseWheelZoom,
+    unnecessaryCodeFade,
   );
 }
 
