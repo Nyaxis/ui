@@ -28,11 +28,13 @@ class LuauLanguageService {
 
   bool get isConnected => _client?.isInitialized ?? false;
 
-  /// the backend answers nothing until it is licensed, so a start that gets no
-  /// answer is tried again by the next document that is attached
+  /// the backend refuses everything until it is licensed and ready, which is
+  /// after the first documents are open, so the server is only started then. a
+  /// start that gets no answer is tried again by the next document attached
   Future<void> start() => _starting ??= _start();
 
   Future<void> _start() async {
+    await _backend.ready;
     final client = LspClient(
       JsonRpcConnection.messages(_backend.lspMessages, _backend.lspSend),
     );
