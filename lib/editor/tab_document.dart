@@ -70,6 +70,9 @@ class NativeTabDocument implements TabDocument {
   /// told when the text changes
   void Function(NativeTabDocument document)? onChanged;
 
+  /// told when the document is closed
+  void Function(NativeTabDocument document)? onClosed;
+
   late String _saved;
   bool _lineEndingChanged = false;
 
@@ -113,6 +116,7 @@ class NativeTabDocument implements TabDocument {
 
   @override
   Future<void> close() async {
+    onClosed?.call(this);
     controller.buffer.removeListener(_changed);
     controller.dispose();
   }

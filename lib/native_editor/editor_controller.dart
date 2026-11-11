@@ -212,6 +212,37 @@ class EditorController extends ChangeNotifier {
   /// the highlights go under this key, which no other highlight has
   static const int _occurrencesKey = 1;
 
+  static const int _warningsKey = 2;
+  static const int _errorsKey = 3;
+
+  /// underlines the places that a language server found wrong; errors are
+  /// over warnings where they cover the same text
+  void setDiagnostics({
+    required List<AnchorRange> errors,
+    required List<AnchorRange> warnings,
+  }) {
+    _highlights = _highlights
+        .withTextHighlight(
+          _warningsKey,
+          warnings.isEmpty
+              ? null
+              : TextHighlight(
+                  const HighlightStyle(background: 0x33CCA700, underline: true),
+                  warnings,
+                ),
+        )
+        .withTextHighlight(
+          _errorsKey,
+          errors.isEmpty
+              ? null
+              : TextHighlight(
+                  const HighlightStyle(background: 0x33F14C4C, underline: true),
+                  errors,
+                ),
+        );
+    _changed();
+  }
+
   /// a text that is longer is searched a moment after the selection is made,
   /// and not at once
   static const int _quickSearchLength = 100000;

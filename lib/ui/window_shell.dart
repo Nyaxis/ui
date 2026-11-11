@@ -16,6 +16,7 @@ import '../native_editor/editor_view.dart';
 import '../editor/file_icon_theme.dart';
 import '../editor/keymap.dart';
 import '../editor/language_extensions.dart';
+import '../editor/luau_language_service.dart';
 import '../editor/luau_lsp.dart';
 import '../editor/monaco_theme.dart';
 import '../editor/text_encoding.dart';
@@ -127,6 +128,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   final _tabs = EditorTabs();
   final _keymap = Keymap();
   Backend? _backend;
+  LuauLanguageService? _luau;
   String? _presenceFile;
 
   bool _sidebarOpen = false;
@@ -292,6 +294,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         return;
       }
       setState(() => _backend = backend);
+      _luau = LuauLanguageService(backend);
+      _tabs.luau = _luau;
       _updatePresence();
     });
   }
@@ -310,6 +314,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     _editorSettings.removeListener(_applyEditorOptions);
     _editorSettings.dispose();
     _tabs.removeListener(_updatePresence);
+    _luau?.dispose().ignore();
     _backend?.dispose();
     _tabs.dispose();
     _keymap.dispose();

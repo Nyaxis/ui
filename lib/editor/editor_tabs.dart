@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../editor_core/buffer.dart' show LineEnding;
 import '../native_editor/editor_controller.dart';
+import 'luau_language_service.dart';
 import 'session_file.dart';
 import 'tab_document.dart';
 import 'text_encoding.dart';
@@ -118,6 +119,20 @@ class EditorTabs extends ChangeNotifier with WindowListener {
       return _lineEnding;
     }
     return controller.buffer.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF';
+  }
+
+  LuauLanguageService? _luau;
+
+  /// the language server for the documents that flutter draws; those that are
+  /// already open are told to it
+  set luau(LuauLanguageService? value) {
+    _luau = value;
+    for (final tab in tabs) {
+      final native = tab.native;
+      if (native != null) {
+        value?.attach(native);
+      }
+    }
   }
 
   MonacoController? _controller;
@@ -349,6 +364,7 @@ reportLanguage();''';
           ..completeBlocks = true
           ..autoClose = autoClose;
         document = native;
+        _luau?.attach(native);
       } else {
         document = MonacoTabDocument(
           await controller.openDocument(
