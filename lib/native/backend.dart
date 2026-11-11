@@ -37,10 +37,22 @@ class Backend {
     }
   }
 
+  /// a backend that runs nothing, which the tests feed lines to
+  @visibleForTesting
+  Backend.detached() : _process = null;
+
   final _lsp = StreamController<String>.broadcast();
+  final _ready = Completer<void>();
 
   /// what the language server sends, one json-rpc message to an event
   Stream<String> get lspMessages => _lsp.stream;
+
+  /// completes when the backend says it is licensed and ready, before which it
+  /// refuses what the language server is sent
+  Future<void> get ready => _ready.future;
+
+  @visibleForTesting
+  void handleLine(String line) => _onLine(line);
 
   void _onLine(String line) {
     try {
@@ -48,6 +60,12 @@ class Backend {
       if (reply is Map && reply['evt'] == 'lsp' && reply['detail'] is String) {
         _lsp.add(reply['detail'] as String);
         return;
+      }
+      if (reply is Map &&
+          reply['evt'] == 'state' &&
+          reply['detail'] == 'Ready' &&
+          !_ready.isCompleted) {
+        _ready.complete();
       }
     } on FormatException {
       // not a reply; it is logged like any other line
