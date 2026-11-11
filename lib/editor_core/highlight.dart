@@ -8,6 +8,8 @@ class HighlightStyle {
     this.bold,
     this.italic,
     this.underline,
+    this.underlineColor,
+    this.wavy,
     this.strikethrough,
   });
 
@@ -16,6 +18,12 @@ class HighlightStyle {
   final bool? bold;
   final bool? italic;
   final bool? underline;
+
+  /// the color of the underline, which is the color of the text when null
+  final int? underlineColor;
+
+  /// whether the underline is wavy, as that of a diagnostic is
+  final bool? wavy;
   final bool? strikethrough;
 
   /// this style with everything that [other] sets taken from it
@@ -25,6 +33,8 @@ class HighlightStyle {
     bold: other.bold ?? bold,
     italic: other.italic ?? italic,
     underline: other.underline ?? underline,
+    underlineColor: other.underlineColor ?? underlineColor,
+    wavy: other.wavy ?? wavy,
     strikethrough: other.strikethrough ?? strikethrough,
   );
 
@@ -36,16 +46,28 @@ class HighlightStyle {
       other.bold == bold &&
       other.italic == italic &&
       other.underline == underline &&
+      other.underlineColor == underlineColor &&
+      other.wavy == wavy &&
       other.strikethrough == strikethrough;
 
   @override
-  int get hashCode =>
-      Object.hash(color, background, bold, italic, underline, strikethrough);
+  int get hashCode => Object.hash(
+    color,
+    background,
+    bold,
+    italic,
+    underline,
+    underlineColor,
+    wavy,
+    strikethrough,
+  );
 
   @override
   String toString() =>
       'HighlightStyle(color: $color, background: $background, bold: $bold, '
-      'italic: $italic, underline: $underline, strikethrough: $strikethrough)';
+      'italic: $italic, underline: $underline, '
+      'underlineColor: $underlineColor, wavy: $wavy, '
+      'strikethrough: $strikethrough)';
 }
 
 /// ranges of the buffer that are drawn in [style], such as the matches of a

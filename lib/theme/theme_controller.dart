@@ -581,6 +581,8 @@ class ThemeController extends ValueNotifier<AppTheme> {
       punctuation: themed.punctuation,
       cursor: themed.cursor,
       info: themed.info,
+      warning: themed.warning,
+      hint: themed.hint,
     );
     await _save();
   }
@@ -624,6 +626,8 @@ class ThemeController extends ValueNotifier<AppTheme> {
     ('punctuation', 'Punctuation'),
     ('cursor', 'Cursor'),
     ('info', 'Information'),
+    ('warning', 'Warnings'),
+    ('hint', 'Hints'),
   ];
 
   Color colorOf(String role) => _roleColor(value, role);
@@ -655,6 +659,8 @@ class ThemeController extends ValueNotifier<AppTheme> {
     'punctuation' => theme.punctuation,
     'cursor' => theme.cursor,
     'info' => theme.info,
+    'warning' => theme.warning,
+    'hint' => theme.hint,
     _ => throw ArgumentError.value(role, 'role'),
   };
 
@@ -720,6 +726,8 @@ class ThemeController extends ValueNotifier<AppTheme> {
       'punctuation' => value.copyWith(punctuation: opaque),
       'cursor' => value.copyWith(cursor: opaque),
       'info' => value.copyWith(info: opaque),
+      'warning' => value.copyWith(warning: opaque),
+      'hint' => value.copyWith(hint: opaque),
       _ => throw ArgumentError.value(role, 'role'),
     };
     // a drag through the picker changes it many times a second
@@ -877,6 +885,8 @@ class ThemeController extends ValueNotifier<AppTheme> {
     'punctuation': _hex(t.punctuation),
     'cursor': _hex(t.cursor),
     'info': _hex(t.info),
+    'warning': _hex(t.warning),
+    'hint': _hex(t.hint),
   };
 
   static String _serializePalette(AppTheme t) =>
