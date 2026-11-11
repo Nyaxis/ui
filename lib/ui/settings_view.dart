@@ -255,6 +255,49 @@ class SettingsView extends StatelessWidget {
                           onPrefs(prefs.copyWith(mouseWheelZoom: v)),
                     ),
                   ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Unnecessary code fade',
+                    description:
+                        'How much to fade out unused code (0.0 - 0.9).',
+                    control: StepperControl(
+                      theme: theme,
+                      text: prefs.unnecessaryCodeFade.toStringAsFixed(2),
+                      slider: SliderSpec(
+                        value: prefs.unnecessaryCodeFade,
+                        min: 0,
+                        max: EditorPrefs.maxUnnecessaryCodeFade,
+                        divisions: 9,
+                        onChanged: (v) => onPrefs(
+                          prefs.copyWith(
+                            unnecessaryCodeFade: (v * 10).round() / 10,
+                          ),
+                        ),
+                      ),
+                      onMinus: prefs.unnecessaryCodeFade > 0.05
+                          ? () => onPrefs(
+                              prefs.copyWith(
+                                unnecessaryCodeFade:
+                                    ((prefs.unnecessaryCodeFade - 0.1) * 10)
+                                        .round() /
+                                    10,
+                              ),
+                            )
+                          : null,
+                      onPlus:
+                          prefs.unnecessaryCodeFade <
+                              EditorPrefs.maxUnnecessaryCodeFade - 0.05
+                          ? () => onPrefs(
+                              prefs.copyWith(
+                                unnecessaryCodeFade:
+                                    ((prefs.unnecessaryCodeFade + 0.1) * 10)
+                                        .round() /
+                                    10,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 24),

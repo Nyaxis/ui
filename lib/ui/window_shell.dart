@@ -420,7 +420,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     for (final tab in _tabs.tabs) {
       tab.document.controller
         ..occurrenceBackground = color
-        ..diagnosticColors = diagnostics;
+        ..diagnosticColors = diagnostics
+        ..unnecessaryCodeFade = _editorSettings.value.unnecessaryCodeFade;
     }
   }
 
@@ -515,7 +516,9 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     final autoClose = _editorSettings.value.autoClosingBrackets;
     _tabs.autoClose = autoClose;
     for (final tab in _tabs.tabs) {
-      tab.document.controller.autoClose = autoClose;
+      tab.document.controller
+        ..autoClose = autoClose
+        ..unnecessaryCodeFade = _editorSettings.value.unnecessaryCodeFade;
     }
     if (mounted) {
       setState(() {});

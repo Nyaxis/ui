@@ -11,6 +11,7 @@ class HighlightStyle {
     this.underlineColor,
     this.wavy,
     this.strikethrough,
+    this.fadeOut,
   });
 
   final int? color;
@@ -26,8 +27,22 @@ class HighlightStyle {
   final bool? wavy;
   final bool? strikethrough;
 
-  /// this style with everything that [other] sets taken from it
+  /// how much of the text's opacity is taken away, from 0 to 1, as unused code
+  /// is drawn
+  final double? fadeOut;
+
+  /// this style with everything that [other] sets taken from it. two fades
+  /// that meet add up: the one underneath grows by the share of the one on
+  /// top, and stays within 0 and 1
   HighlightStyle merge(HighlightStyle other) => HighlightStyle(
+    fadeOut: switch ((fadeOut, other.fadeOut)) {
+      (_, null) => fadeOut,
+      (null, final top) => top,
+      (final double under, final double top) => (under * (1 + top)).clamp(
+        0.0,
+        1.0,
+      ),
+    },
     color: other.color ?? color,
     background: other.background ?? background,
     bold: other.bold ?? bold,
@@ -48,7 +63,8 @@ class HighlightStyle {
       other.underline == underline &&
       other.underlineColor == underlineColor &&
       other.wavy == wavy &&
-      other.strikethrough == strikethrough;
+      other.strikethrough == strikethrough &&
+      other.fadeOut == fadeOut;
 
   @override
   int get hashCode => Object.hash(
@@ -60,6 +76,7 @@ class HighlightStyle {
     underlineColor,
     wavy,
     strikethrough,
+    fadeOut,
   );
 
   @override
@@ -67,7 +84,7 @@ class HighlightStyle {
       'HighlightStyle(color: $color, background: $background, bold: $bold, '
       'italic: $italic, underline: $underline, '
       'underlineColor: $underlineColor, wavy: $wavy, '
-      'strikethrough: $strikethrough)';
+      'strikethrough: $strikethrough, fadeOut: $fadeOut)';
 }
 
 /// ranges of the buffer that are drawn in [style], such as the matches of a

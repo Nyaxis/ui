@@ -103,10 +103,14 @@ class LuauLanguageService {
       for (final severity in DiagnosticSeverity.values)
         severity: <(int, int)>[],
     };
+    final unused = <(int, int)>[];
     for (final diagnostic in diagnostics) {
       final (start, end) = diagnosticOffsets(text, diagnostic.range);
       if (end > start) {
         bySeverity[diagnostic.severity]!.add((start, end));
+        if (diagnostic.unnecessary) {
+          unused.add((start, end));
+        }
       }
     }
     List<AnchorRange> ranges(List<(int, int)> places) =>
@@ -124,6 +128,7 @@ class LuauLanguageService {
         warnings: ranges(bySeverity[DiagnosticSeverity.warning]!),
         information: ranges(bySeverity[DiagnosticSeverity.information]!),
         hints: ranges(bySeverity[DiagnosticSeverity.hint]!),
+        unnecessary: ranges(unused),
       ),
     );
   }
