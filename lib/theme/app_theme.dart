@@ -40,6 +40,8 @@ class AppTheme {
     this.property = const Color(0xffb4befe),
     this.special = const Color(0xfff5c2e7),
     this.punctuation = const Color(0xff9399b2),
+    this.cursor = const Color(0xfff5e0dc),
+    this.info = const Color(0xff94e2d5),
   });
 
   final double cornerRadius;
@@ -114,6 +116,13 @@ class AppTheme {
   /// brackets, commas and the like
   final Color punctuation;
 
+  /// the text cursor, and its marks in the scrollbar
+  final Color cursor;
+
+  /// what is only for information, such as the marks in the scrollbar for
+  /// the other places a selected text is
+  final Color info;
+
   TextStyle get titleStyle => TextStyle(
     fontFamily: fontFamily,
     fontSize: fontSizeTitle,
@@ -185,6 +194,8 @@ class AppTheme {
     Color? property,
     Color? special,
     Color? punctuation,
+    Color? cursor,
+    Color? info,
   }) {
     return AppTheme(
       cornerRadius: cornerRadius ?? this.cornerRadius,
@@ -222,6 +233,8 @@ class AppTheme {
       property: property ?? this.property,
       special: special ?? this.special,
       punctuation: punctuation ?? this.punctuation,
+      cursor: cursor ?? this.cursor,
+      info: info ?? this.info,
     );
   }
 
@@ -302,6 +315,8 @@ class AppTheme {
       property: _color(colors['property'], _fallback.property),
       special: _color(colors['special'], _fallback.special),
       punctuation: _color(colors['punctuation'], _fallback.punctuation),
+      cursor: _color(colors['cursor'], _fallback.cursor),
+      info: _color(colors['info'], _fallback.info),
     );
   }
 }

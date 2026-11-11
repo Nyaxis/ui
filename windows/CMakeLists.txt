@@ -39,6 +39,10 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 
 add_subdirectory("runner")
 
+# the parser of the editor, which dart loads by its name
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../native/tree_sitter"
+  "${CMAKE_CURRENT_BINARY_DIR}/nyaxis_syntax")
+
 include(flutter/generated_plugins.cmake)
 
 # support files are copied next to the executable so it runs in place, which
@@ -54,6 +58,9 @@ set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/data")
 set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)
+
+install(TARGETS nyaxis_syntax RUNTIME DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"

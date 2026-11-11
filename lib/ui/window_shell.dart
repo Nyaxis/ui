@@ -3,25 +3,26 @@ import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_monaco/flutter_monaco.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:window_manager/window_manager.dart';
 
-import '../editor/editor_font.dart';
 import '../editor/editor_tabs.dart';
-import '../editor/file_icon_theme.dart';
+import '../native_editor/cursor_summary.dart';
+import '../native_editor/editor_style.dart';
+import '../native_editor/editor_view.dart';
 import '../editor/keymap.dart';
-import '../editor/language_extensions.dart';
-import '../editor/luau_lsp.dart';
-import '../editor/monaco_theme.dart';
+import '../editor/luau_language_service.dart';
 import '../editor/text_encoding.dart';
 import '../native/backend.dart';
 import '../settings/config_file.dart';
 import '../settings/editor_settings.dart';
+import '../syntax/syntax_layer.dart';
+import '../syntax/syntax_palette.dart';
+import '../syntax/syntax_tree.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import 'clickable.dart';
 import 'context_menu.dart';
-import 'deferred_size.dart';
 import 'dialog.dart';
 import 'picker.dart';
 import 'settings_view.dart';
@@ -109,26 +110,23 @@ class WindowShell extends StatefulWidget {
 }
 
 class _WindowShellState extends State<WindowShell> with WindowListener {
-  static const _monacoTheme = MonacoTheme('nyaxis');
-
   /// keeps the editor alive when the sidebar docks to the other side, which
   /// moves it among the row's children
   final _editorKey = GlobalKey();
 
-  MonacoController? _monaco;
   final _tabs = EditorTabs();
   final _keymap = Keymap();
   Backend? _backend;
+  LuauLanguageService? _luau;
   String? _presenceFile;
 
   bool _sidebarOpen = false;
   double _sidebarWidth = 240;
 
-  String? _editorCss;
-
   var _view = _View.editor;
   final _config = ConfigFile.user();
   late final _editorSettings = EditorSettings(_config);
+  late final _syntaxStyles = SyntaxStyleSettings(_config);
 
   bool _maximized = false;
   bool _newMenuOpen = false;
@@ -157,12 +155,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     action: 'line_ending_selector::Toggle',
     onPressed: _openLineEndingPicker,
   );
-  late final _language = _BottomButton(
-    'language',
-    'Select Language',
-    action: 'language_selector::Toggle',
-    onPressed: _openLanguagePicker,
-  );
+  late final _language = _BottomButton('language', 'Language');
   late final _sidebar = _BottomButton(
     'sidebar',
     'Toggle Sidebar',
@@ -266,13 +259,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   void initState() {
     super.initState();
     _loadSettings();
-    _loadEditorCss();
+    _startEditor();
     _editorSettings.load();
     _editorSettings.addListener(_applyEditorOptions);
     _tabs.confirmClose = _confirmClose;
-    widget.controller.addListener(_applyMonacoTheme);
     widget.controller.addListener(_applyEditorOptions);
-    widget.controller.addListener(_applyEditorFont);
     windowManager.addListener(this);
     windowManager.setPreventClose(true);
     _tabs.addListener(_updatePresence);
@@ -282,6 +273,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         return;
       }
       setState(() => _backend = backend);
+      _luau = LuauLanguageService(backend);
+      _tabs.luau = _luau;
       _updatePresence();
     });
   }
@@ -289,12 +282,16 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   @override
   void dispose() {
     windowManager.removeListener(this);
-    widget.controller.removeListener(_applyMonacoTheme);
     widget.controller.removeListener(_applyEditorOptions);
-    widget.controller.removeListener(_applyEditorFont);
+    widget.controller.removeListener(_applySyntax);
+    widget.controller.removeListener(_applyOccurrenceColor);
+    _tabs.removeListener(_applyOccurrenceColor);
+    _syntaxStyles.removeListener(_applySyntax);
+    _tabs.removeListener(_applySyntax);
     _editorSettings.removeListener(_applyEditorOptions);
     _editorSettings.dispose();
     _tabs.removeListener(_updatePresence);
+    _luau?.dispose().ignore();
     _backend?.dispose();
     _tabs.dispose();
     _keymap.dispose();
@@ -328,14 +325,144 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   @override
   void onWindowUnmaximize() => setState(() => _maximized = false);
 
-  /// the documents have to exist before the server connects, so it sees them
-  Future<void> _attachEditor(MonacoController controller) async {
+  /// whether the scripts are open, which they are once the editor is started
+  bool _editorStarted = false;
+
+  Future<void> _startEditor() async {
+    await _attachNativeEditor();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _editorStarted = true);
+    await _loadSyntaxQuery();
+  }
+
+  /// what the parser finds to color, as the grammar says
+  String? _syntaxQuery;
+
+  /// set when the parser cannot be used, which is not tried again
+  bool _syntaxUnavailable = false;
+  AppTheme? _syntaxFor;
+  Map<String, String>? _syntaxStylesFor;
+  SyntaxTheme? _syntaxTheme;
+
+  Future<void> _loadSyntaxQuery() async {
+    try {
+      _syntaxQuery = await rootBundle.loadString(
+        'native/tree_sitter/queries/luau/highlights.scm',
+      );
+    } catch (e) {
+      debugPrint('WindowShell: cannot read the syntax query ($e)');
+      _syntaxUnavailable = true;
+      return;
+    }
+    await _syntaxStyles.load();
+    _tabs.addListener(_applySyntax);
+    widget.controller.addListener(_applySyntax);
+    _syntaxStyles.addListener(_applySyntax);
+    _applySyntax();
+  }
+
+  /// gives the tabs the syntax colors, and the colors of the theme
+  void _applySyntax() {
+    final query = _syntaxQuery;
+    if (query == null || _syntaxUnavailable) {
+      return;
+    }
+    final theme = widget.controller.value;
+    final styles = _syntaxStyles.value;
+    if (!identical(_syntaxFor, theme) || !identical(_syntaxStylesFor, styles)) {
+      _syntaxFor = theme;
+      _syntaxStylesFor = styles;
+      _syntaxTheme = syntaxThemeFor(theme, fontStyles: styles);
+    }
+    final syntaxTheme = _syntaxTheme!;
+    for (final tab in _tabs.tabs) {
+      final controller = tab.document.controller;
+      final layer = controller.syntax;
+      if (layer == null) {
+        String? failure;
+        final attached = SyntaxLayer.attach(
+          controller.buffer,
+          syntaxTheme,
+          query,
+          error: (error) => failure = error,
+        );
+        if (attached == null) {
+          debugPrint('WindowShell: no syntax colors ($failure)');
+          _syntaxUnavailable = true;
+          return;
+        }
+        controller.setSyntax(attached);
+      } else if (!identical(layer.theme, syntaxTheme)) {
+        layer.theme = syntaxTheme;
+        controller.redraw();
+      }
+    }
+  }
+
+  /// the tab size the editor was last given, so that a change of theme does
+  /// not put it back
+  int? _nativeTabSize;
+
+  /// the other places a selected text is, are the accent behind the text
+  void _applyOccurrenceColor() {
+    final color = widget.controller.value.accent
+        .withValues(alpha: 0x17 / 255)
+        .toARGB32();
+    for (final tab in _tabs.tabs) {
+      tab.document.controller.occurrenceBackground = color;
+    }
+  }
+
+  /// the font size of the editor that flutter draws, when it was changed with
+  /// the keys or the wheel, which lasts until the app is closed and is not
+  /// saved; null is the one of the settings
+  double? _zoomedFontSize;
+
+  static const _minFontSize = 6.0;
+  static const _maxFontSize = 100.0;
+
+  /// changes the zoomed size by [step] pixels, from the size that is shown now
+  void _zoom(int step) {
+    final shown =
+        _zoomedFontSize ??
+        _editorSettings.value.fontSize ??
+        widget.controller.value.fontSizeBody;
+    setState(
+      () => _zoomedFontSize = (shown + step).clamp(_minFontSize, _maxFontSize),
+    );
+  }
+
+  void _resetZoom() {
+    if (_zoomedFontSize != null) {
+      setState(() => _zoomedFontSize = null);
+    }
+  }
+
+  Future<void> _attachNativeEditor() async {
+    _tabs.addListener(_applyOccurrenceColor);
+    widget.controller.addListener(_applyOccurrenceColor);
+    _bindKeymap();
+    _keymap.on('zed::IncreaseBufferFontSize', () async => _zoom(1));
+    _keymap.on('zed::DecreaseBufferFontSize', () async => _zoom(-1));
+    _keymap.on('zed::ResetBufferFontSize', () async => _resetZoom());
+    await _keymap.attachNative(() => _tabs.activeController?.hasFocus ?? false);
+    if (mounted) {
+      setState(() {});
+    }
+    await _editorSettings.load();
+    _applyEditorOptions();
+    await _tabs.start();
+  }
+
+  /// what each action does
+  void _bindKeymap() {
     _keymap.on('workspace::Save', _tabs.save);
     _keymap.on('workspace::Open', _openFile);
     _keymap.on('go_to_line::Toggle', _openGoToLine);
     _keymap.on('indentation_selector::Toggle', _openIndentationPicker);
     _keymap.on('encoding_selector::Toggle', _openEncodingPicker);
-    _keymap.on('language_selector::Toggle', _openLanguagePicker);
     _keymap.on('line_ending_selector::Toggle', _openLineEndingPicker);
     _keymap.on('pane::CloseOtherItems', () => _tabs.closeOthers(_tabs.active));
     _keymap.on(
@@ -357,20 +484,6 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       'workspace::ShowSettings',
       () async => _showView(_View.settings),
     );
-    await _keymap.attach(controller);
-    // the sidebar names the keys of its items, which are known by now
-    if (mounted) {
-      setState(() {});
-    }
-    await _applyEditorOptions();
-    final family = widget.controller.value.monospaceFontFamily;
-    // the page was loaded with this font already
-    _editorFontKey = '${widget.controller.themeName}/$family';
-    if (EditorFont.isSafe(family)) {
-      await controller.runJavaScript(EditorFont.remeasureScript(family));
-    }
-    await _tabs.attach(controller);
-    await connectLuauLsp(controller);
   }
 
   void _showView(_View view) {
@@ -379,48 +492,25 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     }
   }
 
-  /// the theme and font the editor was last given, so that it is given a font
-  /// again only when one of them changes
-  String? _editorFontKey;
-
-  /// the editor page has the font it was loaded with, so the font of a theme
-  /// that is switched to, or one that is chosen, is put in it
-  Future<void> _applyEditorFont() async {
-    final monaco = _monaco;
-    final family = widget.controller.value.monospaceFontFamily;
-    final key = '${widget.controller.themeName}/$family';
-    if (monaco == null || key == _editorFontKey) {
-      return;
-    }
-    _editorFontKey = key;
-    try {
-      final dir = ThemeController.directory;
-      final css = await EditorFont.css(
-        family,
-        themeFonts: dir == null ? null : Directory('${dir.path}\\fonts'),
-      );
-      if (css != null) {
-        await monaco.runJavaScript(EditorFont.injectScript(css));
+  /// gives the editor the settings, which has the theme's font size until one
+  /// is set
+  void _applyEditorOptions() {
+    final size = _editorSettings.value.tabSize;
+    if (size != _nativeTabSize) {
+      _nativeTabSize = size;
+      _tabs.tabSize = size;
+      for (final tab in _tabs.tabs) {
+        tab.document.controller.setTabSize(size);
       }
-      await monaco.updateOptions(EditorOptions(fontFamily: family));
-      if (EditorFont.isSafe(family)) {
-        await monaco.runJavaScript(EditorFont.remeasureScript(family));
-      }
-    } catch (e) {
-      debugPrint('WindowShell: cannot give the editor the font $family ($e)');
     }
-  }
-
-  /// sends the editor settings to the editor, which has the theme's font size
-  /// until one is set
-  Future<void> _applyEditorOptions() async {
-    final monaco = _monaco;
-    if (monaco == null) {
-      return;
+    final autoClose = _editorSettings.value.autoClosingBrackets;
+    _tabs.autoClose = autoClose;
+    for (final tab in _tabs.tabs) {
+      tab.document.controller.autoClose = autoClose;
     }
-    await monaco.updateOptions(
-      _editorSettings.value.toOptions(widget.controller.value.fontSizeBody),
-    );
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _setAutoSave(AutoSave value) {
@@ -431,19 +521,6 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   void _setAutoSaveDelay(Duration value) {
     setState(() => _tabs.autoSaveDelay = value);
     _config.update((json) => json['autoSaveDelay'] = value.inMilliseconds);
-  }
-
-  /// the editor is drawn by monaco, so the palette reaches it as a custom
-  /// monaco theme
-  Future<void> _applyMonacoTheme() async {
-    final monaco = _monaco;
-    if (monaco == null) {
-      return;
-    }
-    await monaco.defineTheme(
-      monacoThemeFor(widget.controller.value, id: _monacoTheme.id),
-    );
-    await monaco.setTheme(_monacoTheme);
   }
 
   @override
@@ -561,12 +638,14 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   Widget _settingsView(AppTheme theme) {
     return ListenableBuilder(
-      listenable: Listenable.merge([_editorSettings, _tabs]),
+      listenable: Listenable.merge([_editorSettings, _syntaxStyles, _tabs]),
       builder: (context, _) => SettingsView(
         theme: theme,
         controller: widget.controller,
         prefs: _editorSettings.value,
         onPrefs: _editorSettings.change,
+        syntaxStyles: _syntaxStyles.value,
+        onSyntaxStyles: _syntaxStyles.change,
         autoSave: _tabs.autoSave,
         onAutoSave: _setAutoSave,
         autoSaveDelay: _tabs.autoSaveDelay,
@@ -575,55 +654,75 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     );
   }
 
-  Widget _editor(AppTheme theme) {
-    return
-    // the webview is slow to resize, so it waits for the
-    // window to stop being dragged
-    DeferredSize(
-      key: _editorKey,
-      // the page takes its css when it loads, so it waits for the font
-      child: _editorCss == null
-          ? const SizedBox.expand()
-          : MonacoEditor(
-              backgroundColor: Colors.transparent,
-              // the editor background is transparent, so the caret of monaco's
-              // hidden input element, which sits behind the text, shows through
-              page: MonacoPageConfig(customCss: _editorCss),
-              loadingBuilder: (_) => const SizedBox.expand(),
-              onReady: (controller) {
-                setState(() => _monaco = controller);
-                _applyMonacoTheme();
-                _attachEditor(controller);
-              },
-              options: EditorOptions(
-                theme: _monacoTheme,
-                fontFamily: theme.monospaceFontFamily,
-                fontSize: theme.fontSizeBody,
-              ),
-            ),
+  /// the colors and the font of the editor that flutter draws
+  EditorStyle _nativeStyle(AppTheme theme) {
+    final dark = theme.background.computeLuminance() < 0.5;
+    final prefs = _editorSettings.value;
+    return EditorStyle(
+      textStyle: TextStyle(
+        fontFamily: theme.monospaceFontFamily,
+        fontSize: _zoomedFontSize ?? prefs.fontSize ?? theme.fontSizeBody,
+        height: 1.5,
+        color: theme.textPrimary,
+        fontFeatures: prefs.fontLigatures
+            ? null
+            : const [FontFeature.disable('liga'), FontFeature.disable('calt')],
+      ),
+      // the window paints the background, so its opacity applies
+      background: const Color(0x00000000),
+      selection: theme.selection.withValues(alpha: dark ? 0.25 : 0.3),
+      cursor: theme.cursor,
+      currentLine: theme.textPrimary.withValues(alpha: 0.07),
+      gutterText: theme.lineNumber,
+      currentGutterText: theme.accent,
+      invisible: theme.textDim,
+      // the colors of the scrollbars, which the palettes have in these
+      scrollbarTrack: theme.titleBar,
+      scrollbarTrackBorder: theme.textPrimary.withValues(alpha: 0.07),
+      scrollbarThumb: theme.active.withValues(alpha: 0.5),
+      scrollbarThumbHover: theme.disabled,
+      scrollbarMarker: theme.info,
+      // the palettes do not have one for a thumb that is pressed, so it is the
+      // faint light or dark that the default themes use
+      scrollbarThumbActive: dark
+          ? const Color(0x23FBFBEB)
+          : const Color(0x211F1800),
     );
   }
 
-  static const _editorBaseCss =
-      'html, body { background: transparent !important; }'
-      '.monaco-editor .native-edit-context { caret-color: transparent; }';
+  Widget _nativeEditorView(AppTheme theme) {
+    final controller = _tabs.activeController;
+    if (controller == null) {
+      return const SizedBox.expand();
+    }
+    final prefs = _editorSettings.value;
+    return EditorView(
+      key: ObjectKey(controller),
+      controller: controller,
+      style: _nativeStyle(theme),
+      softWrap: prefs.wordWrap,
+      showLineNumbers: prefs.lineNumbers,
+      scrollbars: prefs.scrollbars,
+      mouseWheelZoom: prefs.mouseWheelZoom,
+      onZoom: _zoom,
+      autofocus: true,
+      onFocusChanged: (focused) {
+        if (!focused) {
+          _tabs.editorFocusLost();
+        }
+      },
+    );
+  }
 
-  /// the editor page's css: its own, and the monospace font of the theme
-  Future<void> _loadEditorCss() async {
-    final family = widget.controller.value.monospaceFontFamily;
-    String? font;
-    try {
-      final dir = ThemeController.directory;
-      font = await EditorFont.css(
-        family,
-        themeFonts: dir == null ? null : Directory('${dir.path}\\fonts'),
-      );
-    } catch (e) {
-      debugPrint('WindowShell: cannot load the editor font $family ($e)');
+  Widget _editor(AppTheme theme) {
+    if (!_editorStarted) {
+      return const SizedBox.expand();
     }
-    if (mounted) {
-      setState(() => _editorCss = '$_editorBaseCss${font ?? ''}');
-    }
+    return ListenableBuilder(
+      key: _editorKey,
+      listenable: Listenable.merge([_tabs, _editorSettings]),
+      builder: (context, _) => _nativeEditorView(theme),
+    );
   }
 
   static const _titleBarHeight = 40.0;
@@ -822,42 +921,41 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   }
 
   /// cursor position, encoding and language of the active document
-  Widget _status(AppTheme theme, MonacoController monaco) {
-    return ValueListenableBuilder<MonacoLiveStats>(
-      valueListenable: monaco.stats,
-      builder: (context, stats, _) {
-        final cursor = stats.cursorPosition;
-        return ListenableBuilder(
-          listenable: _tabs,
-          builder: (context, _) {
-            final language = _tabs.language ?? stats.language;
-            return Row(
-              children: [
-                for (final (button, text) in [
-                  if (cursor != null)
-                    (_cursor, 'Ln ${cursor.line}, Col ${cursor.column}'),
-                  if (_tabs.indentation.isNotEmpty)
-                    (_indentation, _tabs.indentation),
-                  if (_tabs.active < _tabs.tabs.length)
-                    (_encoding, _tabs.tabs[_tabs.active].encoding.label),
-                  if (_tabs.lineEnding.isNotEmpty)
-                    (_lineEnding, _tabs.lineEnding),
-                  if (language != null)
-                    (_language, language.label ?? language.id),
-                ])
-                  if (!button.hidden)
-                    _StatusItem(
-                      label: button.label,
-                      keys: _keysOf(button),
-                      onPressed: button.onPressed,
-                      text: text,
-                      theme: theme,
-                      onMenu: (position) =>
-                          _showButtonMenu(theme, button, position),
-                    ),
-              ],
-            );
-          },
+  Widget _nativeStatus(AppTheme theme) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([_tabs, ?_tabs.activeController]),
+      builder: (context, _) {
+        final controller = _tabs.activeController;
+        String? cursor;
+        if (controller != null) {
+          cursor = cursorSummary(
+            controller.buffer.text,
+            controller.selections.all,
+            controller.selections.newest,
+          );
+        }
+        return Row(
+          children: [
+            for (final (button, text) in [
+              if (cursor != null) (_cursor, cursor),
+              if (_tabs.indentation.isNotEmpty)
+                (_indentation, _tabs.indentation),
+              if (_tabs.active < _tabs.tabs.length)
+                (_encoding, _tabs.tabs[_tabs.active].encoding.label),
+              if (_tabs.lineEnding.isNotEmpty) (_lineEnding, _tabs.lineEnding),
+              if (_tabs.languageName != null) (_language, _tabs.languageName!),
+            ])
+              if (!button.hidden)
+                _StatusItem(
+                  label: button.label,
+                  keys: _keysOf(button),
+                  onPressed: button.onPressed,
+                  text: text,
+                  theme: theme,
+                  onMenu: (position) =>
+                      _showButtonMenu(theme, button, position),
+                ),
+          ],
         );
       },
     );
@@ -877,23 +975,27 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   }
 
   Future<void> _openGoToLine() async {
-    final stats = _monaco?.stats.value;
-    if (stats == null || _tabs.tabs.isEmpty) {
+    if (_tabs.tabs.isEmpty) {
       return;
     }
-    final cursor = stats.cursorPosition;
-    final lines = stats.lineCount;
+    final controller = _tabs.activeController;
+    if (controller == null) {
+      return;
+    }
+    final point = controller.buffer.offsetToPoint(
+      controller.selections.newest.head,
+    );
+    final cursor = (line: point.row + 1, column: point.column + 1);
+    final lines = controller.buffer.lineCount;
     showInputPicker(
       context,
       theme: widget.controller.value,
       top: _pickerTop,
-      hint: cursor == null ? 'Line:Column' : '${cursor.line}:${cursor.column}',
+      hint: '${cursor.line}:${cursor.column}',
       describe: (text) {
         final target = _parseGoTo(text);
         if (text.trim().isEmpty) {
-          return cursor == null
-              ? 'Lines: $lines'
-              : 'Current Line: ${cursor.line} of $lines (column ${cursor.column})';
+          return 'Current Line: ${cursor.line} of $lines (column ${cursor.column})';
         }
         if (target == null) {
           return 'Enter a line, or line:column';
@@ -962,36 +1064,6 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       1 => CloseChoice.discard,
       _ => CloseChoice.cancel,
     };
-  }
-
-  Future<void> _openLanguagePicker() async {
-    final monaco = _monaco;
-    if (monaco == null || _tabs.tabs.isEmpty) {
-      return;
-    }
-    final current = _tabs.language ?? monaco.stats.value.language;
-    final icons = await FileIconTheme.load(widget.controller.palette);
-    if (!mounted) {
-      return;
-    }
-    final languages = MonacoLanguage.builtIn;
-    showListPicker(
-      context,
-      theme: widget.controller.value,
-      top: _pickerTop,
-      hint: 'Select a language...',
-      items: [
-        for (final language in languages)
-          PickerItem(
-            language.label ?? language.id,
-            checked: language == current,
-            icon: icons?.assetFor(
-              languageExtensions[language.id] ?? language.id,
-            ),
-          ),
-      ],
-      onSelected: (i) => _tabs.setLanguage(languages[i]),
-    );
   }
 
   Future<void> _openEncodingPicker() async {
@@ -1067,7 +1139,6 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   }
 
   Widget _bottomBar(AppTheme theme) {
-    final monaco = _monaco;
     final dock = _sidebar.dock!;
     // the button's own space is already between it and the divider
     final divider = Container(
@@ -1091,11 +1162,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           tipBelow: false,
           name: _sidebarOpen ? 'sidebar-open' : 'sidebar-closed',
           extent: _bottomBarHeight,
-          // the icon's own grid, so its lines land on whole pixels
-          size: 16,
+          // the small icon size, which is 14 pixels, and in the text color, like
+          // the text of the bar that it is in
+          size: 14,
           hoverInset: 2,
           hoverRadius: 4,
-          dim: true,
           theme: theme,
           onPressed: _sidebar.onPressed!,
         ),
@@ -1116,7 +1187,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           children: [
             if (dock == _Dock.left) ...[sidebarButton, divider],
             const Spacer(),
-            if (monaco != null && _view == _View.editor) _status(theme, monaco),
+            if (_view == _View.editor) _nativeStatus(theme),
             if (dock == _Dock.right) ...[divider, sidebarButton],
           ],
         ),
@@ -1405,9 +1476,7 @@ class _StatusItemState extends State<_StatusItem> {
           ),
           child: Text(
             widget.text,
-            style: theme.captionStyle.copyWith(
-              color: _hovered ? theme.textPrimary : null,
-            ),
+            style: theme.captionStyle.copyWith(color: theme.textPrimary),
           ),
         ),
       ),
@@ -1426,7 +1495,6 @@ class _BarButton extends StatefulWidget {
     this.hoverInset = 0,
     this.hoverRadius = 0,
     this.destructive = false,
-    this.dim = false,
     this.active = false,
     this.keys,
     this.tipBelow = true,
@@ -1458,9 +1526,6 @@ class _BarButton extends StatefulWidget {
 
   /// hovers in the theme's red instead of the border color
   final bool destructive;
-
-  /// draws the icon in the dim text color until the button is hovered
-  final bool dim;
 
   /// draws the icon in the accent color, while a menu opened from the button
   /// is showing
@@ -1516,9 +1581,7 @@ class _BarButtonState extends State<_BarButton> {
               ? theme.background
               : widget.active
               ? theme.accent
-              : (widget.dim && !_hovered && !_pressed
-                    ? theme.textDim
-                    : theme.textPrimary),
+              : theme.textPrimary,
         ),
       ),
     );

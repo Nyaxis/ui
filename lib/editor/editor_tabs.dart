@@ -4,10 +4,13 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_monaco/flutter_monaco.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../editor_core/buffer.dart' show LineEnding;
+import '../native_editor/editor_controller.dart';
+import 'luau_language_service.dart';
 import 'session_file.dart';
+import 'tab_document.dart';
 import 'text_encoding.dart';
 
 class EditorTab {
@@ -18,7 +21,7 @@ class EditorTab {
 
   /// null until an untitled tab is first saved
   File? file;
-  final MonacoDocument document;
+  final NativeTabDocument document;
   bool dirty = false;
 }
 
@@ -34,28 +37,72 @@ enum AutoSave { off, afterDelay, onFocusChange, onWindowChange }
 class EditorTabs extends ChangeNotifier with WindowListener {
   static const _extension = '.luau';
 
-  /// the language of each known extension; other files open as plain text
-  static const _languages = {
-    '.lua': MonacoLanguage.lua,
-    '.luau': MonacoLanguage.lua,
-    '.json': MonacoLanguage.json,
-    '.js': MonacoLanguage.javascript,
-    '.ts': MonacoLanguage.typescript,
-    '.md': MonacoLanguage.markdown,
-    '.html': MonacoLanguage.html,
-    '.css': MonacoLanguage.css,
-    '.xml': MonacoLanguage.xml,
-    '.yaml': MonacoLanguage.yaml,
-    '.yml': MonacoLanguage.yaml,
-    '.py': MonacoLanguage.python,
+  /// the names of the languages of the known extensions; other files are
+  /// plain text
+  static const _languageNames = {
+    '.lua': 'Luau',
+    '.luau': 'Luau',
+    '.json': 'JSON',
+    '.js': 'JavaScript',
+    '.ts': 'TypeScript',
+    '.md': 'Markdown',
+    '.html': 'HTML',
+    '.css': 'CSS',
+    '.xml': 'XML',
+    '.yaml': 'YAML',
+    '.yml': 'YAML',
+    '.py': 'Python',
   };
 
   final tabs = <EditorTab>[];
   int active = 0;
 
-  MonacoController? _controller;
+  /// the text of the active tab
+  EditorController? get activeController =>
+      active < tabs.length ? tabs[active].document.controller : null;
+
+  /// the name of the language of the active tab
+  String? get languageName {
+    if (active >= tabs.length) {
+      return null;
+    }
+    final name = tabs[active].name;
+    final dot = name.lastIndexOf('.');
+    return _languageNames[dot < 0 ? '' : name.substring(dot).toLowerCase()] ??
+        'Plain Text';
+  }
+
+  /// the indentation of the active tab, like `Spaces: 4`
+  String get indentation {
+    final controller = activeController;
+    if (controller == null) {
+      return '';
+    }
+    return '${controller.useTabs ? 'Tab Size' : 'Spaces'}: '
+        '${controller.display.tabSize}';
+  }
+
+  /// of the active tab, `LF` or `CRLF`
+  String get lineEnding {
+    final controller = activeController;
+    if (controller == null) {
+      return '';
+    }
+    return controller.buffer.lineEnding == LineEnding.crlf ? 'CRLF' : 'LF';
+  }
+
+  LuauLanguageService? _luau;
+
+  /// the language server for the documents; those that are already open are
+  /// told to it
+  set luau(LuauLanguageService? value) {
+    _luau = value;
+    for (final tab in tabs) {
+      value?.attach(tab.document);
+    }
+  }
+
   Directory? _folder;
-  StreamSubscription<MonacoEvent>? _events;
   var _nextUri = 0;
 
   var _autoSave = AutoSave.off;
@@ -80,52 +127,6 @@ class EditorTabs extends ChangeNotifier with WindowListener {
   /// window can close at any moment
   SessionFile? _session;
   Timer? _sessionTimer;
-
-  /// tells flutter how the active document is indented, how its lines end and
-  /// what language it is in, which monaco detects from its content or is told
-  static const _documentScript = '''
-const post = (name, data) => window.flutterChannel.postMessage(
-    JSON.stringify({kind: 'event', name: 'nyaxis.' + name, data}));
-const reportIndent = () => {
-  const model = editor.getModel();
-  if (!model) return;
-  const {insertSpaces, tabSize} = model.getOptions();
-  post('indent', {insertSpaces, tabSize});
-};
-editor.onDidChangeModel(reportIndent);
-editor.onDidChangeModelOptions(reportIndent);
-reportIndent();
-
-let crlf;
-const reportEol = () => {
-  const model = editor.getModel();
-  if (!model) return;
-  const now = model.getEOL().length === 2;
-  if (now === crlf) return;
-  crlf = now;
-  post('eol', {crlf});
-};
-editor.onDidChangeModel(() => { crlf = undefined; reportEol(); });
-editor.onDidChangeModelContent(reportEol);
-reportEol();
-
-const reportLanguage = () => {
-  const model = editor.getModel();
-  if (model) post('language', {id: model.getLanguageId()});
-};
-editor.onDidChangeModel(reportLanguage);
-editor.onDidChangeModelLanguage(reportLanguage);
-reportLanguage();''';
-
-  /// of the active document, like `Spaces: 4`; empty until monaco reports it
-  String indentation = '';
-
-  /// of the active document, `LF` or `CRLF`; empty until monaco reports it
-  String lineEnding = '';
-
-  /// of the active document; the live stats of the editor only follow its
-  /// content and cursor, not a change of language
-  MonacoLanguage? language;
 
   /// the auto save options are read from `config.json`, and added to it with
   /// their defaults when missing so they can be found
@@ -155,20 +156,18 @@ reportLanguage();''';
     }
   }
 
-  Future<void> attach(MonacoController controller) async {
+  /// opens the scripts of the folder, and the tabs of the last session
+  Future<void> start() async {
     final appData = Platform.environment['APPDATA'];
     if (appData == null) {
       debugPrint('EditorTabs: APPDATA unavailable, no scripts');
       return;
     }
-    _controller = controller;
     final folder = _folder = Directory('$appData\\Nyaxis\\scripts');
     await folder.create(recursive: true);
     await _loadConfig(appData);
 
     windowManager.addListener(this);
-    _events = controller.events.listen(_onEvent);
-    await controller.runJavaScript(_documentScript);
 
     final files =
         folder
@@ -242,10 +241,6 @@ reportLanguage();''';
 
   /// opens [file], or an empty untitled document when it is null
   Future<EditorTab?> _open(File? file) async {
-    final controller = _controller;
-    if (controller == null) {
-      return null;
-    }
     try {
       // the language server matches documents by exact uri, and it sees them
       // lowercased, so the uri is lowercase and independent of the file name
@@ -254,11 +249,18 @@ reportLanguage();''';
       final name = file == null ? _untitledName() : file.uri.pathSegments.last;
       final dot = name.lastIndexOf('.');
       final extension = dot < 0 ? '' : name.substring(dot).toLowerCase();
-      final document = await controller.openDocument(
-        text: encoding.decode(bytes),
-        language: _languages[extension] ?? MonacoLanguage.plaintext,
-        uri: Uri.parse('file:///nyaxis/script${_nextUri++}$extension'),
+      final uri = Uri.parse('file:///nyaxis/script${_nextUri++}$extension');
+      final document = NativeTabDocument(
+        encoding.decode(bytes),
+        uri,
+        tabSize: tabSize,
+        onChanged: _nativeChanged,
       );
+      // the scripts are Luau, whatever the file is called
+      document.controller
+        ..completeBlocks = true
+        ..autoClose = autoClose;
+      _luau?.attach(document);
       final tab = EditorTab(name, document, encoding, file);
       tabs.add(tab);
       return tab;
@@ -310,7 +312,39 @@ reportLanguage();''';
     }
     active = index;
     notifyListeners();
-    await _controller?.activateDocument(tabs[index].document);
+  }
+
+  /// the tab size new documents of the editor that flutter draws start with
+  int tabSize = 4;
+
+  /// whether new documents of the editor that flutter draws type brackets and
+  /// quotes in pairs
+  bool autoClose = true;
+
+  /// the text of a tab changed: it is dirty or not, and saved a moment later
+  /// when auto save says so
+  Future<void> _nativeChanged(NativeTabDocument document) async {
+    final tab = tabs.where((t) => t.document == document).firstOrNull;
+    if (tab != null) {
+      await _contentChanged(tab);
+    }
+  }
+
+  Future<void> _contentChanged(EditorTab tab) async {
+    final dirty = await tab.document.isDirty();
+    if (dirty != tab.dirty) {
+      tab.dirty = dirty;
+    }
+    // the status shows the line ending and the indentation
+    notifyListeners();
+    _scheduleSession();
+    _timers.remove(tab)?.cancel();
+    if (dirty && _autoSave == AutoSave.afterDelay) {
+      _timers[tab] = Timer(
+        autoSaveDelay,
+        () => _autoSaveTab(tabs.indexOf(tab)),
+      );
+    }
   }
 
   /// asks what to do with the tabs to close that have unsaved changes, and
@@ -404,60 +438,30 @@ reportLanguage();''';
 
   /// puts the cursor at [line], and [column] when given, and focuses the editor
   Future<void> goTo(int line, [int column = 1]) async {
-    final position = '{lineNumber: $line, column: $column}';
-    await _controller?.runJavaScript(
-      'editor.setPosition($position);'
-      'editor.revealPositionInCenter($position);'
-      'editor.focus();',
-    );
+    final controller = activeController;
+    if (controller != null) {
+      controller.goToLineColumn(line, column);
+      controller.focus();
+    }
   }
 
   /// indents the active document with [spaces] or tabs, [size] wide. the
   /// indentation it already has keeps its levels, each as wide as the old
   /// size, and a remainder that is not a whole level stays as spaces
   Future<void> setIndentation({required bool spaces, required int size}) async {
-    await _controller?.runJavaScript('''
-(() => {
-  const model = editor.getModel();
-  if (!model) return;
-  const old = model.getOptions().tabSize;
-  const edits = [];
-  for (let line = 1; line <= model.getLineCount(); line++) {
-    const lead = /^[ \\t]*/.exec(model.getLineContent(line))[0];
-    if (!lead) continue;
-    let columns = 0;
-    for (const c of lead) columns += c === '\\t' ? old - columns % old : 1;
-    const levels = Math.floor(columns / old);
-    const text = ($spaces ? ' '.repeat(levels * $size) : '\\t'.repeat(levels))
-        + ' '.repeat(columns % old);
-    if (text !== lead) {
-      edits.push({
-        range: {startLineNumber: line, startColumn: 1,
-                endLineNumber: line, endColumn: lead.length + 1},
-        text,
-      });
+    final controller = activeController;
+    if (controller != null) {
+      controller.setIndentation(spaces: spaces, size: size);
+      controller.focus();
     }
-  }
-  model.updateOptions({insertSpaces: $spaces, tabSize: $size});
-  editor.pushUndoStop();
-  editor.executeEdits('nyaxis.indentation', edits);
-  editor.pushUndoStop();
-  editor.focus();
-})();''');
-  }
-
-  Future<void> setLanguage(MonacoLanguage language) async {
-    if (active >= tabs.length) {
-      return;
-    }
-    await tabs[active].document.setLanguage(language);
-    await _controller?.runJavaScript('editor.focus();');
   }
 
   Future<void> setLineEnding({required bool crlf}) async {
-    await _controller?.runJavaScript(
-      'editor.getModel()?.setEOL(${crlf ? 1 : 0});editor.focus();',
-    );
+    if (active < tabs.length) {
+      final document = tabs[active].document;
+      document.changeLineEnding(crlf ? LineEnding.crlf : LineEnding.lf);
+      document.controller.focus();
+    }
   }
 
   /// reads the active tab's file again with [encoding], so changes that are
@@ -481,7 +485,7 @@ reportLanguage();''';
       tab.dirty = false;
       notifyListeners();
       _scheduleSession();
-      await _controller?.runJavaScript('editor.focus();');
+      tab.document.controller.focus();
     } catch (e) {
       debugPrint(
         'EditorTabs: cannot reopen ${file.path} as ${encoding.label} '
@@ -526,43 +530,10 @@ reportLanguage();''';
     }
   }
 
-  Future<void> _onEvent(MonacoEvent event) async {
-    if (event is MonacoUnknownEvent && event.name.startsWith('nyaxis.')) {
-      switch (event.name.substring('nyaxis.'.length)) {
-        case 'indent':
-          indentation =
-              '${event.data['insertSpaces'] == true ? 'Spaces' : 'Tab Size'}: '
-              '${event.data['tabSize']}';
-          notifyListeners();
-        case 'language':
-          language = MonacoLanguage(event.data['id'] as String);
-          notifyListeners();
-        case 'eol':
-          lineEnding = event.data['crlf'] == true ? 'CRLF' : 'LF';
-          notifyListeners();
-      }
-    } else if (event is MonacoFocusChanged) {
-      if (!event.focused && _autoSave == AutoSave.onFocusChange) {
-        await _autoSaveAll();
-      }
-    } else if (event is MonacoContentChanged) {
-      for (final tab in tabs) {
-        if (tab.document.uri == event.documentUri) {
-          final dirty = await tab.document.isDirty();
-          if (dirty != tab.dirty) {
-            tab.dirty = dirty;
-            notifyListeners();
-          }
-          _scheduleSession();
-          _timers.remove(tab)?.cancel();
-          if (dirty && _autoSave == AutoSave.afterDelay) {
-            _timers[tab] = Timer(
-              autoSaveDelay,
-              () => _autoSaveTab(tabs.indexOf(tab)),
-            );
-          }
-        }
-      }
+  /// the editor lost the focus, which saves the tabs when auto save says so
+  Future<void> editorFocusLost() async {
+    if (_autoSave == AutoSave.onFocusChange) {
+      await _autoSaveAll();
     }
   }
 
@@ -580,7 +551,6 @@ reportLanguage();''';
       timer.cancel();
     }
     _sessionTimer?.cancel();
-    _events?.cancel();
     super.dispose();
   }
 }

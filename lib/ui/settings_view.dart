@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_monaco/flutter_monaco.dart' show RenderWhitespace;
 
 import '../editor/editor_tabs.dart' show AutoSave;
+import '../native_editor/scrollbar_layout.dart' show ScrollbarVisibility;
 import '../settings/editor_settings.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
@@ -21,6 +21,8 @@ class SettingsView extends StatelessWidget {
     required this.onAutoSave,
     required this.autoSaveDelay,
     required this.onAutoSaveDelay,
+    this.syntaxStyles,
+    this.onSyntaxStyles,
   });
 
   static const _maxWidth = 760.0;
@@ -38,6 +40,66 @@ class SettingsView extends StatelessWidget {
   final ValueChanged<AutoSave> onAutoSave;
   final Duration autoSaveDelay;
   final ValueChanged<Duration> onAutoSaveDelay;
+
+  /// which kinds of code are drawn bold or italic, by the names the queries
+  /// give them; null when the editor does not color code, which leaves out
+  /// the section
+  final Map<String, String>? syntaxStyles;
+  final ValueChanged<Map<String, String>>? onSyntaxStyles;
+
+  /// the kinds of code a style can be given, and what the queries call them
+  static const _syntaxKinds = [
+    ('Comments', 'comment'),
+    ('Keywords', 'keyword'),
+    ('Strings', 'string'),
+    ('Numbers', 'number'),
+    ('Constants', 'constant'),
+    ('Functions', 'function'),
+    ('Types', 'type'),
+    ('self and built-ins', 'variable.builtin'),
+    ('Parameters', 'variable.parameter'),
+    ('Fields', 'variable.member'),
+    ('Operators', 'operator'),
+    ('Brackets and punctuation', 'punctuation'),
+  ];
+
+  static const _fontStyleOptions = [
+    ('regular', 'Regular'),
+    ('bold', 'Bold'),
+    ('italic', 'Italic'),
+    ('bold italic', 'Bold italic'),
+  ];
+
+  /// how [name] is drawn now: comments are italic until it is said otherwise
+  String _fontStyleOf(String name) {
+    final spec = syntaxStyles?[name];
+    if (spec == null) {
+      return name == 'comment' ? 'italic' : 'regular';
+    }
+    final words = spec.toLowerCase().split(RegExp(r'[\s,]+'));
+    final bold = words.contains('bold');
+    final italic = words.contains('italic');
+    return bold && italic
+        ? 'bold italic'
+        : bold
+        ? 'bold'
+        : italic
+        ? 'italic'
+        : 'regular';
+  }
+
+  /// the styles with [name] drawn as [style]. what is the default is not kept.
+  Map<String, String> _withFontStyle(String name, String style) {
+    final styles = Map.of(syntaxStyles ?? const <String, String>{});
+    final standard = name == 'comment' ? 'italic' : 'regular';
+    if (style == standard) {
+      styles.remove(name);
+    } else {
+      // regular is said as none, as that takes the default style away
+      styles[name] = style == 'regular' ? 'none' : style;
+    }
+    return styles;
+  }
 
   static String _number(num value) =>
       value % 1 == 0 ? value.toInt().toString() : value.toStringAsFixed(1);
@@ -151,33 +213,11 @@ class SettingsView extends StatelessWidget {
                   ),
                   SettingRow(
                     theme: theme,
-                    label: 'Minimap',
-                    control: SwitchControl(
-                      theme: theme,
-                      value: prefs.minimap,
-                      onChanged: (v) => onPrefs(prefs.copyWith(minimap: v)),
-                    ),
-                  ),
-                  SettingRow(
-                    theme: theme,
                     label: 'Line numbers',
                     control: SwitchControl(
                       theme: theme,
                       value: prefs.lineNumbers,
                       onChanged: (v) => onPrefs(prefs.copyWith(lineNumbers: v)),
-                    ),
-                  ),
-                  SettingRow(
-                    theme: theme,
-                    label: 'Show whitespace',
-                    control: ChoiceControl<RenderWhitespace>(
-                      theme: theme,
-                      value: prefs.renderWhitespace,
-                      options: [
-                        for (final w in RenderWhitespace.values) (w, w.label),
-                      ],
-                      onChanged: (v) =>
-                          onPrefs(prefs.copyWith(renderWhitespace: v)),
                     ),
                   ),
                   SettingRow(
@@ -192,26 +232,6 @@ class SettingsView extends StatelessWidget {
                   ),
                   SettingRow(
                     theme: theme,
-                    label: 'Smooth scrolling',
-                    control: SwitchControl(
-                      theme: theme,
-                      value: prefs.smoothScrolling,
-                      onChanged: (v) =>
-                          onPrefs(prefs.copyWith(smoothScrolling: v)),
-                    ),
-                  ),
-                  SettingRow(
-                    theme: theme,
-                    label: 'Bracket pair colors',
-                    control: SwitchControl(
-                      theme: theme,
-                      value: prefs.bracketPairColorization,
-                      onChanged: (v) =>
-                          onPrefs(prefs.copyWith(bracketPairColorization: v)),
-                    ),
-                  ),
-                  SettingRow(
-                    theme: theme,
                     label: 'Close brackets automatically',
                     control: SwitchControl(
                       theme: theme,
@@ -220,8 +240,66 @@ class SettingsView extends StatelessWidget {
                           onPrefs(prefs.copyWith(autoClosingBrackets: v)),
                     ),
                   ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Mouse wheel zoom',
+                    description: 'Whether to zoom the editor font size with the mouse wheel while holding the primary modifier key.',
+                    control: SwitchControl(
+                      theme: theme,
+                      value: prefs.mouseWheelZoom,
+                      onChanged: (v) =>
+                          onPrefs(prefs.copyWith(mouseWheelZoom: v)),
+                    ),
+                  ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Scrollbars',
+                    description: 'Auto hides them a moment after scrolling',
+                    control: ChoiceControl<ScrollbarVisibility>(
+                      theme: theme,
+                      value: prefs.scrollbars,
+                      options: const [
+                        (ScrollbarVisibility.auto, 'Auto'),
+                        (ScrollbarVisibility.always, 'Always'),
+                        (ScrollbarVisibility.never, 'Never'),
+                      ],
+                      onChanged: (v) => onPrefs(prefs.copyWith(scrollbars: v)),
+                    ),
+                  ),
                 ],
               ),
+              if (syntaxStyles != null && onSyntaxStyles != null) ...[
+                const SizedBox(height: 24),
+                SettingsSection(
+                  theme: theme,
+                  title: 'Code styles',
+                  rows: [
+                    for (final (label, name) in _syntaxKinds)
+                      SettingRow(
+                        theme: theme,
+                        label: label,
+                        control: ChoiceControl<String>(
+                          theme: theme,
+                          value: _fontStyleOf(name),
+                          options: _fontStyleOptions,
+                          onChanged: (style) =>
+                              onSyntaxStyles!(_withFontStyle(name, style)),
+                        ),
+                      ),
+                    if (syntaxStyles!.isNotEmpty)
+                      SettingRow(
+                        theme: theme,
+                        label: 'Reset',
+                        description: 'Back to the defaults',
+                        control: LinkButton(
+                          theme: theme,
+                          label: 'Reset all',
+                          onTap: () => onSyntaxStyles!(const {}),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 24),
               SettingsSection(
                 theme: theme,

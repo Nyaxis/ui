@@ -114,9 +114,8 @@ bool HostBackdropWindow::Create(HWND target) {
   return true;
 }
 
-// a thread holds one dispatcher queue, and the webview plugin fails to start
-// when this one already took it, so the composition is only built once the
-// backdrop is switched on, and reuses a queue that exists by then
+// the composition is only built once the backdrop is switched on, and reuses
+// the dispatcher queue of the thread when it has one
 bool HostBackdropWindow::EnsureComposition() {
   if (impl_) {
     return true;
