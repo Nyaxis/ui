@@ -22,7 +22,7 @@ class EditorView extends StatefulWidget {
     this.style = const EditorStyle(),
     this.softWrap = true,
     this.showLineNumbers = true,
-    this.scrollbars = ScrollbarVisibility.always,
+    this.scrollbars = const ScrollbarSettings(),
     this.mouseWheelZoom = false,
     this.onZoom,
     this.focusNode,
@@ -39,8 +39,8 @@ class EditorView extends StatefulWidget {
   final bool softWrap;
   final bool showLineNumbers;
 
-  /// when the text has scrollbars
-  final ScrollbarVisibility scrollbars;
+  /// when the text has scrollbars, and what they mark
+  final ScrollbarSettings scrollbars;
 
   /// whether the wheel with the control key down zooms, which is told to
   /// [onZoom] as a step of one for the wheel going up and minus one for down,
@@ -103,7 +103,9 @@ class EditorViewState extends State<EditorView> {
   static bool systemAutoHide = systemAutoHidesScrollbars();
 
   void _showScrollbars() {
-    if (widget.scrollbars != ScrollbarVisibility.auto) {
+    final show = widget.scrollbars.show;
+    if (show != ScrollbarVisibility.auto &&
+        show != ScrollbarVisibility.system) {
       return;
     }
     _render?.scrollbarsShown = true;
@@ -124,7 +126,7 @@ class EditorViewState extends State<EditorView> {
   @override
   void didUpdateWidget(EditorView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.scrollbars != widget.scrollbars) {
+    if (oldWidget.scrollbars.show != widget.scrollbars.show) {
       _hideScrollbars?.cancel();
       _render?.scrollbarsShown = true;
     }
@@ -491,7 +493,7 @@ class _EditorRenderWidget extends LeafRenderObjectWidget {
   final EditorStyle style;
   final bool softWrap;
   final bool showLineNumbers;
-  final ScrollbarVisibility scrollbars;
+  final ScrollbarSettings scrollbars;
 
   @override
   RenderEditor createRenderObject(BuildContext context) => RenderEditor(

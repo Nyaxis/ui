@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
-import '../native_editor/scrollbar_layout.dart' show ScrollbarVisibility;
+import '../native_editor/scrollbar_layout.dart'
+    show ScrollbarSettings, ScrollbarVisibility;
 import '../syntax/syntax_palette.dart' show fontStylesFromConfig;
 import 'config_file.dart';
 
@@ -16,7 +17,7 @@ class EditorPrefs {
     this.lineNumbers = true,
     this.fontLigatures = false,
     this.autoClosingBrackets = true,
-    this.scrollbars = ScrollbarVisibility.auto,
+    this.scrollbar = const ScrollbarSettings(show: ScrollbarVisibility.auto),
     this.mouseWheelZoom = false,
   });
 
@@ -47,10 +48,10 @@ class EditorPrefs {
         'autoClosingBrackets',
         defaults.autoClosingBrackets,
       ),
-      scrollbars: ScrollbarVisibility.fromId(
-        json['scrollbars'] as String?,
-        orElse: defaults.scrollbars,
-      ),
+      scrollbar: json['scrollbar'] is Map
+          ? ScrollbarSettings.fromJson(json['scrollbar'])
+          // the setting that was only when to show them
+          : ScrollbarSettings.fromJson({'show': json['scrollbars']}),
       mouseWheelZoom: flag('mouseWheelZoom', defaults.mouseWheelZoom),
     );
   }
@@ -70,8 +71,8 @@ class EditorPrefs {
   /// closes them as the language says, or never
   final bool autoClosingBrackets;
 
-  /// when the editor shows its scrollbars
-  final ScrollbarVisibility scrollbars;
+  /// when the editor shows its scrollbars, and what they mark
+  final ScrollbarSettings scrollbar;
 
   /// whether the wheel with the control key down changes the font size of the
   /// editor
@@ -83,7 +84,7 @@ class EditorPrefs {
     bool? lineNumbers,
     bool? fontLigatures,
     bool? autoClosingBrackets,
-    ScrollbarVisibility? scrollbars,
+    ScrollbarSettings? scrollbar,
     bool? mouseWheelZoom,
   }) {
     return EditorPrefs(
@@ -93,7 +94,7 @@ class EditorPrefs {
       lineNumbers: lineNumbers ?? this.lineNumbers,
       fontLigatures: fontLigatures ?? this.fontLigatures,
       autoClosingBrackets: autoClosingBrackets ?? this.autoClosingBrackets,
-      scrollbars: scrollbars ?? this.scrollbars,
+      scrollbar: scrollbar ?? this.scrollbar,
       mouseWheelZoom: mouseWheelZoom ?? this.mouseWheelZoom,
     );
   }
@@ -107,7 +108,7 @@ class EditorPrefs {
       lineNumbers: lineNumbers,
       fontLigatures: fontLigatures,
       autoClosingBrackets: autoClosingBrackets,
-      scrollbars: scrollbars,
+      scrollbar: scrollbar,
       mouseWheelZoom: mouseWheelZoom,
     );
   }
@@ -119,7 +120,7 @@ class EditorPrefs {
     'lineNumbers': lineNumbers,
     'fontLigatures': fontLigatures,
     'autoClosingBrackets': autoClosingBrackets,
-    'scrollbars': scrollbars.name,
+    'scrollbar': scrollbar.toJson(),
     'mouseWheelZoom': mouseWheelZoom,
   };
 
@@ -132,7 +133,7 @@ class EditorPrefs {
       other.lineNumbers == lineNumbers &&
       other.fontLigatures == fontLigatures &&
       other.autoClosingBrackets == autoClosingBrackets &&
-      other.scrollbars == scrollbars &&
+      other.scrollbar == scrollbar &&
       other.mouseWheelZoom == mouseWheelZoom;
 
   @override
@@ -143,7 +144,7 @@ class EditorPrefs {
     lineNumbers,
     fontLigatures,
     autoClosingBrackets,
-    scrollbars,
+    scrollbar,
     mouseWheelZoom,
   );
 }

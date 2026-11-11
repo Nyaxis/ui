@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../editor/editor_tabs.dart' show AutoSave;
-import '../native_editor/scrollbar_layout.dart' show ScrollbarVisibility;
+import '../native_editor/scrollbar_layout.dart'
+    show ScrollbarDiagnostics, ScrollbarSettings, ScrollbarVisibility;
 import '../settings/editor_settings.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
@@ -114,6 +115,9 @@ class SettingsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fontSize = prefs.fontSize ?? theme.fontSizeBody;
+    final scrollbar = prefs.scrollbar;
+    void setScrollbar(ScrollbarSettings value) =>
+        onPrefs(prefs.copyWith(scrollbar: value));
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
       child: Align(
@@ -251,19 +255,115 @@ class SettingsView extends StatelessWidget {
                           onPrefs(prefs.copyWith(mouseWheelZoom: v)),
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              SettingsSection(
+                theme: theme,
+                title: 'Scrollbar',
+                rows: [
                   SettingRow(
                     theme: theme,
-                    label: 'Scrollbars',
-                    description: 'Auto hides them a moment after scrolling',
+                    label: 'Show',
+                    description: 'When to show the scrollbar in the editor.',
                     control: ChoiceControl<ScrollbarVisibility>(
                       theme: theme,
-                      value: prefs.scrollbars,
+                      value: scrollbar.show,
                       options: const [
                         (ScrollbarVisibility.auto, 'Auto'),
+                        (ScrollbarVisibility.system, 'System'),
                         (ScrollbarVisibility.always, 'Always'),
                         (ScrollbarVisibility.never, 'Never'),
                       ],
-                      onChanged: (v) => onPrefs(prefs.copyWith(scrollbars: v)),
+                      onChanged: (v) =>
+                          setScrollbar(scrollbar.copyWith(show: v)),
+                    ),
+                  ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Cursors',
+                    description: 'Show cursor positions in the scrollbar.',
+                    control: SwitchControl(
+                      theme: theme,
+                      value: scrollbar.cursors,
+                      onChanged: (v) =>
+                          setScrollbar(scrollbar.copyWith(cursors: v)),
+                    ),
+                  ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Search Results',
+                    description: 'Show buffer search result indicators in the scrollbar.',
+                    control: SwitchControl(
+                      theme: theme,
+                      value: scrollbar.searchResults,
+                      onChanged: (v) =>
+                          setScrollbar(scrollbar.copyWith(searchResults: v)),
+                    ),
+                  ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Selected Text',
+                    description:
+                        'Show selected text occurrences in the scrollbar.',
+                    control: SwitchControl(
+                      theme: theme,
+                      value: scrollbar.selectedText,
+                      onChanged: (v) =>
+                          setScrollbar(scrollbar.copyWith(selectedText: v)),
+                    ),
+                  ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Selected Symbol',
+                    description:
+                        'Show selected symbol occurrences in the scrollbar.',
+                    control: SwitchControl(
+                      theme: theme,
+                      value: scrollbar.selectedSymbol,
+                      onChanged: (v) =>
+                          setScrollbar(scrollbar.copyWith(selectedSymbol: v)),
+                    ),
+                  ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Diagnostics',
+                    description:
+                        'Which diagnostic indicators to show in the scrollbar.',
+                    control: ChoiceControl<ScrollbarDiagnostics>(
+                      theme: theme,
+                      value: scrollbar.diagnostics,
+                      options: const [
+                        (ScrollbarDiagnostics.all, 'All'),
+                        (ScrollbarDiagnostics.information, 'Information'),
+                        (ScrollbarDiagnostics.warning, 'Warning'),
+                        (ScrollbarDiagnostics.error, 'Error'),
+                        (ScrollbarDiagnostics.none, 'None'),
+                      ],
+                      onChanged: (v) =>
+                          setScrollbar(scrollbar.copyWith(diagnostics: v)),
+                    ),
+                  ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Horizontal Scrollbar',
+                    description: 'When false, forcefully disables the horizontal scrollbar.',
+                    control: SwitchControl(
+                      theme: theme,
+                      value: scrollbar.horizontal,
+                      onChanged: (v) =>
+                          setScrollbar(scrollbar.copyWith(horizontal: v)),
+                    ),
+                  ),
+                  SettingRow(
+                    theme: theme,
+                    label: 'Vertical Scrollbar',
+                    description: 'When false, forcefully disables the vertical scrollbar.',
+                    control: SwitchControl(
+                      theme: theme,
+                      value: scrollbar.vertical,
+                      onChanged: (v) =>
+                          setScrollbar(scrollbar.copyWith(vertical: v)),
                     ),
                   ),
                 ],

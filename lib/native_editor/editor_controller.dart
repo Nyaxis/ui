@@ -263,6 +263,16 @@ class EditorController extends ChangeNotifier {
   /// what the language server found wrong, by how bad it is
   var _diagnostics = const DiagnosticRanges();
 
+  /// what the language server found wrong, where
+  DiagnosticRanges get diagnosticRanges => _diagnostics;
+
+  /// whether it found anything at all
+  bool get hasDiagnostics =>
+      _diagnostics.errors.isNotEmpty ||
+      _diagnostics.warnings.isNotEmpty ||
+      _diagnostics.information.isNotEmpty ||
+      _diagnostics.hints.isNotEmpty;
+
   DiagnosticColors _diagnosticColors = const DiagnosticColors();
 
   DiagnosticColors get diagnosticColors => _diagnosticColors;

@@ -2,6 +2,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ui/editor_core/buffer.dart' show AnchorRange;
+import 'package:ui/editor_core/patch.dart' show Bias;
 import 'package:ui/native_editor/editor_controller.dart';
 import 'package:ui/native_editor/editor_style.dart';
 import 'package:ui/native_editor/editor_view.dart';
@@ -18,7 +20,7 @@ Future<RenderEditor> _pump(
   WidgetTester tester,
   EditorController controller, {
   bool softWrap = true,
-  ScrollbarVisibility scrollbars = ScrollbarVisibility.always,
+  ScrollbarSettings scrollbars = const ScrollbarSettings(),
 }) async {
   await tester.pumpWidget(
     Directionality(
@@ -191,7 +193,7 @@ void main() {
       final render = await _pump(
         tester,
         controller,
-        scrollbars: ScrollbarVisibility.never,
+        scrollbars: const ScrollbarSettings(show: ScrollbarVisibility.never),
       );
       expect(render.scrollbarLayouts(), isEmpty);
       final columns =
@@ -225,10 +227,10 @@ void main() {
       // the first cursor is on the first row, which is at the top
       var marks = render.cursorMarkers();
       expect(marks, hasLength(1));
-      expect(marks.single.top, 0);
-      expect(marks.single.height, 2);
-      expect(marks.single.left, 485 + 1);
-      expect(marks.single.right, 500);
+      expect(marks.single.rect.top, 0);
+      expect(marks.single.rect.height, 2);
+      expect(marks.single.rect.left, 485 + 1);
+      expect(marks.single.rect.right, 500);
 
       final bar = render.scrollbar(ScrollbarAxis.vertical)!;
       final text = controller.text;
@@ -237,7 +239,7 @@ void main() {
       await tester.pump();
       marks = render.cursorMarkers();
       expect(marks, hasLength(2));
-      expect(marks.last.top, closeTo(100 * bar.unitSize, 1e-6));
+      expect(marks.last.rect.top, closeTo(100 * bar.unitSize, 1e-6));
       await _finish(tester, controller);
     });
 
@@ -272,11 +274,11 @@ void main() {
       expect(marks, hasLength(2));
       final bar = render.scrollbar(ScrollbarAxis.vertical)!;
       // a third of the track after its line, less the line
-      expect(marks.first.left, bar.track.left + 1 + 4);
-      expect(marks.first.right, bar.track.left + 1 + 8);
-      expect(marks.first.height, greaterThanOrEqualTo(5));
-      expect(marks.first.top, closeTo(51 * bar.unitSize, 1e-6));
-      expect(marks.last.top, closeTo(102 * bar.unitSize, 1e-6));
+      expect(marks.first.rect.left, bar.track.left + 1 + 4);
+      expect(marks.first.rect.right, bar.track.left + 1 + 8);
+      expect(marks.first.rect.height, greaterThanOrEqualTo(5));
+      expect(marks.first.rect.top, closeTo(51 * bar.unitSize, 1e-6));
+      expect(marks.last.rect.top, closeTo(102 * bar.unitSize, 1e-6));
       await _finish(tester, controller);
     });
 
@@ -287,7 +289,7 @@ void main() {
       final render = await _pump(
         tester,
         controller,
-        scrollbars: ScrollbarVisibility.auto,
+        scrollbars: const ScrollbarSettings(show: ScrollbarVisibility.auto),
       );
       // the cursor is in sight, and the text is scrolled a little
       controller.selections.selectRanges([(0, 5)]);
@@ -316,7 +318,7 @@ void main() {
         final render = await _pump(
           tester,
           controller,
-          scrollbars: ScrollbarVisibility.auto,
+          scrollbars: const ScrollbarSettings(show: ScrollbarVisibility.auto),
         );
         expect(render.scrollbarsVisible, isTrue);
         controller.setScroll(y: 10);
@@ -334,7 +336,7 @@ void main() {
       final render = await _pump(
         tester,
         controller,
-        scrollbars: ScrollbarVisibility.auto,
+        scrollbars: const ScrollbarSettings(show: ScrollbarVisibility.auto),
       );
       expect(render.scrollbarsVisible, isTrue);
       controller.setScroll(y: 10);
@@ -362,7 +364,7 @@ void main() {
       final render = await _pump(
         tester,
         controller,
-        scrollbars: ScrollbarVisibility.auto,
+        scrollbars: const ScrollbarSettings(show: ScrollbarVisibility.auto),
       );
       controller.setScroll(y: 10);
       await tester.pump();
@@ -387,7 +389,7 @@ void main() {
       final render = await _pump(
         tester,
         controller,
-        scrollbars: ScrollbarVisibility.auto,
+        scrollbars: const ScrollbarSettings(show: ScrollbarVisibility.auto),
       );
       controller.setScroll(y: 2000);
       await tester.pump();
@@ -408,10 +410,194 @@ void main() {
       final never = await _pump(
         tester,
         other,
-        scrollbars: ScrollbarVisibility.never,
+        scrollbars: const ScrollbarSettings(show: ScrollbarVisibility.never),
       );
       expect(never.scrollbarsVisible, isFalse);
       await _finish(tester, other);
+    });
+  });
+
+  group('the settings of the scrollbar', () {
+    AnchorRange place(EditorController controller, int row) {
+      final from = controller.text.indexOf('line $row\n');
+      return AnchorRange(
+        controller.buffer.anchorAt(from, Bias.right),
+        controller.buffer.anchorAt(from + 4, Bias.left),
+      );
+    }
+
+    const colors = DiagnosticColors(
+      error: 0xFFAA0000,
+      warning: 0xFFBB0000,
+      information: 0xFFCC0000,
+      hint: 0xFFDD0000,
+    );
+
+    DiagnosticRanges every(EditorController controller) => DiagnosticRanges(
+      errors: [place(controller, 50)],
+      warnings: [place(controller, 80)],
+      information: [place(controller, 110)],
+      hints: [place(controller, 140)],
+    );
+
+    testWidgets('diagnostics are marks in the last third, in their colors', (
+      tester,
+    ) async {
+      final controller = EditorController(text: _long)
+        ..diagnosticColors = colors;
+      final render = await _pump(tester, controller);
+      controller.setDiagnostics(every(controller));
+      await tester.pump();
+      final marks = render.diagnosticMarkers();
+      // the least bad first, so that the worst is painted last
+      expect(marks.map((m) => m.color.toARGB32()), [
+        0xFFDD0000,
+        0xFFCC0000,
+        0xFFBB0000,
+        0xFFAA0000,
+      ]);
+      final bar = render.scrollbar(ScrollbarAxis.vertical)!;
+      for (final mark in marks) {
+        expect(mark.rect.left, bar.track.left + 1 + 8);
+        expect(mark.rect.right, bar.track.left + 1 + 12);
+        expect(mark.rect.height, greaterThanOrEqualTo(5));
+      }
+      expect(marks.last.rect.top, closeTo(50 * bar.unitSize, 1e-6));
+      await _finish(tester, controller);
+    });
+
+    testWidgets('the setting says which diagnostics are marked', (
+      tester,
+    ) async {
+      final controller = EditorController(text: _long)
+        ..diagnosticColors = colors;
+      final render = await _pump(tester, controller);
+      controller.setDiagnostics(every(controller));
+      await tester.pump();
+      for (final (level, count) in [
+        (ScrollbarDiagnostics.all, 4),
+        (ScrollbarDiagnostics.information, 3),
+        (ScrollbarDiagnostics.warning, 2),
+        (ScrollbarDiagnostics.error, 1),
+        (ScrollbarDiagnostics.none, 0),
+      ]) {
+        render.scrollbars = ScrollbarSettings(diagnostics: level);
+        expect(render.diagnosticMarkers(), hasLength(count), reason: '$level');
+      }
+      await _finish(tester, controller);
+    });
+
+    testWidgets('marks next to each other are one when they are of a color', (
+      tester,
+    ) async {
+      final controller = EditorController(text: _long)
+        ..diagnosticColors = colors;
+      final render = await _pump(tester, controller);
+      controller.setDiagnostics(
+        DiagnosticRanges(
+          errors: [place(controller, 10), place(controller, 11)],
+          warnings: [place(controller, 12)],
+        ),
+      );
+      await tester.pump();
+      // two errors that are next to each other, and a warning that is not
+      // of their color
+      expect(render.diagnosticMarkers(), hasLength(2));
+      await _finish(tester, controller);
+    });
+
+    testWidgets('auto shows the scrollbars for what there is to mark', (
+      tester,
+    ) async {
+      final controller = EditorController(text: _long)
+        ..diagnosticColors = colors;
+      final render = await _pump(
+        tester,
+        controller,
+        scrollbars: const ScrollbarSettings(show: ScrollbarVisibility.auto),
+      );
+      // not shown for a moment, with the cursor in sight
+      render.scrollbarsShown = false;
+      expect(render.scrollbarsVisible, isFalse);
+      controller.setDiagnostics(every(controller));
+      await tester.pump();
+      expect(render.scrollbarsVisible, isTrue);
+      render.scrollbars = const ScrollbarSettings(
+        show: ScrollbarVisibility.auto,
+        diagnostics: ScrollbarDiagnostics.none,
+      );
+      expect(render.scrollbarsVisible, isFalse);
+      await _finish(tester, controller);
+    });
+
+    testWidgets('system does not show them for what there is to mark', (
+      tester,
+    ) async {
+      final controller = EditorController(text: _long)
+        ..diagnosticColors = colors;
+      final render = await _pump(
+        tester,
+        controller,
+        scrollbars: const ScrollbarSettings(show: ScrollbarVisibility.system),
+      );
+      controller.setDiagnostics(every(controller));
+      await tester.pump();
+      render.scrollbarsShown = false;
+      expect(render.scrollbarsVisible, isFalse);
+      render.scrollbarsShown = true;
+      expect(render.scrollbarsVisible, isTrue);
+      await _finish(tester, controller);
+    });
+
+    testWidgets('the other places of the selected text, by their setting', (
+      tester,
+    ) async {
+      final controller = EditorController(
+        text: 'alpha\n${'x\n' * 50}alpha\n${'x\n' * 50}alpha',
+      );
+      final render = await _pump(
+        tester,
+        controller,
+        scrollbars: const ScrollbarSettings(show: ScrollbarVisibility.auto),
+      );
+      controller.selections.selectRanges([(0, 5)]);
+      controller.notifyListeners();
+      await tester.pump();
+      render.scrollbarsShown = false;
+      expect(render.occurrenceMarkers(), hasLength(2));
+      expect(render.scrollbarsVisible, isTrue);
+      render.scrollbars = const ScrollbarSettings(
+        show: ScrollbarVisibility.auto,
+        selectedText: false,
+      );
+      expect(render.occurrenceMarkers(), isEmpty);
+      expect(render.scrollbarsVisible, isFalse);
+      await _finish(tester, controller);
+    });
+
+    testWidgets('the cursors are marked when the setting says so', (
+      tester,
+    ) async {
+      final controller = EditorController(text: _long);
+      final render = await _pump(tester, controller);
+      expect(render.cursorMarkers(), hasLength(1));
+      render.scrollbars = const ScrollbarSettings(cursors: false);
+      expect(render.cursorMarkers(), isEmpty);
+      await _finish(tester, controller);
+    });
+
+    testWidgets('a scrollbar can be forced off by its axis', (tester) async {
+      final controller = EditorController(text: '${'x' * 2000}\n$_long');
+      final render = await _pump(tester, controller, softWrap: false);
+      expect(render.scrollbar(ScrollbarAxis.vertical), isNotNull);
+      expect(render.scrollbar(ScrollbarAxis.horizontal), isNotNull);
+      render.scrollbars = const ScrollbarSettings(horizontal: false);
+      expect(render.scrollbar(ScrollbarAxis.vertical), isNotNull);
+      expect(render.scrollbar(ScrollbarAxis.horizontal), isNull);
+      render.scrollbars = const ScrollbarSettings(vertical: false);
+      expect(render.scrollbar(ScrollbarAxis.vertical), isNull);
+      expect(render.scrollbar(ScrollbarAxis.horizontal), isNotNull);
+      await _finish(tester, controller);
     });
   });
 }
