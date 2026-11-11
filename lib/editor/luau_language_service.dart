@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../editor_core/buffer.dart';
 import '../editor_core/patch.dart' show Bias;
-import '../editor_core/rope.dart';
+import '../lsp/diagnostic_range.dart';
 import '../lsp/document_sync.dart';
 import '../lsp/json_rpc.dart';
 import '../lsp/lsp_client.dart';
@@ -104,16 +104,10 @@ class LuauLanguageService {
         severity: <(int, int)>[],
     };
     for (final diagnostic in diagnostics) {
-      final start = _offsetAt(text, diagnostic.range.start);
-      var end = _offsetAt(text, diagnostic.range.end);
-      if (end <= start) {
-        // an empty range is drawn under the character it is before
-        end = (start + 1).clamp(0, text.length);
-        if (end <= start) {
-          continue;
-        }
+      final (start, end) = diagnosticOffsets(text, diagnostic.range);
+      if (end > start) {
+        bySeverity[diagnostic.severity]!.add((start, end));
       }
-      bySeverity[diagnostic.severity]!.add((start, end));
     }
     List<AnchorRange> ranges(List<(int, int)> places) =>
         (places..sort((a, b) => a.$1.compareTo(b.$1)))
@@ -132,15 +126,6 @@ class LuauLanguageService {
         hints: ranges(bySeverity[DiagnosticSeverity.hint]!),
       ),
     );
-  }
-
-  static int _offsetAt(Rope text, LspPosition position) {
-    final row = position.line.clamp(0, text.lineCount - 1);
-    final start = text.lineStart(row);
-    final end = row + 1 < text.lineCount
-        ? text.lineStart(row + 1) - 1
-        : text.length;
-    return (start + position.character).clamp(start, end);
   }
 
   Future<void> dispose() async {
