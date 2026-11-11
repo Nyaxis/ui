@@ -542,11 +542,6 @@ class RenderEditor extends RenderBox {
       return;
     }
     for (final layout in scrollbarLayouts()) {
-      // with nothing to scroll there is no scrollbar at all, as in Zed, which
-      // has no thumb to draw and so draws no track either
-      if (layout.thumb == null) {
-        continue;
-      }
       canvas.drawRect(layout.track, Paint()..color = _style.scrollbarTrack);
       if (layout.axis == ScrollbarAxis.vertical) {
         // the line between the text and the scrollbar
