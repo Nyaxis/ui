@@ -30,12 +30,21 @@ class JsonRpcNotification {
 /// JSON-RPC 2.0 as the language server protocol sends it: each message is a
 /// JSON text after a `Content-Length` header, over a pair of byte streams
 class JsonRpcConnection {
-  JsonRpcConnection(Stream<List<int>> input, this._output) {
+  JsonRpcConnection(Stream<List<int>> input, this._output) : _write = null {
     _subscription = input.listen(_onData, onDone: _onDone, onError: (_) {});
   }
 
-  final StreamSink<List<int>> _output;
-  late final StreamSubscription<List<int>> _subscription;
+  /// over a channel that carries each message whole, so that no header is
+  /// needed: [input] has one message per event, and [write] sends one
+  JsonRpcConnection.messages(Stream<String> input, void Function(String) write)
+    : _output = null,
+      _write = write {
+    _subscription = input.listen(_onMessage, onDone: _onDone, onError: (_) {});
+  }
+
+  final StreamSink<List<int>>? _output;
+  final void Function(String)? _write;
+  late final StreamSubscription<Object?> _subscription;
   final _pending = <int, Completer<Object?>>{};
   final _notifications = StreamController<JsonRpcNotification>.broadcast();
   final _done = Completer<void>();
@@ -62,12 +71,7 @@ class JsonRpcConnection {
     final id = _nextId++;
     final completer = Completer<Object?>();
     _pending[id] = completer;
-    _send({
-      'jsonrpc': '2.0',
-      'id': id,
-      'method': method,
-      'params': ?params,
-    });
+    _send({'jsonrpc': '2.0', 'id': id, 'method': method, 'params': ?params});
     return completer.future;
   }
 
@@ -75,11 +79,7 @@ class JsonRpcConnection {
     if (_closed) {
       return;
     }
-    _send({
-      'jsonrpc': '2.0',
-      'method': method,
-      'params': ?params,
-    });
+    _send({'jsonrpc': '2.0', 'method': method, 'params': ?params});
   }
 
   Future<void> close() async {
@@ -88,17 +88,22 @@ class JsonRpcConnection {
     }
     await _subscription.cancel();
     try {
-      await _output.close();
+      await _output?.close();
     } on Object {
       // the other end went away first
     }
   }
 
   void _send(Map<String, Object?> message) {
-    final body = utf8.encode(jsonEncode(message));
-    final header = ascii.encode('Content-Length: ${body.length}\r\n\r\n');
     try {
-      _output.add(header);
+      final write = _write;
+      if (write != null) {
+        write(jsonEncode(message));
+        return;
+      }
+      final body = utf8.encode(jsonEncode(message));
+      final header = ascii.encode('Content-Length: ${body.length}\r\n\r\n');
+      _output!.add(header);
       _output.add(body);
     } on Object {
       _end();
@@ -157,7 +162,8 @@ class JsonRpcConnection {
   static int? _contentLength(String header) {
     for (final line in header.split('\r\n')) {
       final colon = line.indexOf(':');
-      if (colon > 0 && line.substring(0, colon).toLowerCase() == 'content-length') {
+      if (colon > 0 &&
+          line.substring(0, colon).toLowerCase() == 'content-length') {
         return int.tryParse(line.substring(colon + 1).trim());
       }
     }

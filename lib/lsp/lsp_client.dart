@@ -32,7 +32,9 @@ class LspPosition {
 
   @override
   bool operator ==(Object other) =>
-      other is LspPosition && other.line == line && other.character == character;
+      other is LspPosition &&
+      other.line == line &&
+      other.character == character;
 
   @override
   int get hashCode => Object.hash(line, character);
@@ -67,7 +69,9 @@ class LspRange {
     }
     final line = json['line'];
     final character = json['character'];
-    return line is int && character is int ? LspPosition(line, character) : null;
+    return line is int && character is int
+        ? LspPosition(line, character)
+        : null;
   }
 
   @override
@@ -271,15 +275,10 @@ class LspClient {
     }
     final list = params['diagnostics'];
     _diagnostics.add(
-      PublishedDiagnostics(
-        params['uri'] as String,
-        [
-          if (list is List)
-            for (final item in list)
-              ?LspDiagnostic.fromJson(item),
-        ],
-        params['version'] as int?,
-      ),
+      PublishedDiagnostics(params['uri'] as String, [
+        if (list is List)
+          for (final item in list) ?LspDiagnostic.fromJson(item),
+      ], params['version'] as int?),
     );
   }
 

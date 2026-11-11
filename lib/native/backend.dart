@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -23,20 +24,45 @@ class Backend {
     }
     try {
       final process = await Process.start(path, const []);
+      final backend = Backend._(process);
       process.stdout
           .transform(utf8.decoder)
           .transform(const LineSplitter())
-          .listen((line) => debugPrint('backend: $line'));
+          .listen(backend._onLine);
       process.stderr.transform(utf8.decoder).listen(debugPrint);
-      return Backend._(process);
+      return backend;
     } catch (e) {
       debugPrint('backend: $e');
       return Backend._(null);
     }
   }
 
+  final _lsp = StreamController<String>.broadcast();
+
+  /// what the language server sends, one json-rpc message to an event
+  Stream<String> get lspMessages => _lsp.stream;
+
+  void _onLine(String line) {
+    try {
+      final reply = jsonDecode(line);
+      if (reply is Map && reply['evt'] == 'lsp' && reply['detail'] is String) {
+        _lsp.add(reply['detail'] as String);
+        return;
+      }
+    } on FormatException {
+      // not a reply; it is logged like any other line
+    }
+    debugPrint('backend: $line');
+  }
+
   void _send(Map<String, Object?> command) =>
       _process?.stdin.writeln(jsonEncode(command));
+
+  /// starts the backend's language server, which it refuses until licensed
+  void lspStart() => _send({'cmd': 'lsp_start'});
+
+  /// one json-rpc message for the language server
+  void lspSend(String message) => _send({'cmd': 'lsp', 'payload': message});
 
   void inject() => _send({'cmd': 'inject'});
 
@@ -62,5 +88,8 @@ class Backend {
     );
   }
 
-  void dispose() => shutdown().ignore();
+  void dispose() {
+    shutdown().ignore();
+    _lsp.close().ignore();
+  }
 }

@@ -45,24 +45,46 @@ void main() {
     await server.close();
   });
 
-  test('a message that comes in pieces, or many in one, is read whole', () async {
-    final input = StreamController<List<int>>();
-    final sink = StreamController<List<int>>();
-    final connection = JsonRpcConnection(input.stream, sink.sink);
-    // a sink with nobody listening never finishes closing
-    sink.stream.listen((_) {});
+  test(
+    'a message that comes in pieces, or many in one, is read whole',
+    () async {
+      final input = StreamController<List<int>>();
+      final sink = StreamController<List<int>>();
+      final connection = JsonRpcConnection(input.stream, sink.sink);
+      // a sink with nobody listening never finishes closing
+      sink.stream.listen((_) {});
+      final methods = <String>[];
+      connection.notifications.listen((n) => methods.add(n.method));
+      final first = _frame({'jsonrpc': '2.0', 'method': 'one'});
+      final second = _frame({'jsonrpc': '2.0', 'method': 'two'});
+      final third = _frame({'jsonrpc': '2.0', 'method': 'três'});
+      // the first in two cut pieces, the other two together
+      input.add(first.sublist(0, 7));
+      input.add(first.sublist(7, first.length - 3));
+      input.add([...first.sublist(first.length - 3), ...second, ...third]);
+      await Future<void>.delayed(Duration.zero);
+      expect(methods, ['one', 'two', 'três']);
+      await connection.close();
+    },
+  );
+
+  test('whole messages go over a channel that has no framing', () async {
+    final toServer = StreamController<String>();
+    final toClient = StreamController<String>();
+    final client = JsonRpcConnection.messages(toClient.stream, toServer.add);
+    final server = JsonRpcConnection.messages(toServer.stream, toClient.add);
+    server.onRequest = (method, params) async => {'m': method, 'p': params};
+    expect(await client.request('ask', {'x': 1}), {
+      'm': 'ask',
+      'p': {'x': 1},
+    });
     final methods = <String>[];
-    connection.notifications.listen((n) => methods.add(n.method));
-    final first = _frame({'jsonrpc': '2.0', 'method': 'one'});
-    final second = _frame({'jsonrpc': '2.0', 'method': 'two'});
-    final third = _frame({'jsonrpc': '2.0', 'method': 'três'});
-    // the first in two cut pieces, the other two together
-    input.add(first.sublist(0, 7));
-    input.add(first.sublist(7, first.length - 3));
-    input.add([...first.sublist(first.length - 3), ...second, ...third]);
+    server.notifications.listen((n) => methods.add(n.method));
+    client.notify('tell');
     await Future<void>.delayed(Duration.zero);
-    expect(methods, ['one', 'two', 'três']);
-    await connection.close();
+    expect(methods, ['tell']);
+    await client.close();
+    await server.close();
   });
 
   test('requests that are open fail when the connection ends', () async {
