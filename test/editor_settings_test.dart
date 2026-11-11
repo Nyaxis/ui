@@ -21,20 +21,76 @@ void main() {
       expect(defaults.tabSize, 4);
     });
 
-    test('the scrollbars are auto, and another is read by its name', () {
-      expect(const EditorPrefs().scrollbars, ScrollbarVisibility.auto);
+    test('the scrollbar is auto and marks everything, and is read by name', () {
+      const defaults = ScrollbarSettings(show: ScrollbarVisibility.auto);
+      expect(const EditorPrefs().scrollbar, defaults);
       expect(
-        EditorPrefs.fromJson({'scrollbars': 'always'}).scrollbars,
+        EditorPrefs.fromJson({
+          'scrollbar': {'show': 'always'},
+        }).scrollbar.show,
         ScrollbarVisibility.always,
       );
       expect(
-        EditorPrefs.fromJson({'scrollbars': 'sometimes'}).scrollbars,
+        EditorPrefs.fromJson({
+          'scrollbar': {'show': 'system'},
+        }).scrollbar.show,
+        ScrollbarVisibility.system,
+      );
+      expect(
+        EditorPrefs.fromJson({
+          'scrollbar': {'show': 'sometimes'},
+        }).scrollbar.show,
         ScrollbarVisibility.auto,
       );
-      const prefs = EditorPrefs(scrollbars: ScrollbarVisibility.never);
-      expect(prefs.toJson()['scrollbars'], 'never');
+      // the setting that was only when to show them
+      expect(
+        EditorPrefs.fromJson({'scrollbars': 'never'}).scrollbar.show,
+        ScrollbarVisibility.never,
+      );
+      const prefs = EditorPrefs(
+        scrollbar: ScrollbarSettings(
+          show: ScrollbarVisibility.never,
+          cursors: false,
+          searchResults: false,
+          selectedText: false,
+          selectedSymbol: false,
+          diagnostics: ScrollbarDiagnostics.warning,
+          horizontal: false,
+          vertical: false,
+        ),
+      );
+      expect(prefs.toJson()['scrollbar'], {
+        'show': 'never',
+        'cursors': false,
+        'searchResults': false,
+        'selectedText': false,
+        'selectedSymbol': false,
+        'diagnostics': 'warning',
+        'axes': {'horizontal': false, 'vertical': false},
+      });
       expect(EditorPrefs.fromJson(prefs.toJson()), prefs);
-      expect(prefs.withFontSize(12).scrollbars, ScrollbarVisibility.never);
+      expect(prefs.withFontSize(12).scrollbar, prefs.scrollbar);
+    });
+
+    test('the diagnostics of the scrollbar are a level, or true or false', () {
+      ScrollbarDiagnostics read(Object? value) => EditorPrefs.fromJson({
+        'scrollbar': {'diagnostics': value},
+      }).scrollbar.diagnostics;
+      expect(read('error'), ScrollbarDiagnostics.error);
+      expect(read(true), ScrollbarDiagnostics.all);
+      expect(read(false), ScrollbarDiagnostics.none);
+      expect(read('loud'), ScrollbarDiagnostics.all);
+      expect(read(null), ScrollbarDiagnostics.all);
+      // a level shows the ones that are as bad as it, or worse
+      for (final (level, shown) in [
+        (ScrollbarDiagnostics.all, [true, true, true, true]),
+        (ScrollbarDiagnostics.information, [true, true, true, false]),
+        (ScrollbarDiagnostics.warning, [true, true, false, false]),
+        (ScrollbarDiagnostics.error, [true, false, false, false]),
+        (ScrollbarDiagnostics.none, [false, false, false, false]),
+      ]) {
+        expect([for (var rank = 0; rank < 4; rank++) level.shows(rank)], shown);
+      }
     });
 
     test('the wheel zoom is off, and is kept', () {

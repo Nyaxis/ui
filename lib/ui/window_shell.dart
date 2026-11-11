@@ -711,7 +711,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       style: _nativeStyle(theme),
       softWrap: prefs.wordWrap,
       showLineNumbers: prefs.lineNumbers,
-      scrollbars: prefs.scrollbars,
+      scrollbars: prefs.scrollbar,
       mouseWheelZoom: prefs.mouseWheelZoom,
       onZoom: _zoom,
       autofocus: true,

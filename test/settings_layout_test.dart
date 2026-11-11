@@ -81,7 +81,7 @@ void main() {
       Map<String, String>? styles,
       ValueChanged<Map<String, String>> onStyles,
     ) async {
-      tester.view.physicalSize = const Size(900, 4200);
+      tester.view.physicalSize = const Size(900, 6000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(
@@ -142,7 +142,7 @@ void main() {
 
     testWidgets('the scrollbars and the wheel zoom are chosen', (tester) async {
       EditorPrefs? chosen;
-      tester.view.physicalSize = const Size(900, 4200);
+      tester.view.physicalSize = const Size(900, 6000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
       Future<void> show(Map<String, String>? styles) => tester.pumpWidget(
@@ -165,12 +165,28 @@ void main() {
       );
       await show(const {});
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('Scrollbars'), findsOneWidget);
       expect(find.text('Mouse wheel zoom'), findsOneWidget);
+      // the rows of the scrollbar, as the settings of an editor have them
+      for (final label in [
+        'Show',
+        'Cursors',
+        'Search Results',
+        'Selected Text',
+        'Selected Symbol',
+        'Diagnostics',
+        'Horizontal Scrollbar',
+        'Vertical Scrollbar',
+      ]) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
       await tester.tap(find.text('Always'));
-      expect(chosen?.scrollbars, ScrollbarVisibility.always);
+      expect(chosen?.scrollbar.show, ScrollbarVisibility.always);
+      await tester.tap(find.text('System'));
+      expect(chosen?.scrollbar.show, ScrollbarVisibility.system);
       await tester.tap(find.text('Never'));
-      expect(chosen?.scrollbars, ScrollbarVisibility.never);
+      expect(chosen?.scrollbar.show, ScrollbarVisibility.never);
+      await tester.tap(find.text('Error'));
+      expect(chosen?.scrollbar.diagnostics, ScrollbarDiagnostics.error);
     });
 
     testWidgets('the styles that are set can all be reset', (tester) async {

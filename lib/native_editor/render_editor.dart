@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/rendering.dart';
 
+import '../editor_core/buffer.dart' show Anchor;
 import '../editor_core/display_map.dart';
 import '../editor_core/patch.dart' show Bias;
 import '../editor_core/point.dart';
@@ -10,6 +11,14 @@ import 'editor_style.dart';
 import 'scrollbar_layout.dart';
 import 'selection_path.dart';
 import 'wavy_underline.dart';
+
+/// a mark in the track of a scrollbar, and the color it is painted in
+class ScrollbarMarker {
+  const ScrollbarMarker(this.rect, this.color);
+
+  final Rect rect;
+  final Color color;
+}
 
 /// a row of the screen, laid out as one line of text, with where each of its
 /// columns is
@@ -71,7 +80,7 @@ class RenderEditor extends RenderBox {
     required EditorStyle style,
     required bool softWrap,
     required bool showLineNumbers,
-    ScrollbarVisibility scrollbars = ScrollbarVisibility.always,
+    ScrollbarSettings scrollbars = const ScrollbarSettings(),
   }) : this._(controller, style, softWrap, showLineNumbers, scrollbars);
 
   RenderEditor._(
@@ -86,11 +95,11 @@ class RenderEditor extends RenderBox {
   EditorStyle _style;
   bool _softWrap;
   bool _showLineNumbers;
-  ScrollbarVisibility _scrollbars;
+  ScrollbarSettings _scrollbars;
 
-  ScrollbarVisibility get scrollbars => _scrollbars;
+  ScrollbarSettings get scrollbars => _scrollbars;
 
-  set scrollbars(ScrollbarVisibility value) {
+  set scrollbars(ScrollbarSettings value) {
     if (value == _scrollbars) {
       return;
     }
@@ -115,18 +124,22 @@ class RenderEditor extends RenderBox {
   /// the width that the scrollbar takes at the right, which the text does not
   /// go under, also when it is not drawn for a moment
   double get _scrollbarWidth =>
-      _scrollbars == ScrollbarVisibility.never ? 0 : _style.scrollbarWidth;
+      _scrollbars.show == ScrollbarVisibility.never ? 0 : _style.scrollbarWidth;
 
   /// whether the scrollbars are drawn: when they are always, when they are
-  /// shown, and with auto while a cursor is out of sight or there are other
-  /// places that the selected text is
-  bool get scrollbarsVisible => switch (_scrollbars) {
+  /// shown, and with auto also when there is something to mark in them: the
+  /// other places that the selected text is, or diagnostics, or when a cursor
+  /// is out of sight
+  bool get scrollbarsVisible => switch (_scrollbars.show) {
     ScrollbarVisibility.always => true,
     ScrollbarVisibility.never => false,
+    ScrollbarVisibility.system => _scrollbarsShown,
     ScrollbarVisibility.auto =>
-      _scrollbarsShown ||
+      (_scrollbars.selectedText && _controller.occurrences.isNotEmpty) ||
+          (_scrollbars.diagnostics != ScrollbarDiagnostics.none &&
+              _controller.hasDiagnostics) ||
           _cursorsOutOfSight() ||
-          _controller.occurrences.isNotEmpty,
+          _scrollbarsShown,
   };
 
   /// whether a cursor is on a row that is not on the screen
@@ -448,25 +461,28 @@ class RenderEditor extends RenderBox {
   }
 
   /// the scrollbars for the scroll as it is. the one that goes down is always
-  /// there, and the one that goes along when the text is wider than the view
+  /// there, and the one that goes along when the text is wider than the view;
+  /// a setting can say that one is not
   List<ScrollbarLayout> scrollbarLayouts() {
-    if (_scrollbars == ScrollbarVisibility.never || !hasSize) {
+    if (_scrollbars.show == ScrollbarVisibility.never || !hasSize) {
       return const [];
     }
     final width = _scrollbarWidth;
     final content = contentSize;
     return [
-      ScrollbarLayout.compute(
-        axis: ScrollbarAxis.vertical,
-        track: Rect.fromLTWH(size.width - width, 0, width, size.height),
-        viewportSize: size.height,
-        // the text goes as far as its last row, and there is room to scroll
-        // until that row is at the top
-        scrollRange: math.max(0.0, content.height - _lineHeight) + size.height,
-        glyph: _lineHeight,
-        scrollPosition: _controller.scrollY / _lineHeight,
-      ),
-      if (!_softWrap && content.width > _textWidth)
+      if (_scrollbars.vertical)
+        ScrollbarLayout.compute(
+          axis: ScrollbarAxis.vertical,
+          track: Rect.fromLTWH(size.width - width, 0, width, size.height),
+          viewportSize: size.height,
+          // the text goes as far as its last row, and there is room to scroll
+          // until that row is at the top
+          scrollRange:
+              math.max(0.0, content.height - _lineHeight) + size.height,
+          glyph: _lineHeight,
+          scrollPosition: _controller.scrollY / _lineHeight,
+        ),
+      if (_scrollbars.horizontal && !_softWrap && content.width > _textWidth)
         ScrollbarLayout.compute(
           axis: ScrollbarAxis.horizontal,
           track: Rect.fromLTWH(
@@ -514,12 +530,18 @@ class RenderEditor extends RenderBox {
     }
   }
 
+  /// the display row of a place in the text
+  int _rowOf(Anchor anchor) => _snapshot
+      .offsetToDisplayPoint(_controller.buffer.snapshot.offsetForAnchor(anchor))
+      .row;
+
   /// the marks in the track that go down, at the rows of the cursors: two
-  /// pixels high, and one where the rows are next to each other
-  List<Rect> cursorMarkers() {
+  /// pixels high, across the track, and one where the rows are next to each
+  /// other. there are none when the setting says so, or when there are too
+  /// many to tell apart
+  List<ScrollbarMarker> cursorMarkers() {
     final cursors = _controller.selections.all;
-    // there are none when there are too many to tell apart
-    if (cursors.length > 100) {
+    if (!_scrollbars.cursors || cursors.length > 100) {
       return const [];
     }
     return _markerRects([
@@ -527,6 +549,7 @@ class RenderEditor extends RenderBox {
         (
           _snapshot.offsetToDisplayPoint(s.head).row,
           _snapshot.offsetToDisplayPoint(s.head).row,
+          _style.cursor,
         ),
     ]);
   }
@@ -534,43 +557,68 @@ class RenderEditor extends RenderBox {
   /// the marks in the middle third of the track, for the other places that
   /// the selected text is: at least five pixels high, and one where they are
   /// next to each other
-  List<Rect> occurrenceMarkers() {
-    final buffer = _controller.buffer.snapshot;
+  List<ScrollbarMarker> occurrenceMarkers() {
+    if (!_scrollbars.selectedText) {
+      return const [];
+    }
     return _markerRects([
       for (final range in _controller.occurrences)
-        (
-          _snapshot
-              .offsetToDisplayPoint(buffer.offsetForAnchor(range.start))
-              .row,
-          _snapshot.offsetToDisplayPoint(buffer.offsetForAnchor(range.end)).row,
-        ),
+        (_rowOf(range.start), _rowOf(range.end), _style.scrollbarMarker),
     ], column: 1);
+  }
+
+  /// the marks in the last third of the track, for the diagnostics that the
+  /// setting says: in the color of how bad each is, the least bad first, so
+  /// that the worst is painted last
+  List<ScrollbarMarker> diagnosticMarkers() {
+    if (_scrollbars.diagnostics == ScrollbarDiagnostics.none) {
+      return const [];
+    }
+    final diagnostics = _controller.diagnosticRanges;
+    final colors = _controller.diagnosticColors;
+    final levels = [
+      (diagnostics.hints, 3, colors.hint),
+      (diagnostics.information, 2, colors.information),
+      (diagnostics.warnings, 1, colors.warning),
+      (diagnostics.errors, 0, colors.error),
+    ];
+    return _markerRects([
+      for (final (ranges, rank, color) in levels)
+        if (_scrollbars.diagnostics.shows(rank))
+          for (final range in ranges)
+            (_rowOf(range.start), _rowOf(range.end), Color(color)),
+    ], column: 2);
   }
 
   /// the marks of rows of the text in the track that goes down. without a
   /// [column] they are two pixels high and across the track, and with one
   /// they are in that third of it, at least five pixels high. marks that are
-  /// next to each other are one.
-  List<Rect> _markerRects(List<(int, int)> rowRanges, {int? column}) {
+  /// next to each other and of one color are one.
+  List<ScrollbarMarker> _markerRects(
+    List<(int, int, Color)> rowRanges, {
+    int? column,
+  }) {
     final bar = scrollbar(ScrollbarAxis.vertical);
     if (bar == null || rowRanges.isEmpty) {
       return const [];
     }
-    final sorted = [...rowRanges]..sort((a, b) => a.$1.compareTo(b.$1));
     final minHeight = column == null ? 2.0 : 5.0;
     final maxHeight = column == null ? 2.0 : double.infinity;
     final height = bar.unitSize.clamp(minHeight, maxHeight);
-    final ranges = <(double, double)>[];
-    for (final (start, end) in sorted) {
+    final ranges = <(double, double, Color)>[];
+    for (final (start, end, color) in rowRanges) {
       final top = bar.track.top + start * bar.unitSize;
       final bottom = bar.track.top + end * bar.unitSize + height;
-      if (ranges.isNotEmpty && ranges.last.$2 >= top - 1) {
+      if (ranges.isNotEmpty &&
+          ranges.last.$2 >= top - 1 &&
+          ranges.last.$3 == color) {
         ranges[ranges.length - 1] = (
           ranges.last.$1,
           math.max(ranges.last.$2, bottom),
+          color,
         );
       } else {
-        ranges.add((top, bottom));
+        ranges.add((top, bottom, color));
       }
     }
     final double left;
@@ -586,8 +634,8 @@ class RenderEditor extends RenderBox {
       right = left + columnWidth;
     }
     return [
-      for (final (top, bottom) in ranges)
-        Rect.fromLTRB(left, top, right, bottom),
+      for (final (top, bottom, color) in ranges)
+        ScrollbarMarker(Rect.fromLTRB(left, top, right, bottom), color),
     ];
   }
 
@@ -608,11 +656,13 @@ class RenderEditor extends RenderBox {
           ),
           Paint()..color = _style.scrollbarTrackBorder,
         );
-        for (final marker in occurrenceMarkers()) {
-          canvas.drawRect(marker, Paint()..color = _style.scrollbarMarker);
-        }
-        for (final marker in cursorMarkers()) {
-          canvas.drawRect(marker, Paint()..color = _style.cursor);
+        // the cursors are painted last, over the others
+        for (final marker in [
+          ...occurrenceMarkers(),
+          ...diagnosticMarkers(),
+          ...cursorMarkers(),
+        ]) {
+          canvas.drawRect(marker.rect, Paint()..color = marker.color);
         }
       }
       final thumb = layout.thumb;
