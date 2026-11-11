@@ -15,6 +15,7 @@ import '../editor_core/text_metrics.dart';
 import '../syntax/syntax_layer.dart';
 import 'auto_pairs.dart';
 import 'block_completion.dart';
+import 'system_scrollbars.dart';
 
 /// where the language server found something wrong, by how bad it is
 class DiagnosticRanges {
@@ -69,6 +70,65 @@ class EditorController extends ChangeNotifier {
       ..addListener(_changed);
     selections = SelectionsCollection(buffer);
     buffer.addListener(_onBufferChange);
+    showScrollbars();
+  }
+
+  /// whether the system wants scrollbars that are not used to go away, which
+  /// is whether they are hidden a moment after being shown
+  @visibleForTesting
+  static bool systemAutoHide = systemAutoHidesScrollbars();
+
+  static const _scrollbarsShownFor = Duration(seconds: 1);
+
+  bool _scrollbarsShown = false;
+  bool _disposed = false;
+  Timer? _hideScrollbars;
+
+  /// whether the scrollbars are shown at the moment: they are when the editor
+  /// is made, and for a moment when the text scrolls or the pointer is at one
+  /// of them. it is the editor's, so that a tab that is left and comes back
+  /// has what it had
+  bool get scrollbarsShown => _scrollbarsShown;
+
+  @visibleForTesting
+  set scrollbarsShown(bool value) {
+    _hideScrollbars?.cancel();
+    if (value != _scrollbarsShown) {
+      _scrollbarsShown = value;
+      notifyListeners();
+    }
+  }
+
+  /// whether a thumb of a scrollbar is held, which the view says, as the
+  /// scrollbars do not go while it is
+  bool Function()? scrollbarHeld;
+
+  /// shows the scrollbars, and hides them a moment later when the system hides
+  /// scrollbars that are not used
+  void showScrollbars() {
+    if (_disposed) {
+      return;
+    }
+    if (!_scrollbarsShown) {
+      _scrollbarsShown = true;
+      notifyListeners();
+    }
+    _hideScrollbars?.cancel();
+    if (!systemAutoHide) {
+      _hideScrollbars = null;
+      return;
+    }
+    _hideScrollbars = Timer(_scrollbarsShownFor, () {
+      if (_disposed) {
+        return;
+      }
+      if (scrollbarHeld?.call() ?? false) {
+        showScrollbars();
+      } else {
+        _scrollbarsShown = false;
+        notifyListeners();
+      }
+    });
   }
 
   final TextBuffer buffer;
@@ -1329,6 +1389,8 @@ class EditorController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _hideScrollbars?.cancel();
     buffer.removeListener(_onBufferChange);
     _occurrenceSearch?.cancel();
     _syntax?.dispose();

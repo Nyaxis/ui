@@ -11,7 +11,6 @@ import 'editor_text_input.dart';
 import 'modifier_keys.dart';
 import 'render_editor.dart';
 import 'scrollbar_layout.dart';
-import 'system_scrollbars.dart';
 
 /// shows the text of an [EditorController], and takes what is typed, clicked
 /// and dragged on it
@@ -84,51 +83,28 @@ class EditorViewState extends State<EditorView> {
     ModifierKeys.instance.start();
     focusNode.addListener(_onFocusChange);
     widget.controller.addListener(_onControllerChange);
+    widget.controller.scrollbarHeld = _scrollbarHeld;
     _scrollX = widget.controller.scrollX;
     _scrollY = widget.controller.scrollY;
   }
 
-  // the scrollbars are shown for a moment when the text scrolls, or the pointer
-  // is at one of them
-
-  static const _scrollbarsShownFor = Duration(seconds: 1);
-  Timer? _hideScrollbars;
   double _scrollX = 0;
   double _scrollY = 0;
   bool _scrollCheck = false;
 
-  /// whether auto hides the scrollbars at all: as in Zed, only when the system
-  /// says that scrollbars go away when not used, and otherwise they stay
-  @visibleForTesting
-  static bool systemAutoHide = systemAutoHidesScrollbars();
+  // the scrollbars are shown for a moment when the text scrolls, or the pointer
+  // is at one of them. whether they are shown, and when they go, is of the
+  // editor and not of its view, which is made again when a tab is switched to
 
-  void _showScrollbars() {
-    final show = widget.scrollbars.show;
-    if (show != ScrollbarVisibility.auto &&
-        show != ScrollbarVisibility.system) {
-      return;
-    }
-    _render?.scrollbarsShown = true;
-    _hideScrollbars?.cancel();
-    if (!systemAutoHide) {
-      return;
-    }
-    _hideScrollbars = Timer(_scrollbarsShownFor, () {
-      // not while a thumb is being dragged
-      if (_scrollbarDrag != null) {
-        _showScrollbars();
-      } else {
-        _render?.scrollbarsShown = false;
-      }
-    });
-  }
+  bool _scrollbarHeld() => _scrollbarDrag != null;
+
+  void _showScrollbars() => widget.controller.showScrollbars();
 
   @override
   void didUpdateWidget(EditorView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.scrollbars.show != widget.scrollbars.show) {
-      _hideScrollbars?.cancel();
-      _render?.scrollbarsShown = true;
+      widget.controller.showScrollbars();
     }
     final oldNode = oldWidget.focusNode ?? oldWidget.controller.focusNode;
     if (oldNode != focusNode) {
@@ -137,6 +113,8 @@ class EditorViewState extends State<EditorView> {
     }
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_onControllerChange);
+      oldWidget.controller.scrollbarHeld = null;
+      widget.controller.scrollbarHeld = _scrollbarHeld;
       _input.detach();
       _input = EditorTextInput(widget.controller);
       widget.controller.addListener(_onControllerChange);
@@ -441,8 +419,8 @@ class EditorViewState extends State<EditorView> {
   @override
   void dispose() {
     _blink?.cancel();
-    _hideScrollbars?.cancel();
     _input.detach();
+    widget.controller.scrollbarHeld = null;
     widget.controller.removeListener(_onControllerChange);
     focusNode.removeListener(_onFocusChange);
     super.dispose();

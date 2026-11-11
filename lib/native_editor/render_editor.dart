@@ -107,19 +107,8 @@ class RenderEditor extends RenderBox {
     markNeedsLayout();
   }
 
-  bool _scrollbarsShown = true;
-
-  /// whether the scrollbars are shown at the moment, which the view says when
-  /// it hides them after a while without scrolling
-  bool get scrollbarsShown => _scrollbarsShown;
-
-  set scrollbarsShown(bool value) {
-    if (value == _scrollbarsShown) {
-      return;
-    }
-    _scrollbarsShown = value;
-    markNeedsPaint();
-  }
+  /// whether the scrollbars are shown at the moment, which the editor says
+  bool get _scrollbarsShown => _controller.scrollbarsShown;
 
   /// the width that the scrollbar takes at the right, which the text does not
   /// go under, also when it is not drawn for a moment
