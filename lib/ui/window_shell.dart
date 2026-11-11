@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../editor/editor_tabs.dart';
 import '../native_editor/cursor_summary.dart';
+import '../native_editor/editor_controller.dart' show DiagnosticColors;
 import '../native_editor/editor_style.dart';
 import '../native_editor/editor_view.dart';
 import '../editor/keymap.dart';
@@ -405,13 +406,21 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   /// not put it back
   int? _nativeTabSize;
 
-  /// the other places a selected text is, are the accent behind the text
+  /// the other places a selected text is, are the accent behind the text; the
+  /// diagnostics are underlined in the colors of how bad they are
   void _applyOccurrenceColor() {
-    final color = widget.controller.value.accent
-        .withValues(alpha: 0x17 / 255)
-        .toARGB32();
+    final theme = widget.controller.value;
+    final color = theme.accent.withValues(alpha: 0x17 / 255).toARGB32();
+    final diagnostics = DiagnosticColors(
+      error: theme.red.toARGB32(),
+      warning: theme.warning.toARGB32(),
+      information: theme.info.toARGB32(),
+      hint: theme.hint.toARGB32(),
+    );
     for (final tab in _tabs.tabs) {
-      tab.document.controller.occurrenceBackground = color;
+      tab.document.controller
+        ..occurrenceBackground = color
+        ..diagnosticColors = diagnostics;
     }
   }
 

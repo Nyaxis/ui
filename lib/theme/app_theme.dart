@@ -42,6 +42,8 @@ class AppTheme {
     this.punctuation = const Color(0xff9399b2),
     this.cursor = const Color(0xfff5e0dc),
     this.info = const Color(0xff94e2d5),
+    this.warning = const Color(0xfff9e2af),
+    this.hint = const Color(0xff585b70),
   });
 
   final double cornerRadius;
@@ -123,6 +125,12 @@ class AppTheme {
   /// the other places a selected text is
   final Color info;
 
+  /// the underline of a warning of the language server
+  final Color warning;
+
+  /// the underline of a hint of the language server
+  final Color hint;
+
   TextStyle get titleStyle => TextStyle(
     fontFamily: fontFamily,
     fontSize: fontSizeTitle,
@@ -196,6 +204,8 @@ class AppTheme {
     Color? punctuation,
     Color? cursor,
     Color? info,
+    Color? warning,
+    Color? hint,
   }) {
     return AppTheme(
       cornerRadius: cornerRadius ?? this.cornerRadius,
@@ -235,6 +245,8 @@ class AppTheme {
       punctuation: punctuation ?? this.punctuation,
       cursor: cursor ?? this.cursor,
       info: info ?? this.info,
+      warning: warning ?? this.warning,
+      hint: hint ?? this.hint,
     );
   }
 
@@ -317,6 +329,8 @@ class AppTheme {
       punctuation: _color(colors['punctuation'], _fallback.punctuation),
       cursor: _color(colors['cursor'], _fallback.cursor),
       info: _color(colors['info'], _fallback.info),
+      warning: _color(colors['warning'], _fallback.warning),
+      hint: _color(colors['hint'], _fallback.hint),
     );
   }
 }

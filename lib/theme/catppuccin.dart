@@ -30,6 +30,8 @@ const catppuccinPalettes = <String, Map<String, String>>{
     'punctuation': '#7c7f93',
     'cursor': '#dc8a78',
     'info': '#179299',
+    'warning': '#df8e1d',
+    'hint': '#acb0be',
   },
   'Catppuccin Frappé': {
     'background': '#303446',
@@ -58,6 +60,8 @@ const catppuccinPalettes = <String, Map<String, String>>{
     'punctuation': '#949cbb',
     'cursor': '#f2d5cf',
     'info': '#81c8be',
+    'warning': '#e5c890',
+    'hint': '#626880',
   },
   'Catppuccin Macchiato': {
     'background': '#24273a',
@@ -86,6 +90,8 @@ const catppuccinPalettes = <String, Map<String, String>>{
     'punctuation': '#939ab7',
     'cursor': '#f4dbd6',
     'info': '#8bd5ca',
+    'warning': '#eed49f',
+    'hint': '#5b6078',
   },
   'Catppuccin Mocha': {
     'background': '#1e1e2e',
@@ -114,6 +120,8 @@ const catppuccinPalettes = <String, Map<String, String>>{
     'punctuation': '#9399b2',
     'cursor': '#f5e0dc',
     'info': '#94e2d5',
+    'warning': '#f9e2af',
+    'hint': '#585b70',
   },
 };
 

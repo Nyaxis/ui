@@ -78,6 +78,11 @@ class EditorStyle {
         if (style.underline == true) TextDecoration.underline,
         if (style.strikethrough == true) TextDecoration.lineThrough,
       ]),
+      decorationColor: style.underlineColor == null
+          ? null
+          : Color(style.underlineColor!),
+      decorationStyle: style.wavy == true ? TextDecorationStyle.wavy : null,
+      decorationThickness: style.wavy == true ? 1.0 : null,
     );
   }
 }
