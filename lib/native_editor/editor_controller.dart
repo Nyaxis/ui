@@ -16,6 +16,47 @@ import '../syntax/syntax_layer.dart';
 import 'auto_pairs.dart';
 import 'block_completion.dart';
 
+/// where the language server found something wrong, by how bad it is
+class DiagnosticRanges {
+  const DiagnosticRanges({
+    this.errors = const [],
+    this.warnings = const [],
+    this.information = const [],
+    this.hints = const [],
+  });
+
+  final List<AnchorRange> errors;
+  final List<AnchorRange> warnings;
+  final List<AnchorRange> information;
+  final List<AnchorRange> hints;
+}
+
+/// the colors that diagnostics are underlined in, `0xAARRGGBB`
+class DiagnosticColors {
+  const DiagnosticColors({
+    this.error = 0xFFF38BA8,
+    this.warning = 0xFFF9E2AF,
+    this.information = 0xFF94E2D5,
+    this.hint = 0xFF585B70,
+  });
+
+  final int error;
+  final int warning;
+  final int information;
+  final int hint;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DiagnosticColors &&
+      other.error == error &&
+      other.warning == warning &&
+      other.information == information &&
+      other.hint == hint;
+
+  @override
+  int get hashCode => Object.hash(error, warning, information, hint);
+}
+
 /// an editor's text and everything that is done to it: the buffer, how it is
 /// laid out on the screen, the selections, and where the view is scrolled to
 class EditorController extends ChangeNotifier {
@@ -212,33 +253,60 @@ class EditorController extends ChangeNotifier {
   /// the highlights go under this key, which no other highlight has
   static const int _occurrencesKey = 1;
 
-  static const int _warningsKey = 2;
-  static const int _errorsKey = 3;
+  /// the diagnostics go under these keys, from the least to the most severe, so
+  /// that the worse one is on top where they cover the same text
+  static const int _hintsKey = 2;
+  static const int _informationKey = 3;
+  static const int _warningsKey = 4;
+  static const int _errorsKey = 5;
 
-  /// underlines the places that a language server found wrong; errors are
-  /// over warnings where they cover the same text
-  void setDiagnostics({
-    required List<AnchorRange> errors,
-    required List<AnchorRange> warnings,
-  }) {
+  /// what the language server found wrong, by how bad it is
+  var _diagnostics = const DiagnosticRanges();
+
+  DiagnosticColors _diagnosticColors = const DiagnosticColors();
+
+  DiagnosticColors get diagnosticColors => _diagnosticColors;
+
+  set diagnosticColors(DiagnosticColors value) {
+    if (value == _diagnosticColors) {
+      return;
+    }
+    _diagnosticColors = value;
+    _applyDiagnostics();
+  }
+
+  /// underlines the places that a language server found wrong, as Zed does: a
+  /// wavy line of one pixel in the color of how bad it is
+  void setDiagnostics(DiagnosticRanges diagnostics) {
+    _diagnostics = diagnostics;
+    _applyDiagnostics();
+  }
+
+  void _applyDiagnostics() {
+    TextHighlight? underline(List<AnchorRange> ranges, int color) =>
+        ranges.isEmpty
+        ? null
+        : TextHighlight(
+            HighlightStyle(underline: true, underlineColor: color, wavy: true),
+            ranges,
+          );
+    final colors = _diagnosticColors;
     _highlights = _highlights
         .withTextHighlight(
+          _hintsKey,
+          underline(_diagnostics.hints, colors.hint),
+        )
+        .withTextHighlight(
+          _informationKey,
+          underline(_diagnostics.information, colors.information),
+        )
+        .withTextHighlight(
           _warningsKey,
-          warnings.isEmpty
-              ? null
-              : TextHighlight(
-                  const HighlightStyle(background: 0x33CCA700, underline: true),
-                  warnings,
-                ),
+          underline(_diagnostics.warnings, colors.warning),
         )
         .withTextHighlight(
           _errorsKey,
-          errors.isEmpty
-              ? null
-              : TextHighlight(
-                  const HighlightStyle(background: 0x33F14C4C, underline: true),
-                  errors,
-                ),
+          underline(_diagnostics.errors, colors.error),
         );
     _changed();
   }

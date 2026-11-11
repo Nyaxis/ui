@@ -9,6 +9,7 @@ import '../lsp/document_sync.dart';
 import '../lsp/json_rpc.dart';
 import '../lsp/lsp_client.dart';
 import '../native/backend.dart';
+import '../native_editor/editor_controller.dart' show DiagnosticRanges;
 import 'tab_document.dart';
 
 /// the language server of the backend, told of the documents that flutter
@@ -96,8 +97,10 @@ class LuauLanguageService {
   void _show(NativeTabDocument document, List<LspDiagnostic> diagnostics) {
     final buffer = document.controller.buffer;
     final text = buffer.text;
-    final errors = <(int, int)>[];
-    final warnings = <(int, int)>[];
+    final bySeverity = {
+      for (final severity in DiagnosticSeverity.values)
+        severity: <(int, int)>[],
+    };
     for (final diagnostic in diagnostics) {
       final start = _offsetAt(text, diagnostic.range.start);
       var end = _offsetAt(text, diagnostic.range.end);
@@ -108,9 +111,7 @@ class LuauLanguageService {
           continue;
         }
       }
-      (diagnostic.severity == DiagnosticSeverity.error ? errors : warnings).add(
-        (start, end),
-      );
+      bySeverity[diagnostic.severity]!.add((start, end));
     }
     List<AnchorRange> ranges(List<(int, int)> places) =>
         (places..sort((a, b) => a.$1.compareTo(b.$1)))
@@ -122,8 +123,12 @@ class LuauLanguageService {
             )
             .toList();
     document.controller.setDiagnostics(
-      errors: ranges(errors),
-      warnings: ranges(warnings),
+      DiagnosticRanges(
+        errors: ranges(bySeverity[DiagnosticSeverity.error]!),
+        warnings: ranges(bySeverity[DiagnosticSeverity.warning]!),
+        information: ranges(bySeverity[DiagnosticSeverity.information]!),
+        hints: ranges(bySeverity[DiagnosticSeverity.hint]!),
+      ),
     );
   }
 
