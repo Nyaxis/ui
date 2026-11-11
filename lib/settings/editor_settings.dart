@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../native_editor/diagnostic_hover.dart' show HoverSettings;
 import '../native_editor/scrollbar_layout.dart'
     show ScrollbarSettings, ScrollbarVisibility;
 import '../syntax/syntax_palette.dart' show fontStylesFromConfig;
@@ -20,6 +21,7 @@ class EditorPrefs {
     this.scrollbar = const ScrollbarSettings(show: ScrollbarVisibility.auto),
     this.mouseWheelZoom = false,
     this.unnecessaryCodeFade = defaultUnnecessaryCodeFade,
+    this.hover = const HoverSettings(),
   });
 
   /// unknown or malformed values fall back to their defaults
@@ -36,7 +38,28 @@ class EditorPrefs {
     final size = json['fontSize'];
     final tab = json['tabSize'];
     final fade = json['unnecessaryCodeFade'];
+    Duration delay(String key, Duration fallback) {
+      final value = json[key];
+      return value is num
+          ? Duration(
+              milliseconds: value
+                  .round()
+                  .clamp(0, maxHoverDelay.inMilliseconds)
+                  .toInt(),
+            )
+          : fallback;
+    }
+
     return EditorPrefs(
+      hover: HoverSettings(
+        enabled: flag('hoverPopoverEnabled', defaults.hover.enabled),
+        delay: delay('hoverPopoverDelay', defaults.hover.delay),
+        sticky: flag('hoverPopoverSticky', defaults.hover.sticky),
+        hidingDelay: delay(
+          'hoverPopoverHidingDelay',
+          defaults.hover.hidingDelay,
+        ),
+      ),
       unnecessaryCodeFade: fade is num
           ? fade.toDouble().clamp(0.0, maxUnnecessaryCodeFade).toDouble()
           : defaults.unnecessaryCodeFade,
@@ -70,6 +93,9 @@ class EditorPrefs {
   static const defaultUnnecessaryCodeFade = 0.3;
   static const maxUnnecessaryCodeFade = 0.9;
 
+  /// the longest that the pointer rests before a popover, or it stays
+  static const maxHoverDelay = Duration(seconds: 2);
+
   /// null follows the theme's body size
   final double? fontSize;
   final int tabSize;
@@ -90,7 +116,12 @@ class EditorPrefs {
   /// how much unused code is faded out, from 0 to [maxUnnecessaryCodeFade]
   final double unnecessaryCodeFade;
 
+  /// when what the language server found is shown for the text that the
+  /// pointer rests on
+  final HoverSettings hover;
+
   EditorPrefs copyWith({
+    HoverSettings? hover,
     int? tabSize,
     bool? wordWrap,
     bool? lineNumbers,
@@ -101,6 +132,7 @@ class EditorPrefs {
     double? unnecessaryCodeFade,
   }) {
     return EditorPrefs(
+      hover: hover ?? this.hover,
       unnecessaryCodeFade: unnecessaryCodeFade ?? this.unnecessaryCodeFade,
       fontSize: fontSize,
       tabSize: tabSize ?? this.tabSize,
@@ -116,6 +148,7 @@ class EditorPrefs {
   /// [size] is kept within the limits, and null goes back to the theme's
   EditorPrefs withFontSize(double? size) {
     return EditorPrefs(
+      hover: hover,
       unnecessaryCodeFade: unnecessaryCodeFade,
       fontSize: size?.clamp(minFontSize, maxFontSize).toDouble(),
       tabSize: tabSize,
@@ -138,6 +171,10 @@ class EditorPrefs {
     'scrollbar': scrollbar.toJson(),
     'mouseWheelZoom': mouseWheelZoom,
     'unnecessaryCodeFade': unnecessaryCodeFade,
+    'hoverPopoverEnabled': hover.enabled,
+    'hoverPopoverDelay': hover.delay.inMilliseconds,
+    'hoverPopoverSticky': hover.sticky,
+    'hoverPopoverHidingDelay': hover.hidingDelay.inMilliseconds,
   };
 
   @override
@@ -151,7 +188,8 @@ class EditorPrefs {
       other.autoClosingBrackets == autoClosingBrackets &&
       other.scrollbar == scrollbar &&
       other.mouseWheelZoom == mouseWheelZoom &&
-      other.unnecessaryCodeFade == unnecessaryCodeFade;
+      other.unnecessaryCodeFade == unnecessaryCodeFade &&
+      other.hover == hover;
 
   @override
   int get hashCode => Object.hash(
@@ -164,6 +202,7 @@ class EditorPrefs {
     scrollbar,
     mouseWheelZoom,
     unnecessaryCodeFade,
+    hover,
   );
 }
 

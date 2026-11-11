@@ -92,6 +92,7 @@ class LspDiagnostic {
     required this.message,
     this.source,
     this.code,
+    this.codeHref,
     this.unnecessary = false,
   });
 
@@ -100,6 +101,9 @@ class LspDiagnostic {
   final String message;
   final String? source;
   final String? code;
+
+  /// where the server says the code is explained
+  final String? codeHref;
 
   /// whether the server tagged it as code that is not needed, such as a local
   /// that is never used
@@ -123,6 +127,10 @@ class LspDiagnostic {
       message: message,
       source: json['source'] as String?,
       code: json['code']?.toString(),
+      codeHref: switch (json['codeDescription']) {
+        {'href': final String href} => href,
+        _ => null,
+      },
       unnecessary: switch (json['tags']) {
         final List tags => tags.contains(unnecessaryTag),
         _ => false,

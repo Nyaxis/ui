@@ -17,6 +17,31 @@ import 'auto_pairs.dart';
 import 'block_completion.dart';
 import 'system_scrollbars.dart';
 
+/// how bad something that a language server found is
+enum DetailSeverity { error, warning, information, hint }
+
+/// what the language server said about a place: the message, and where it
+/// comes from, which is shown when the pointer rests on it
+class DiagnosticDetail {
+  const DiagnosticDetail({
+    required this.range,
+    required this.level,
+    required this.message,
+    this.source,
+    this.code,
+    this.codeHref,
+  });
+
+  final AnchorRange range;
+  final DetailSeverity level;
+  final String message;
+  final String? source;
+  final String? code;
+
+  /// the page that explains the code
+  final String? codeHref;
+}
+
 /// where the language server found something wrong, by how bad it is
 class DiagnosticRanges {
   const DiagnosticRanges({
@@ -25,7 +50,11 @@ class DiagnosticRanges {
     this.information = const [],
     this.hints = const [],
     this.unnecessary = const [],
+    this.details = const [],
   });
+
+  /// what was said about each, for the ones that are shown on hover
+  final List<DiagnosticDetail> details;
 
   final List<AnchorRange> errors;
   final List<AnchorRange> warnings;
@@ -350,6 +379,26 @@ class EditorController extends ChangeNotifier {
 
   /// what the language server found wrong, where
   DiagnosticRanges get diagnosticRanges => _diagnostics;
+
+  /// what the server said about the place at [offset]: of those that have it
+  /// between their ends, the one with the shortest range, as the most specific
+  DiagnosticDetail? diagnosticAt(int offset) {
+    final snapshot = buffer.snapshot;
+    DiagnosticDetail? best;
+    var bestLength = 0;
+    for (final detail in _diagnostics.details) {
+      final start = snapshot.offsetForAnchor(detail.range.start);
+      final end = snapshot.offsetForAnchor(detail.range.end);
+      if (offset < start || offset > end) {
+        continue;
+      }
+      if (best == null || end - start < bestLength) {
+        best = detail;
+        bestLength = end - start;
+      }
+    }
+    return best;
+  }
 
   /// whether it found anything at all
   bool get hasDiagnostics =>

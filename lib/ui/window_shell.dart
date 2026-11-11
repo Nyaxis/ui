@@ -694,6 +694,18 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       scrollbarThumb: theme.active.withValues(alpha: 0.5),
       scrollbarThumbHover: theme.disabled,
       scrollbarMarker: theme.info,
+      // what pops up over the editor is in the font of the interface, on the
+      // raised surface of the theme; there is no color for what has worked in
+      // a theme, so the one of strings is used
+      popoverText: TextStyle(
+        fontFamily: theme.fontFamily,
+        fontSize: theme.fontSizeBody,
+        height: 1.4,
+        color: theme.textPrimary,
+      ),
+      popoverSurface: theme.acrylic ? const Color(0x00000000) : theme.surface,
+      popoverMuted: theme.textDim,
+      popoverSuccess: theme.string,
       // the palettes do not have one for a thumb that is pressed, so it is the
       // faint light or dark that the default themes use
       scrollbarThumbActive: dark
@@ -715,6 +727,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       softWrap: prefs.wordWrap,
       showLineNumbers: prefs.lineNumbers,
       scrollbars: prefs.scrollbar,
+      hover: prefs.hover,
       mouseWheelZoom: prefs.mouseWheelZoom,
       onZoom: _zoom,
       autofocus: true,
