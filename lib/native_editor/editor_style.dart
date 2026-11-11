@@ -74,15 +74,16 @@ class EditorStyle {
           : Color(style.background!),
       fontWeight: style.bold == true ? FontWeight.w700 : null,
       fontStyle: style.italic == true ? FontStyle.italic : null,
+      // a wavy underline is drawn under the text by the editor, as the
+      // decoration of a text is too small a wave
       decoration: TextDecoration.combine([
-        if (style.underline == true) TextDecoration.underline,
+        if (style.underline == true && style.wavy != true)
+          TextDecoration.underline,
         if (style.strikethrough == true) TextDecoration.lineThrough,
       ]),
       decorationColor: style.underlineColor == null
           ? null
           : Color(style.underlineColor!),
-      decorationStyle: style.wavy == true ? TextDecorationStyle.wavy : null,
-      decorationThickness: style.wavy == true ? 1.0 : null,
     );
   }
 }

@@ -9,13 +9,45 @@ import 'editor_controller.dart';
 import 'editor_style.dart';
 import 'scrollbar_layout.dart';
 import 'selection_path.dart';
+import 'wavy_underline.dart';
 
 /// a row of the screen, laid out as one line of text, with where each of its
 /// columns is
 class _RowLayout {
-  _RowLayout(this.painter, this.columnToIndex);
+  _RowLayout(this.painter, this.columnToIndex, [this.wavy = const []]);
 
   final TextPainter painter;
+
+  /// the runs of the painted text that are underlined with a wave, and its
+  /// color: of text with the same underline, one run
+  final List<({int start, int end, int color})> wavy;
+
+  /// draws the waves under the text, at the vertical place of an underline,
+  /// below the baseline by a part of the descent
+  void paintWavy(Canvas canvas, Offset origin) {
+    if (wavy.isEmpty) {
+      return;
+    }
+    final lines = painter.computeLineMetrics();
+    if (lines.isEmpty) {
+      return;
+    }
+    final y = lines.first.baseline + lines.first.descent * 0.618;
+    for (final run in wavy) {
+      final from = painter
+          .getOffsetForCaret(TextPosition(offset: run.start), Rect.zero)
+          .dx;
+      final to = painter
+          .getOffsetForCaret(TextPosition(offset: run.end), Rect.zero)
+          .dx;
+      paintWavyUnderline(
+        canvas,
+        origin + Offset(from, y),
+        to - from,
+        Color(run.color),
+      );
+    }
+  }
 
   /// for each column of the row, which is a code unit of what the display map
   /// says is on it, the index in the text that was painted
@@ -304,12 +336,34 @@ class RenderEditor extends RenderBox {
   _RowLayout _layoutRow(int row) {
     final spans = <InlineSpan>[];
     final columnToIndex = <int>[];
+    final wavy = <({int start, int end, int color})>[];
     var painted = 0;
     for (final chunk in _snapshot.highlightedRowChunks(
       row,
       _controller.highlights,
     )) {
       final shown = chunk.replacement ?? chunk.text;
+      final underline = chunk.style;
+      if (underline != null &&
+          underline.wavy == true &&
+          underline.underlineColor != null) {
+        final last = wavy.isEmpty ? null : wavy.last;
+        if (last != null &&
+            last.end == painted &&
+            last.color == underline.underlineColor) {
+          wavy[wavy.length - 1] = (
+            start: last.start,
+            end: painted + shown.length,
+            color: last.color,
+          );
+        } else {
+          wavy.add((
+            start: painted,
+            end: painted + shown.length,
+            color: underline.underlineColor!,
+          ));
+        }
+      }
       var style = _style.apply(chunk.style);
       if (chunk.replacement != null) {
         style = style.copyWith(color: _style.invisible);
@@ -332,7 +386,7 @@ class RenderEditor extends RenderBox {
       text: TextSpan(style: _style.textStyle, children: spans),
       textDirection: TextDirection.ltr,
     )..layout();
-    return _RowLayout(painter, columnToIndex);
+    return _RowLayout(painter, columnToIndex, wavy);
   }
 
   /// where the left edge of the row [row] is on the screen
@@ -664,8 +718,10 @@ class RenderEditor extends RenderBox {
       if (_snapshot.isBlockLine(row)) {
         continue;
       }
-      _row(row).painter
-          .paint(canvas, Offset(textLeft - _controller.scrollX, _rowTop(row)));
+      final layout = _row(row);
+      final origin = Offset(textLeft - _controller.scrollX, _rowTop(row));
+      layout.painter.paint(canvas, origin);
+      layout.paintWavy(canvas, origin);
     }
 
     // the cursors
