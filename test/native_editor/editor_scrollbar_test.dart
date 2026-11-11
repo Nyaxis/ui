@@ -307,6 +307,26 @@ void main() {
   });
 
   group('showing and hiding', () {
+    testWidgets(
+      'with auto they stay when the system does not hide scrollbars',
+      (tester) async {
+        EditorViewState.systemAutoHide = false;
+        addTearDown(() => EditorViewState.systemAutoHide = true);
+        final controller = EditorController(text: _long);
+        final render = await _pump(
+          tester,
+          controller,
+          scrollbars: ScrollbarVisibility.auto,
+        );
+        expect(render.scrollbarsVisible, isTrue);
+        controller.setScroll(y: 10);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 1100));
+        expect(render.scrollbarsVisible, isTrue);
+        await _finish(tester, controller);
+      },
+    );
+
     testWidgets('with auto they go a moment after the text was scrolled', (
       tester,
     ) async {

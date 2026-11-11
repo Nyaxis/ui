@@ -11,6 +11,7 @@ import 'editor_text_input.dart';
 import 'modifier_keys.dart';
 import 'render_editor.dart';
 import 'scrollbar_layout.dart';
+import 'system_scrollbars.dart';
 
 /// shows the text of an [EditorController], and takes what is typed, clicked
 /// and dragged on it
@@ -96,12 +97,20 @@ class EditorViewState extends State<EditorView> {
   double _scrollY = 0;
   bool _scrollCheck = false;
 
+  /// whether auto hides the scrollbars at all: as in Zed, only when the system
+  /// says that scrollbars go away when not used, and otherwise they stay
+  @visibleForTesting
+  static bool systemAutoHide = systemAutoHidesScrollbars();
+
   void _showScrollbars() {
     if (widget.scrollbars != ScrollbarVisibility.auto) {
       return;
     }
     _render?.scrollbarsShown = true;
     _hideScrollbars?.cancel();
+    if (!systemAutoHide) {
+      return;
+    }
     _hideScrollbars = Timer(_scrollbarsShownFor, () {
       // not while a thumb is being dragged
       if (_scrollbarDrag != null) {
