@@ -695,9 +695,12 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       // what pops up over the editor is in the font of the interface, on the
       // raised surface of the theme; there is no color for what has worked in
       // a theme, so the one of strings is used
+      // the size is that of the code, as it is for what is laid out inside the
+      // editor, so it goes up and down with the zoom keys; the room around the
+      // text is in rems and stays as it is
       popoverText: TextStyle(
         fontFamily: theme.fontFamily,
-        fontSize: theme.uiFontSize,
+        fontSize: _zoomedFontSize ?? prefs.fontSize ?? theme.fontSizeBody,
         height: EditorStyle.popoverLineHeight,
         fontWeight: FontWeight.w400,
         color: theme.textPrimary,
