@@ -56,6 +56,169 @@ void main() {
     });
   }
 
+  group('names', () {
+    late Directory dir;
+    late ThemeController controller;
+
+    setUp(() {
+      dir = Directory.systemTemp.createTempSync('nyaxis-names');
+      controller = ThemeController(
+        const AppTheme(),
+        palette: 'Dark',
+        directory: Directory(
+          '${dir.path}${Platform.pathSeparator}themes${Platform.pathSeparator}t',
+        ),
+      );
+    });
+
+    tearDown(() {
+      controller.dispose();
+      dir.deleteSync(recursive: true);
+    });
+
+    Future<void> pump(
+      WidgetTester tester, {
+      EditorPrefs prefs = const EditorPrefs(),
+      ValueChanged<EditorPrefs>? onPrefs,
+      AutoSave autoSave = AutoSave.afterDelay,
+      ValueChanged<AutoSave>? onAutoSave,
+    }) async {
+      tester.view.physicalSize = const Size(900, 6000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SettingsView(
+              theme: controller.value,
+              controller: controller,
+              prefs: prefs,
+              onPrefs: onPrefs ?? (_) {},
+              autoSave: autoSave,
+              onAutoSave: onAutoSave ?? (_) {},
+              autoSaveDelay: const Duration(seconds: 2),
+              onAutoSaveDelay: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    testWidgets('the sections are those of the editor\'s settings window', (
+      tester,
+    ) async {
+      await pump(tester);
+      for (final section in [
+        'Buffer Font',
+        'Highlighting',
+        'Auto Save',
+        'Scrolling',
+        'Gutter',
+        'Scrollbar',
+        'Indentation',
+        'Wrapping',
+        'Autoclose',
+      ]) {
+        expect(find.text(section), findsOneWidget, reason: section);
+      }
+      // in the order that they go in, down the page
+      double top(String text) => tester.getTopLeft(find.text(text)).dy;
+      final order = [
+        'Buffer Font',
+        'Highlighting',
+        'Auto Save',
+        'Scrolling',
+        'Gutter',
+        'Scrollbar',
+        'Indentation',
+        'Wrapping',
+        'Autoclose',
+      ];
+      for (var i = 1; i < order.length; i++) {
+        expect(top(order[i]), greaterThan(top(order[i - 1])), reason: order[i]);
+      }
+    });
+
+    testWidgets('the settings have the titles and the descriptions there', (
+      tester,
+    ) async {
+      await pump(tester);
+      const settings = {
+        'Font Size': 'Font size for editor text.',
+        'Unnecessary Code Fade':
+            'How much to fade out unused code (0.0 - 0.9).',
+        'Auto Save Mode': 'When to auto save buffer changes.',
+        'Delay (milliseconds)':
+            'Save after inactivity period (in milliseconds).',
+        'Mouse Wheel Zoom': 'Whether to zoom the editor font size with the mouse wheel while holding the primary modifier key.',
+        'Show Line Numbers': 'Show line numbers in the gutter.',
+        'Tab Size': 'How many columns a tab should occupy.',
+        'Soft Wrap': 'How to soft-wrap long lines of text.',
+        'Use Autoclose': "Whether to automatically type closing characters for you. For example, when you type '(', the editor will automatically add a closing ')' at the correct position.",
+      };
+      for (final MapEntry(key: title, value: description) in settings.entries) {
+        expect(find.text(title), findsOneWidget, reason: title);
+        expect(find.text(description), findsOneWidget, reason: title);
+      }
+    });
+
+    testWidgets('the choices of auto save are named as there', (tester) async {
+      AutoSave? chosen;
+      await pump(tester, onAutoSave: (a) => chosen = a);
+      for (final name in [
+        'Off',
+        'After Delay',
+        'On Focus Change',
+        'On Window Change',
+      ]) {
+        expect(find.text(name), findsOneWidget, reason: name);
+      }
+      await tester.tap(find.text('On Focus Change'));
+      expect(chosen, AutoSave.onFocusChange);
+      await tester.tap(find.text('On Window Change'));
+      expect(chosen, AutoSave.onWindowChange);
+    });
+
+    testWidgets('the delay of auto save is said in milliseconds', (
+      tester,
+    ) async {
+      await pump(tester);
+      expect(find.text('2000'), findsOneWidget);
+      await pump(tester, autoSave: AutoSave.off);
+      expect(find.text('Delay (milliseconds)'), findsNothing);
+    });
+
+    testWidgets('soft wrap is none or the width of the editor', (tester) async {
+      EditorPrefs? chosen;
+      await pump(tester, onPrefs: (p) => chosen = p);
+      // the last, as the choices of the diagnostics of the scrollbar have one
+      // above it
+      await tester.tap(find.text('None').last);
+      expect(chosen?.wordWrap, isFalse);
+      await tester.tap(find.text('Editor Width'));
+      expect(chosen?.wordWrap, isTrue);
+    });
+
+    testWidgets('the old names are gone', (tester) async {
+      await pump(tester);
+      for (final old in [
+        'Editor',
+        'Files',
+        'Font size',
+        'Tab size',
+        'Word wrap',
+        'Close brackets automatically',
+        'Mouse wheel zoom',
+        'Unnecessary code fade',
+        'Auto save',
+        'Auto save delay',
+      ]) {
+        expect(find.text(old), findsNothing, reason: old);
+      }
+    });
+  });
+
   group('code styles', () {
     late Directory dir;
     late ThemeController controller;
@@ -165,7 +328,7 @@ void main() {
       );
       await show(const {});
       await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('Mouse wheel zoom'), findsOneWidget);
+      expect(find.text('Mouse Wheel Zoom'), findsOneWidget);
       // the rows of the scrollbar, as the settings of an editor have them
       for (final label in [
         'Show',

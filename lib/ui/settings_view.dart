@@ -10,7 +10,8 @@ import 'settings_controls.dart';
 import 'theme_settings.dart';
 
 /// the settings of the editor and of saving files, which take effect as they
-/// are changed
+/// are changed. the sections, and the titles and descriptions of the settings
+/// in them, are those of the editor's own settings window
 class SettingsView extends StatelessWidget {
   const SettingsView({
     super.key,
@@ -107,9 +108,9 @@ class SettingsView extends StatelessWidget {
 
   static String _autoSaveLabel(AutoSave value) => switch (value) {
     AutoSave.off => 'Off',
-    AutoSave.afterDelay => 'After delay',
-    AutoSave.onFocusChange => 'Editor focus',
-    AutoSave.onWindowChange => 'Window focus',
+    AutoSave.afterDelay => 'After Delay',
+    AutoSave.onFocusChange => 'On Focus Change',
+    AutoSave.onWindowChange => 'On Window Change',
   };
 
   @override
@@ -118,6 +119,7 @@ class SettingsView extends StatelessWidget {
     final scrollbar = prefs.scrollbar;
     void setScrollbar(ScrollbarSettings value) =>
         onPrefs(prefs.copyWith(scrollbar: value));
+    const gap = SizedBox(height: 24);
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
       child: Align(
@@ -128,16 +130,17 @@ class SettingsView extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Settings', style: theme.titleStyle),
-              const SizedBox(height: 24),
+              gap,
               ThemeSettings(theme: theme, controller: controller),
-              const SizedBox(height: 24),
+              gap,
               SettingsSection(
                 theme: theme,
-                title: 'Editor',
+                title: 'Buffer Font',
                 rows: [
                   SettingRow(
                     theme: theme,
-                    label: 'Font size',
+                    label: 'Font Size',
+                    description: 'Font size for editor text.',
                     control: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -179,54 +182,7 @@ class SettingsView extends StatelessWidget {
                   ),
                   SettingRow(
                     theme: theme,
-                    label: 'Tab size',
-                    description:
-                        'For files that set no indentation of their own',
-                    control: StepperControl(
-                      theme: theme,
-                      text: '${prefs.tabSize}',
-                      slider: SliderSpec(
-                        value: prefs.tabSize.toDouble(),
-                        min: EditorPrefs.minTabSize.toDouble(),
-                        max: EditorPrefs.maxTabSize.toDouble(),
-                        divisions:
-                            EditorPrefs.maxTabSize - EditorPrefs.minTabSize,
-                        onChanged: (v) =>
-                            onPrefs(prefs.copyWith(tabSize: v.round())),
-                      ),
-                      onMinus: prefs.tabSize > EditorPrefs.minTabSize
-                          ? () => onPrefs(
-                              prefs.copyWith(tabSize: prefs.tabSize - 1),
-                            )
-                          : null,
-                      onPlus: prefs.tabSize < EditorPrefs.maxTabSize
-                          ? () => onPrefs(
-                              prefs.copyWith(tabSize: prefs.tabSize + 1),
-                            )
-                          : null,
-                    ),
-                  ),
-                  SettingRow(
-                    theme: theme,
-                    label: 'Word wrap',
-                    control: SwitchControl(
-                      theme: theme,
-                      value: prefs.wordWrap,
-                      onChanged: (v) => onPrefs(prefs.copyWith(wordWrap: v)),
-                    ),
-                  ),
-                  SettingRow(
-                    theme: theme,
-                    label: 'Line numbers',
-                    control: SwitchControl(
-                      theme: theme,
-                      value: prefs.lineNumbers,
-                      onChanged: (v) => onPrefs(prefs.copyWith(lineNumbers: v)),
-                    ),
-                  ),
-                  SettingRow(
-                    theme: theme,
-                    label: 'Font ligatures',
+                    label: 'Font Ligatures',
                     control: SwitchControl(
                       theme: theme,
                       value: prefs.fontLigatures,
@@ -234,30 +190,16 @@ class SettingsView extends StatelessWidget {
                           onPrefs(prefs.copyWith(fontLigatures: v)),
                     ),
                   ),
+                ],
+              ),
+              gap,
+              SettingsSection(
+                theme: theme,
+                title: 'Highlighting',
+                rows: [
                   SettingRow(
                     theme: theme,
-                    label: 'Close brackets automatically',
-                    control: SwitchControl(
-                      theme: theme,
-                      value: prefs.autoClosingBrackets,
-                      onChanged: (v) =>
-                          onPrefs(prefs.copyWith(autoClosingBrackets: v)),
-                    ),
-                  ),
-                  SettingRow(
-                    theme: theme,
-                    label: 'Mouse wheel zoom',
-                    description: 'Whether to zoom the editor font size with the mouse wheel while holding the primary modifier key.',
-                    control: SwitchControl(
-                      theme: theme,
-                      value: prefs.mouseWheelZoom,
-                      onChanged: (v) =>
-                          onPrefs(prefs.copyWith(mouseWheelZoom: v)),
-                    ),
-                  ),
-                  SettingRow(
-                    theme: theme,
-                    label: 'Unnecessary code fade',
+                    label: 'Unnecessary Code Fade',
                     description:
                         'How much to fade out unused code (0.0 - 0.9).',
                     control: StepperControl(
@@ -300,7 +242,92 @@ class SettingsView extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              gap,
+              SettingsSection(
+                theme: theme,
+                title: 'Auto Save',
+                rows: [
+                  SettingRow(
+                    theme: theme,
+                    label: 'Auto Save Mode',
+                    description: 'When to auto save buffer changes.',
+                    control: ChoiceControl<AutoSave>(
+                      theme: theme,
+                      value: autoSave,
+                      options: [
+                        for (final a in AutoSave.values) (a, _autoSaveLabel(a)),
+                      ],
+                      onChanged: onAutoSave,
+                    ),
+                  ),
+                  if (autoSave == AutoSave.afterDelay)
+                    SettingRow(
+                      theme: theme,
+                      label: 'Delay (milliseconds)',
+                      description:
+                          'Save after inactivity period (in milliseconds).',
+                      control: StepperControl(
+                        theme: theme,
+                        text: '${autoSaveDelay.inMilliseconds}',
+                        slider: SliderSpec(
+                          value: autoSaveDelay.inMilliseconds / 1000,
+                          min: _minDelay.inMilliseconds / 1000,
+                          max: _maxDelay.inMilliseconds / 1000,
+                          divisions:
+                              (_maxDelay - _minDelay).inMilliseconds ~/
+                              _delayStep.inMilliseconds,
+                          onChanged: (v) => onAutoSaveDelay(
+                            _delayStep *
+                                ((v * 1000) / _delayStep.inMilliseconds)
+                                    .round(),
+                          ),
+                        ),
+                        onMinus: autoSaveDelay > _minDelay
+                            ? () => onAutoSaveDelay(autoSaveDelay - _delayStep)
+                            : null,
+                        onPlus: autoSaveDelay < _maxDelay
+                            ? () => onAutoSaveDelay(autoSaveDelay + _delayStep)
+                            : null,
+                      ),
+                    ),
+                ],
+              ),
+              gap,
+              SettingsSection(
+                theme: theme,
+                title: 'Scrolling',
+                rows: [
+                  SettingRow(
+                    theme: theme,
+                    label: 'Mouse Wheel Zoom',
+                    description: 'Whether to zoom the editor font size with the mouse wheel while holding the primary modifier key.',
+                    control: SwitchControl(
+                      theme: theme,
+                      value: prefs.mouseWheelZoom,
+                      onChanged: (v) =>
+                          onPrefs(prefs.copyWith(mouseWheelZoom: v)),
+                    ),
+                  ),
+                ],
+              ),
+              gap,
+              SettingsSection(
+                theme: theme,
+                title: 'Gutter',
+                rows: [
+                  SettingRow(
+                    theme: theme,
+                    label: 'Show Line Numbers',
+                    description: 'Show line numbers in the gutter.',
+                    control: SwitchControl(
+                      theme: theme,
+                      value: prefs.lineNumbers,
+                      onChanged: (v) => onPrefs(prefs.copyWith(lineNumbers: v)),
+                    ),
+                  ),
+                ],
+              ),
+              gap,
               SettingsSection(
                 theme: theme,
                 title: 'Scrollbar',
@@ -411,8 +438,79 @@ class SettingsView extends StatelessWidget {
                   ),
                 ],
               ),
+              gap,
+              SettingsSection(
+                theme: theme,
+                title: 'Indentation',
+                rows: [
+                  SettingRow(
+                    theme: theme,
+                    label: 'Tab Size',
+                    description: 'How many columns a tab should occupy.',
+                    control: StepperControl(
+                      theme: theme,
+                      text: '${prefs.tabSize}',
+                      slider: SliderSpec(
+                        value: prefs.tabSize.toDouble(),
+                        min: EditorPrefs.minTabSize.toDouble(),
+                        max: EditorPrefs.maxTabSize.toDouble(),
+                        divisions:
+                            EditorPrefs.maxTabSize - EditorPrefs.minTabSize,
+                        onChanged: (v) =>
+                            onPrefs(prefs.copyWith(tabSize: v.round())),
+                      ),
+                      onMinus: prefs.tabSize > EditorPrefs.minTabSize
+                          ? () => onPrefs(
+                              prefs.copyWith(tabSize: prefs.tabSize - 1),
+                            )
+                          : null,
+                      onPlus: prefs.tabSize < EditorPrefs.maxTabSize
+                          ? () => onPrefs(
+                              prefs.copyWith(tabSize: prefs.tabSize + 1),
+                            )
+                          : null,
+                    ),
+                  ),
+                ],
+              ),
+              gap,
+              SettingsSection(
+                theme: theme,
+                title: 'Wrapping',
+                rows: [
+                  SettingRow(
+                    theme: theme,
+                    label: 'Soft Wrap',
+                    description: 'How to soft-wrap long lines of text.',
+                    control: ChoiceControl<bool>(
+                      theme: theme,
+                      value: prefs.wordWrap,
+                      options: const [(false, 'None'), (true, 'Editor Width')],
+                      onChanged: (v) => onPrefs(prefs.copyWith(wordWrap: v)),
+                    ),
+                  ),
+                ],
+              ),
+              gap,
+              SettingsSection(
+                theme: theme,
+                title: 'Autoclose',
+                rows: [
+                  SettingRow(
+                    theme: theme,
+                    label: 'Use Autoclose',
+                    description: "Whether to automatically type closing characters for you. For example, when you type '(', the editor will automatically add a closing ')' at the correct position.",
+                    control: SwitchControl(
+                      theme: theme,
+                      value: prefs.autoClosingBrackets,
+                      onChanged: (v) =>
+                          onPrefs(prefs.copyWith(autoClosingBrackets: v)),
+                    ),
+                  ),
+                ],
+              ),
               if (syntaxStyles != null && onSyntaxStyles != null) ...[
-                const SizedBox(height: 24),
+                gap,
                 SettingsSection(
                   theme: theme,
                   title: 'Code styles',
@@ -443,54 +541,6 @@ class SettingsView extends StatelessWidget {
                   ],
                 ),
               ],
-              const SizedBox(height: 24),
-              SettingsSection(
-                theme: theme,
-                title: 'Files',
-                rows: [
-                  SettingRow(
-                    theme: theme,
-                    label: 'Auto save',
-                    control: ChoiceControl<AutoSave>(
-                      theme: theme,
-                      value: autoSave,
-                      options: [
-                        for (final a in AutoSave.values) (a, _autoSaveLabel(a)),
-                      ],
-                      onChanged: onAutoSave,
-                    ),
-                  ),
-                  if (autoSave == AutoSave.afterDelay)
-                    SettingRow(
-                      theme: theme,
-                      label: 'Auto save delay',
-                      control: StepperControl(
-                        theme: theme,
-                        text:
-                            '${_number(autoSaveDelay.inMilliseconds / 1000)} s',
-                        slider: SliderSpec(
-                          value: autoSaveDelay.inMilliseconds / 1000,
-                          min: _minDelay.inMilliseconds / 1000,
-                          max: _maxDelay.inMilliseconds / 1000,
-                          divisions:
-                              (_maxDelay - _minDelay).inMilliseconds ~/
-                              _delayStep.inMilliseconds,
-                          onChanged: (v) => onAutoSaveDelay(
-                            _delayStep *
-                                ((v * 1000) / _delayStep.inMilliseconds)
-                                    .round(),
-                          ),
-                        ),
-                        onMinus: autoSaveDelay > _minDelay
-                            ? () => onAutoSaveDelay(autoSaveDelay - _delayStep)
-                            : null,
-                        onPlus: autoSaveDelay < _maxDelay
-                            ? () => onAutoSaveDelay(autoSaveDelay + _delayStep)
-                            : null,
-                      ),
-                    ),
-                ],
-              ),
             ],
           ),
         ),
