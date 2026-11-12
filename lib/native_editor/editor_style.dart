@@ -40,6 +40,8 @@ class EditorStyle {
     this.popoverScale = 1,
     this.popoverMuted = const Color(0xFF9399B2),
     this.popoverSuccess = const Color(0xFFA6E3A1),
+    this.popoverButtonHover = const Color(0x4D45475A),
+    this.popoverButtonActive = const Color(0x99585B70),
     this.popoverBorder = const Color(0xFF2C293D),
     this.popoverCodeBackground = const Color(0xFF1E1E2E),
     this.popoverRule = const Color(0xFF313244),
@@ -68,6 +70,18 @@ class EditorStyle {
   static const double popoverFontSize = 16;
   static const double popoverLineHeight = 1.618;
   final double popoverScale;
+
+  /// the [popoverScale] for text of [fontSize]: inside the editor a rem is
+  /// the size of the text times the delta of the default size of the
+  /// interface's text (14 of 16) from one rem, added to one, so what is in
+  /// rems goes up and down with the size of the text
+  static double popoverScaleFor(double fontSize) =>
+      fontSize * (1 + (1 - 14 / 16)) / 16;
+
+  /// the fill of a button in a popover while the pointer is over it, and
+  /// while it is pressed
+  final Color popoverButtonHover;
+  final Color popoverButtonActive;
 
   /// [pixels], which are of a rem at the default size, as they are at the size
   /// that the interface's text has

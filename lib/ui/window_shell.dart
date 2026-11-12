@@ -26,7 +26,6 @@ import '../theme/theme_controller.dart';
 import 'clickable.dart';
 import 'context_menu.dart';
 import 'dialog.dart';
-import 'elevation.dart' show isLightTheme;
 import 'hover_tooltip.dart';
 import 'picker.dart';
 import 'settings_view.dart';
@@ -429,7 +428,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     for (final tab in _tabs.tabs) {
       tab.document.controller
         ..occurrenceBackground = color
-        ..bracketBackground = isLightTheme(theme) ? 0x3B019C39 : 0x4B44FFAA
+        ..bracketBackground = color
         ..hoverBackground = theme.hover.toARGB32()
         ..diagnosticColors = diagnostics
         ..unnecessaryCodeFade = _editorSettings.value.unnecessaryCodeFade;
@@ -688,6 +687,9 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   EditorStyle _nativeStyle(AppTheme theme) {
     final dark = theme.background.computeLuminance() < 0.5;
     final prefs = _editorSettings.value;
+    final popoverFontSize =
+        _zoomedFontSize ?? prefs.fontSize ?? theme.fontSizeBody;
+    final popoverScale = EditorStyle.popoverScaleFor(popoverFontSize);
     return EditorStyle(
       textStyle: TextStyle(
         fontFamily: theme.monospaceFontFamily,
@@ -720,13 +722,15 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       // text is in rems and stays as it is
       popoverText: TextStyle(
         fontFamily: theme.fontFamily,
-        fontSize: _zoomedFontSize ?? prefs.fontSize ?? theme.fontSizeBody,
+        fontSize: popoverFontSize,
         height: EditorStyle.popoverLineHeight,
         fontWeight: FontWeight.w400,
         color: theme.textPrimary,
       ),
-      popoverScale: theme.uiFontSize / AppTheme.remPixels,
-      popoverRadius: theme.rem(8),
+      popoverScale: popoverScale,
+      popoverRadius: 8 * popoverScale,
+      popoverButtonHover: theme.hover.withValues(alpha: 0x4D / 255),
+      popoverButtonActive: theme.active.withValues(alpha: 0x99 / 255),
       popoverSurface: theme.acrylic ? const Color(0x00000000) : theme.surface,
       popoverBorder: theme.borderVariant,
       popoverRule: theme.border,

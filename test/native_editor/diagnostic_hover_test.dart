@@ -585,5 +585,77 @@ void main() {
       expect(find.byIcon(Icons.content_copy), findsOneWidget);
       expect(view.popover, isNotNull);
     });
+
+    testWidgets('has a copy button that is 22 rems and fills when hovered', (
+      tester,
+    ) async {
+      final (_, render) = await pump(tester);
+      final gesture = await mouse(tester);
+      await gesture.moveTo(at(render, 6));
+      await tester.pump(rests);
+      final icon = find.byIcon(Icons.content_copy);
+      final button = find.ancestor(
+        of: icon,
+        matching: find.byType(DecoratedBox),
+      );
+      final box = button.first;
+      expect(tester.getSize(box), const Size(22, 22));
+      expect(tester.widget<Icon>(icon).size, 14);
+      Color? fill() =>
+          ((tester.widget<DecoratedBox>(box).decoration) as BoxDecoration)
+              .color;
+      expect(fill(), isNull);
+      await gesture.moveTo(tester.getCenter(icon));
+      await tester.pump();
+      expect(fill(), _style.popoverButtonHover);
+      await gesture.down(tester.getCenter(icon));
+      await tester.pump();
+      expect(fill(), _style.popoverButtonActive);
+      await gesture.up();
+      await tester.pump();
+    });
+
+    testWidgets('has a copy button that goes with the scale of rems', (
+      tester,
+    ) async {
+      controller.setDiagnostics(
+        DiagnosticRanges(details: [_detail(controller, 6, 7)]),
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 500,
+              height: 300,
+              child: EditorView(
+                controller: controller,
+                style: const EditorStyle(popoverScale: 1.5),
+                autofocus: true,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final render = tester.allRenderObjects.whereType<RenderEditor>().first;
+      final gesture = await mouse(tester);
+      await gesture.moveTo(at(render, 6));
+      await tester.pump(rests);
+      final icon = find.byIcon(Icons.content_copy);
+      expect(tester.widget<Icon>(icon).size, 21);
+      expect(
+        tester.getSize(
+          find.ancestor(of: icon, matching: find.byType(SizedBox)).first,
+        ),
+        const Size(33, 33),
+      );
+    });
+
+    test('rems of the popover are of the size of the text', () {
+      // 15px text: one rem is 15 + 15 * 0.125 pixels, so 16.875, of 16
+      expect(EditorStyle.popoverScaleFor(15), closeTo(1.0546875, 1e-9));
+      expect(EditorStyle.popoverScaleFor(16), closeTo(1.125, 1e-9));
+    });
   });
 }

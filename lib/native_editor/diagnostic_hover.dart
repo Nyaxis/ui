@@ -275,6 +275,69 @@ Future<void> openLink(String url) async {
   }
 }
 
+/// a button with an icon in a popover: a box 22 rems high, with 4 rems of room
+/// at both sides of an icon of 14, which is filled while the pointer is over
+/// it and while it is pressed, with corners of 2 rems
+class _PopoverIconButton extends StatefulWidget {
+  const _PopoverIconButton({
+    required this.style,
+    required this.onTap,
+    required this.icon,
+    required this.color,
+  });
+
+  final EditorStyle style;
+  final VoidCallback onTap;
+  final IconData icon;
+  final Color color;
+
+  @override
+  State<_PopoverIconButton> createState() => _PopoverIconButtonState();
+}
+
+class _PopoverIconButtonState extends State<_PopoverIconButton> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = widget.style;
+    final fill = _pressed
+        ? style.popoverButtonActive
+        : (_hovered ? style.popoverButtonHover : null);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTapCancel: () => setState(() => _pressed = false),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: fill,
+            borderRadius: BorderRadius.circular(style.popoverRem(2)),
+          ),
+          child: SizedBox(
+            // 4 + 14 + 4 wide
+            width: style.popoverRem(22),
+            height: style.popoverRem(22),
+            child: Center(
+              child: Icon(
+                widget.icon,
+                size: style.popoverRem(14),
+                color: widget.color,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// what the language server said about a place: in a box with the color of how
 /// bad it is, with a button that copies the message
 class DiagnosticPopover extends StatefulWidget {
@@ -439,22 +502,13 @@ class _DiagnosticPopoverState extends State<DiagnosticPopover> {
                     right: style.popoverRem(4),
                     child: _tooltip(
                       tip,
-                      MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: _copy,
-                          child: Padding(
-                            padding: EdgeInsets.all(style.popoverRem(2)),
-                            child: Icon(
-                              _copied ? Icons.check : Icons.content_copy,
-                              size: style.popoverRem(14),
-                              color: _copied
-                                  ? style.popoverSuccess
-                                  : style.popoverMuted,
-                            ),
-                          ),
-                        ),
+                      _PopoverIconButton(
+                        style: style,
+                        onTap: _copy,
+                        icon: _copied ? Icons.check : Icons.content_copy,
+                        color: _copied
+                            ? style.popoverSuccess
+                            : style.popoverMuted,
                       ),
                     ),
                   ),
