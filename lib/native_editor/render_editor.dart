@@ -33,7 +33,12 @@ class _RowLayout {
 
   /// draws the waves under the text, at the vertical place of an underline,
   /// below the baseline by a part of the descent
-  void paintWavy(Canvas canvas, Offset origin) {
+  void paintWavy(
+    Canvas canvas,
+    Offset origin, {
+    required double ratio,
+    required Offset globalOrigin,
+  }) {
     if (wavy.isEmpty) {
       return;
     }
@@ -54,6 +59,8 @@ class _RowLayout {
         origin + Offset(from, y),
         to - from,
         Color(run.color),
+        ratio: ratio,
+        globalOrigin: globalOrigin,
       );
     }
   }
@@ -186,6 +193,19 @@ class RenderEditor extends RenderBox {
         break;
       }
     }
+  }
+
+  /// how many device pixels a logical one is, which what is drawn in whole
+  /// pixels of the screen goes by
+  double get devicePixelRatio => _devicePixelRatio;
+  double _devicePixelRatio = 1;
+
+  set devicePixelRatio(double value) {
+    if (value == _devicePixelRatio) {
+      return;
+    }
+    _devicePixelRatio = value;
+    markNeedsPaint();
   }
 
   bool get softWrap => _softWrap;
@@ -786,6 +806,10 @@ class RenderEditor extends RenderBox {
       }
     }
 
+    // where this is on the window, by which the pixels of a wave are put on
+    // the pixels of the screen
+    final globalOrigin = localToGlobal(Offset.zero);
+
     // the text
     canvas.save();
     canvas.clipRect(
@@ -804,7 +828,12 @@ class RenderEditor extends RenderBox {
       final layout = _row(row);
       final origin = Offset(textLeft - _controller.scrollX, _rowTop(row));
       layout.painter.paint(canvas, origin);
-      layout.paintWavy(canvas, origin);
+      layout.paintWavy(
+        canvas,
+        origin,
+        ratio: _devicePixelRatio,
+        globalOrigin: globalOrigin,
+      );
     }
 
     // the cursors

@@ -824,7 +824,7 @@ class _EditorRenderWidget extends LeafRenderObjectWidget {
     softWrap: softWrap,
     showLineNumbers: showLineNumbers,
     scrollbars: scrollbars,
-  );
+  )..devicePixelRatio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1;
 
   @override
   void updateRenderObject(BuildContext context, RenderEditor renderObject) {
@@ -833,6 +833,7 @@ class _EditorRenderWidget extends LeafRenderObjectWidget {
       ..style = style
       ..softWrap = softWrap
       ..showLineNumbers = showLineNumbers
-      ..scrollbars = scrollbars;
+      ..scrollbars = scrollbars
+      ..devicePixelRatio = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1;
   }
 }
