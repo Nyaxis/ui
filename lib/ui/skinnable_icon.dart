@@ -20,8 +20,8 @@ class SkinnableIcon extends StatelessWidget {
   });
 
   /// whether the icon is drawn as it is, and not with the corrected edges that
-  /// every icon has otherwise; [GammaIcon] draws the plain one until its own
-  /// is ready
+  /// every svg icon has otherwise; [GammaIcon] draws the plain one until its
+  /// own is ready
   final bool plain;
 
   static const _extensions = [
@@ -43,17 +43,36 @@ class SkinnableIcon extends StatelessWidget {
   /// whether the theme has a file of its own for the icon [name]
   static bool hasSkin(String name) => _skin(name) != null;
 
+  /// the file that the theme has for the icon [name], or null
+  static File? skinFile(String name) => _skin(name);
+
+  /// whether the file that the theme has for the icon [name] is an svg, which
+  /// is drawn with the corrected edges as the bundled icons are; the other
+  /// kinds are images, which are drawn as they are
+  static bool skinIsSvg(String name) =>
+      _skin(name)?.path.toLowerCase().endsWith('.svg') ?? false;
+
+  /// where the theme's folder is; a test can say another
+  @visibleForTesting
+  static Directory? Function() themeDirectory = () => ThemeController.directory;
+
+  /// forgets which files were found, as a test that changed [themeDirectory]
+  /// needs
+  @visibleForTesting
+  static void forgetFiles() => _found.clear();
+
   File? get _file => _skin(name);
 
   static File? _skin(String name) {
-    final dir = ThemeController.directory;
+    final dir = themeDirectory();
     if (dir == null) {
       return null;
     }
     // by theme too, since another theme has icons of its own
     return _found.putIfAbsent('${dir.path}|$name', () {
       for (final ext in _extensions) {
-        final file = File('${dir.path}\\icons\\$name.$ext');
+        final s = Platform.pathSeparator;
+        final file = File('${dir.path}${s}icons$s$name.$ext');
         if (file.existsSync()) {
           return file;
         }
@@ -64,9 +83,11 @@ class SkinnableIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // a bundled icon has the soft edges that the icons of Zed have; one of the
-    // theme's own is drawn as it is
-    if (!plain && !hasSkin(name)) {
+    // every icon that is an svg has the corrected edges, the bundled ones and
+    // those that the theme has files for, which includes the bundled ones that
+    // the default theme is given as files; an image of the theme's own is drawn
+    // as it is
+    if (!plain && (!hasSkin(name) || skinIsSvg(name))) {
       return GammaIcon(name: name, size: size, color: color);
     }
     final theme = SvgTheme(currentColor: color);

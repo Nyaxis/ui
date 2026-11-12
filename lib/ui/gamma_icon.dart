@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'device_pixels.dart';
 import 'direct_write.dart';
 import 'skinnable_icon.dart';
 
@@ -104,15 +107,32 @@ class _GammaIconState extends State<GammaIcon> {
   }
 
   Future<void> _load() async {
-    if (SkinnableIcon.hasSkin(widget.name)) {
+    // the file that the theme has for the icon, which is drawn here when it is
+    // an svg, and as it is when it is an image
+    final file = SkinnableIcon.skinFile(widget.name);
+    if (file != null && !SkinnableIcon.skinIsSvg(widget.name)) {
       return;
     }
     final ratio = MediaQuery.devicePixelRatioOf(context);
-    final pixels = (widget.size * ratio).round();
+    // the box of the icon on the screen is of whole device pixels
+    final pixels = math.max(1, roundToDevicePixel(widget.size, ratio).toInt());
     final brightness = colorBrightness(widget.color);
     final bundled = widget.size >= 32 ? 32 : (widget.size >= 22 ? 22 : 16);
+    // a file that is changed, or put in its place, is read again
+    String source;
+    if (file == null) {
+      source = '$bundled';
+    } else {
+      try {
+        source =
+            '${file.path}@${file.lastModifiedSync().millisecondsSinceEpoch}'
+            '/${file.lengthSync()}';
+      } on FileSystemException {
+        return;
+      }
+    }
     final key =
-        '${widget.name}|$bundled|$pixels|${brightness.toStringAsFixed(3)}';
+        '${widget.name}|$source|$pixels|${brightness.toStringAsFixed(3)}';
     if (key == _key) {
       return;
     }
@@ -123,10 +143,15 @@ class _GammaIconState extends State<GammaIcon> {
       return;
     }
     try {
-      final loader = SvgAssetLoader(
-        'assets/icons/${widget.name}/${widget.name}-$bundled.svg',
-        theme: const SvgTheme(currentColor: Color(0xFF000000)),
-      );
+      const theme = SvgTheme(currentColor: Color(0xFF000000));
+      final BytesLoader loader = file == null
+          ? SvgAssetLoader(
+              'assets/icons/${widget.name}/${widget.name}-$bundled.svg',
+              theme: theme,
+            )
+          // the text, and not the file: the loader of a file is kept by its
+          // name, and would give the old drawing for a file that was changed
+          : SvgStringLoader(await file.readAsString(), theme: theme);
       final info = await vg.loadPicture(loader, null);
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
@@ -197,7 +222,11 @@ class _GammaIconState extends State<GammaIcon> {
   @override
   Widget build(BuildContext context) {
     final image = _image;
-    if (image == null || SkinnableIcon.hasSkin(widget.name)) {
+    // the plain icon is drawn until the corrected one is ready, and for an
+    // image of the theme's own, which is not corrected
+    final file = SkinnableIcon.skinFile(widget.name);
+    if (image == null ||
+        (file != null && !SkinnableIcon.skinIsSvg(widget.name))) {
       return SkinnableIcon(
         name: widget.name,
         size: widget.size,
@@ -205,18 +234,140 @@ class _GammaIconState extends State<GammaIcon> {
         plain: true,
       );
     }
-    return SizedBox(
-      width: widget.size,
-      height: widget.size,
-      child: RawImage(
-        image: image,
-        width: widget.size,
-        height: widget.size,
-        fit: BoxFit.fill,
-        color: widget.color,
-        colorBlendMode: BlendMode.srcIn,
-        filterQuality: FilterQuality.low,
+    return SnappedImage(
+      image: image,
+      size: widget.size,
+      color: widget.color,
+      ratio: MediaQuery.devicePixelRatioOf(context),
+    );
+  }
+}
+
+/// an image of whole device pixels, drawn on the pixels of the screen without
+/// being scaled, with its corner on the pixel that the corner of its box is
+/// nearest to; the colors are its alpha, in [color]. where it is turned over, or
+/// not on the screen as it is, it is drawn into its box
+class SnappedImage extends LeafRenderObjectWidget {
+  const SnappedImage({
+    super.key,
+    required this.image,
+    required this.size,
+    required this.color,
+    required this.ratio,
+  });
+
+  final ui.Image image;
+
+  /// the side of the box, in logical pixels
+  final double size;
+  final Color color;
+  final double ratio;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      RenderSnappedImage(image, size, color, ratio);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    RenderSnappedImage renderObject,
+  ) {
+    renderObject
+      ..image = image
+      ..side = size
+      ..color = color
+      ..ratio = ratio;
+  }
+}
+
+/// the render object of [SnappedImage]
+class RenderSnappedImage extends RenderBox {
+  RenderSnappedImage(this._image, this._side, this._color, this._ratio);
+
+  ui.Image _image;
+  double _side;
+  Color _color;
+  double _ratio;
+
+  set image(ui.Image value) {
+    if (identical(value, _image)) {
+      return;
+    }
+    _image = value;
+    markNeedsPaint();
+  }
+
+  set side(double value) {
+    if (value == _side) {
+      return;
+    }
+    _side = value;
+    markNeedsLayout();
+  }
+
+  set color(Color value) {
+    if (value == _color) {
+      return;
+    }
+    _color = value;
+    markNeedsPaint();
+  }
+
+  set ratio(double value) {
+    if (value == _ratio) {
+      return;
+    }
+    _ratio = value;
+    markNeedsPaint();
+  }
+
+  @override
+  void performLayout() {
+    size = constraints.constrain(Size.square(_side));
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final source = Rect.fromLTWH(
+      0,
+      0,
+      _image.width.toDouble(),
+      _image.height.toDouble(),
+    );
+    final paint = Paint()
+      ..colorFilter = ColorFilter.mode(_color, BlendMode.srcIn);
+    final m = getTransformTo(null).storage;
+    final moved =
+        m[0] == 1 &&
+        m[5] == 1 &&
+        m[1] == 0 &&
+        m[4] == 0 &&
+        m[2] == 0 &&
+        m[6] == 0;
+    if (!moved) {
+      paint.filterQuality = FilterQuality.low;
+      context.canvas.drawImageRect(_image, source, offset & size, paint);
+      return;
+    }
+    // the corner of the box is on the window at (m[12], m[13]); the sprite goes
+    // to the pixel nearest to it, and is as many pixels as the image has
+    final global = Offset(m[12], m[13]);
+    final snapped = Offset(
+      roundToDevicePixel(global.dx, _ratio) / _ratio,
+      roundToDevicePixel(global.dy, _ratio) / _ratio,
+    );
+    final at = offset + (snapped - global);
+    paint.filterQuality = FilterQuality.none;
+    context.canvas.drawImageRect(
+      _image,
+      source,
+      Rect.fromLTWH(
+        at.dx,
+        at.dy,
+        _image.width / _ratio,
+        _image.height / _ratio,
       ),
+      paint,
     );
   }
 }
