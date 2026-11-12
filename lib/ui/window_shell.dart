@@ -25,6 +25,7 @@ import '../theme/theme_controller.dart';
 import 'clickable.dart';
 import 'context_menu.dart';
 import 'dialog.dart';
+import 'hover_tooltip.dart';
 import 'picker.dart';
 import 'settings_view.dart';
 import 'sidebar.dart';
@@ -74,29 +75,14 @@ Widget _tip({
   required AppTheme theme,
   required String label,
   required String? keys,
-  required bool below,
   required Widget child,
+  bool enabled = true,
 }) {
-  return Tooltip(
-    richMessage: TextSpan(
-      text: label,
-      style: theme.bodyStyle,
-      children: [
-        if (keys != null)
-          TextSpan(
-            text: '   ${Keymap.formatKeys(keys)}',
-            style: theme.bodyStyle.copyWith(color: theme.textDim),
-          ),
-      ],
-    ),
-    preferBelow: below,
-    waitDuration: const Duration(milliseconds: 500),
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-    decoration: BoxDecoration(
-      color: theme.surface,
-      borderRadius: BorderRadius.circular(theme.cornerRadius),
-      border: Border.all(color: theme.border, width: theme.borderWidth),
-    ),
+  return HoverTooltip(
+    theme: theme,
+    title: label,
+    keys: keys,
+    enabled: enabled,
     child: child,
   );
 }
@@ -1171,7 +1157,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         child: _BarButton(
           label: _sidebar.label,
           keys: _keysOf(_sidebar),
-          tipBelow: false,
+          // the button of what is open has no tooltip
+          tip: !_sidebarOpen,
           name: _sidebarOpen ? 'sidebar-open' : 'sidebar-closed',
           extent: _bottomBarHeight,
           // the small icon size, which is 14 pixels, and in the text color, like
@@ -1475,7 +1462,6 @@ class _StatusItemState extends State<_StatusItem> {
         theme: theme,
         label: widget.label,
         keys: widget.keys,
-        below: false,
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
           padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -1509,7 +1495,7 @@ class _BarButton extends StatefulWidget {
     this.destructive = false,
     this.active = false,
     this.keys,
-    this.tipBelow = true,
+    this.tip = true,
     this.cursor = SystemMouseCursors.click,
   });
 
@@ -1519,8 +1505,8 @@ class _BarButton extends StatefulWidget {
   /// of its action, when some are bound
   final String? keys;
 
-  /// whether its tooltip opens under the button, or above it
-  final bool tipBelow;
+  /// whether it has a tooltip, which the button of what is open does not
+  final bool tip;
 
   final MouseCursor cursor;
 
@@ -1601,7 +1587,7 @@ class _BarButtonState extends State<_BarButton> {
       theme: theme,
       label: widget.label,
       keys: widget.keys,
-      below: widget.tipBelow,
+      enabled: widget.tip,
       child: fill,
     );
     if (widget.hoverInset == 0) {
