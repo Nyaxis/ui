@@ -4,13 +4,34 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ui/editor_core/buffer.dart';
 import 'package:ui/editor_core/patch.dart' show Bias;
+import 'package:ui/editor_core/highlight.dart';
 import 'package:ui/native_editor/diagnostic_hover.dart';
 import 'package:ui/native_editor/editor_controller.dart';
 import 'package:ui/native_editor/editor_style.dart';
 import 'package:ui/native_editor/hover_markdown.dart';
+import 'package:ui/syntax/code_highlighter.dart';
+import 'package:ui/syntax/syntax_tree.dart';
+
+/// a highlighter that has the colors of some codes, and not the parser
+class _FakeHighlighter extends CodeHighlighter {
+  _FakeHighlighter(this.known) : super('', SyntaxTheme({}));
+
+  final Map<String, List<SyntaxSpan>> known;
+
+  @override
+  List<SyntaxSpan> spans(String code) => known[code] ?? const [];
+}
 
 void main() {
   group('the blocks of markdown', () {
+    test('say the language that a fence names', () {
+      MarkdownBlock first(String source) => parseMarkdown(source).first;
+      expect(first('```luau\nx\n```').language, 'luau');
+      expect(first('```Luau title="a"\nx\n```').language, 'luau');
+      expect(first('```\nx\n```').language, isNull);
+      expect(first('~~~lua\nx\n~~~').language, 'lua');
+    });
+
     List<String> kinds(String source) => [
       for (final b in parseMarkdown(source)) b.kind.name,
     ];
@@ -305,6 +326,106 @@ void main() {
       );
     });
 
+    group('has the colors of the code', () {
+      Future<void> pumpWith(
+        WidgetTester tester,
+        String markdown,
+        CodeHighlighter? highlighter,
+      ) {
+        final buffer = TextBuffer('abc');
+        return tester.pumpWidget(
+          MaterialApp(
+            home: Align(
+              alignment: Alignment.topLeft,
+              child: InfoPopover(
+                info: HoverInfo(
+                  range: AnchorRange(
+                    buffer.anchorAt(0, Bias.right),
+                    buffer.anchorAt(1, Bias.left),
+                  ),
+                  markdown: markdown,
+                ),
+                style: style,
+                highlighter: highlighter,
+                contentLimit: const Size(400, 200),
+                onOpenLink: (_) async {},
+              ),
+            ),
+          ),
+        );
+      }
+
+      /// the pieces of the code and their colors, as `text:color`
+      List<String> pieces(WidgetTester tester) {
+        final rich = tester.widget<RichText>(
+          find.textContaining('local', findRichText: true),
+        );
+        final root = rich.text as TextSpan;
+        final code = root.children!.single as TextSpan;
+        return [
+          for (final child in code.children ?? const <InlineSpan>[])
+            if (child is TextSpan)
+              '${child.text}:${child.style?.color?.toARGB32()}',
+        ];
+      }
+
+      testWidgets('the words that are read are given theirs', (tester) async {
+        await pumpWith(
+          tester,
+          '```luau\nlocal x = 1\n```',
+          _FakeHighlighter({
+            'local x = 1': [
+              const SyntaxSpan(0, 5, HighlightStyle(color: 0xFFAA0000)),
+              const SyntaxSpan(10, 11, HighlightStyle(color: 0xFF00AA00)),
+            ],
+          }),
+        );
+        expect(pieces(tester), [
+          'local:${0xFFAA0000}',
+          ' x = :null',
+          '1:${0xFF00AA00}',
+        ]);
+      });
+
+      testWidgets('a code of another language is plain', (tester) async {
+        await pumpWith(
+          tester,
+          '```rust\nlocal x = 1\n```',
+          _FakeHighlighter({
+            'local x = 1': [
+              const SyntaxSpan(0, 5, HighlightStyle(color: 0xFFAA0000)),
+            ],
+          }),
+        );
+        expect(pieces(tester), isEmpty);
+        expect(find.text('local x = 1'), findsOneWidget);
+      });
+
+      testWidgets('a code is plain without a highlighter', (tester) async {
+        await pumpWith(tester, '```luau\nlocal x = 1\n```', null);
+        expect(find.text('local x = 1'), findsOneWidget);
+      });
+
+      testWidgets('a bold and an italic word are so', (tester) async {
+        await pumpWith(
+          tester,
+          '```lua\nlocal\n```',
+          _FakeHighlighter({
+            'local': [
+              const SyntaxSpan(0, 5, HighlightStyle(bold: true, italic: true)),
+            ],
+          }),
+        );
+        final rich = tester.widget<RichText>(
+          find.textContaining('local', findRichText: true),
+        );
+        final code = (rich.text as TextSpan).children!.single as TextSpan;
+        final word = code.children!.single as TextSpan;
+        expect(word.style!.fontWeight, FontWeight.w700);
+        expect(word.style!.fontStyle, FontStyle.italic);
+      });
+    });
+
     testWidgets('shows the code and the text of a hover', (tester) async {
       await pump(tester, '```luau\nlocal x: number\n```\n\nThe **count**.');
       expect(find.text('local x: number'), findsOneWidget);
@@ -316,9 +437,12 @@ void main() {
 
     testWidgets('has the code in the font of the editor', (tester) async {
       await pump(tester, '```luau\nlocal x\n```');
-      final text = tester.widget<Text>(find.text('local x'));
-      expect(text.style!.fontFamily, 'Roboto');
-      expect(text.style!.fontSize, 14);
+      final rich = tester.widget<RichText>(
+        find.textContaining('local x', findRichText: true),
+      );
+      final code = (rich.text as TextSpan).children!.single as TextSpan;
+      expect(code.style!.fontFamily, 'Roboto');
+      expect(code.style!.fontSize, 14);
     });
 
     testWidgets('opens the address of a link that is pressed', (tester) async {

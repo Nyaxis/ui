@@ -6,6 +6,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../syntax/code_highlighter.dart';
 import 'diagnostic_hover.dart';
 import 'editor_controller.dart';
 import 'editor_keys.dart';
@@ -28,6 +29,7 @@ class EditorView extends StatefulWidget {
     this.scrollbars = const ScrollbarSettings(),
     this.hover = const HoverSettings(),
     this.tooltip,
+    this.codeHighlighter,
     this.mouseWheelZoom = false,
     this.onZoom,
     this.focusNode,
@@ -39,6 +41,10 @@ class EditorView extends StatefulWidget {
   /// when what the language server found is shown for the text that the
   /// pointer rests on
   final HoverSettings hover;
+
+  /// the colors of the code in what the server says of a symbol; the code is
+  /// not colored without it
+  final CodeHighlighter? Function()? codeHighlighter;
 
   /// the tooltip of the buttons in what is shown for it
   final Widget Function(String message, Widget child)? tooltip;
@@ -744,6 +750,7 @@ class EditorViewState extends State<EditorView> {
                   key: ObjectKey(info),
                   info: info,
                   style: widget.style,
+                  highlighter: widget.codeHighlighter?.call(),
                   contentLimit: limit,
                   onPointer: _onPopoverPointer,
                   scrollbarShow: widget.scrollbars.show,

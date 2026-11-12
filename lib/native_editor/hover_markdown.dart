@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 
+import '../syntax/code_highlighter.dart';
 import 'diagnostic_hover.dart';
 import 'editor_controller.dart';
 import 'editor_style.dart';
@@ -13,9 +14,13 @@ enum MarkdownBlockKind { paragraph, code, rule, heading, quote, item }
 /// one block of markdown: a paragraph, a fenced code, a rule, a heading, a
 /// quote or an item of a list
 class MarkdownBlock {
-  const MarkdownBlock(this.kind, this.text, {this.marker});
+  const MarkdownBlock(this.kind, this.text, {this.marker, this.language});
 
   final MarkdownBlockKind kind;
+
+  /// the language that the fence of a code names, which is the first word
+  /// that follows it; null when it names none
+  final String? language;
 
   /// the text; for a code it is the code as it is, and for the others it still
   /// has its inline marks
@@ -71,7 +76,17 @@ List<MarkdownBlock> parseMarkdown(String source) {
       }
       // past the closing fence, when there is one
       i++;
-      blocks.add(MarkdownBlock(MarkdownBlockKind.code, code.join('\n')));
+      final language = (fence.group(2) ?? '')
+          .trim()
+          .split(RegExp(r'[\s,{]'))
+          .first;
+      blocks.add(
+        MarkdownBlock(
+          MarkdownBlockKind.code,
+          code.join('\n'),
+          language: language.isEmpty ? null : language.toLowerCase(),
+        ),
+      );
       continue;
     }
     if (line.trim().isEmpty) {
@@ -305,11 +320,15 @@ class HoverMarkdown extends StatefulWidget {
     super.key,
     required this.markdown,
     required this.style,
+    this.highlighter,
     this.onOpenLink = openLink,
   });
 
   final String markdown;
   final EditorStyle style;
+
+  /// gives the code in a fence of a language that it reads its colors
+  final CodeHighlighter? highlighter;
   final Future<void> Function(String url) onOpenLink;
 
   @override
@@ -384,6 +403,42 @@ class _HoverMarkdownState extends State<HoverMarkdown> {
     ),
   );
 
+  /// the text of a code, in the colors of its language when it is read
+  InlineSpan _code(MarkdownBlock block, TextStyle code) {
+    final highlighter = widget.highlighter;
+    if (highlighter == null || !CodeHighlighter.reads(block.language)) {
+      return TextSpan(text: block.text, style: code);
+    }
+    final children = <InlineSpan>[];
+    var at = 0;
+    for (final span in highlighter.spans(block.text)) {
+      final start = span.start.clamp(at, block.text.length);
+      final end = span.end.clamp(start, block.text.length);
+      if (end == start) {
+        continue;
+      }
+      if (start > at) {
+        children.add(TextSpan(text: block.text.substring(at, start)));
+      }
+      final look = span.style;
+      children.add(
+        TextSpan(
+          text: block.text.substring(start, end),
+          style: TextStyle(
+            color: look.color == null ? null : Color(look.color!),
+            fontWeight: look.bold == true ? FontWeight.w700 : null,
+            fontStyle: look.italic == true ? FontStyle.italic : null,
+          ),
+        ),
+      );
+      at = end;
+    }
+    if (at < block.text.length) {
+      children.add(TextSpan(text: block.text.substring(at)));
+    }
+    return TextSpan(style: code, children: children);
+  }
+
   /// a paragraph, with the room under it that a paragraph has, which is of
   /// pixels and not of rems
   Widget _paragraph(String text, InlineStyles styles, [TextStyle? over]) =>
@@ -419,7 +474,7 @@ class _HoverMarkdownState extends State<HoverMarkdown> {
         // a rem over and under the code
         return Padding(
           padding: EdgeInsets.symmetric(vertical: style.popoverRem(16)),
-          child: Text(block.text, style: code),
+          child: Text.rich(_code(block, code)),
         );
       case MarkdownBlockKind.rule:
         // a line of a pixel, with the room of a paragraph over and under it
@@ -478,11 +533,15 @@ class InfoPopover extends StatefulWidget {
     required this.info,
     required this.style,
     required this.contentLimit,
+    this.highlighter,
     this.onOpenLink = openLink,
     this.onPointer,
     this.scrollbarShow = ScrollbarVisibility.auto,
     this.systemAutoHide = false,
   });
+
+  /// gives the code of the text its colors
+  final CodeHighlighter? highlighter;
 
   final HoverInfo info;
   final EditorStyle style;
@@ -556,6 +615,7 @@ class _InfoPopoverState extends State<InfoPopover> {
                   child: IntrinsicWidth(
                     child: HoverMarkdown(
                       markdown: widget.info.markdown,
+                      highlighter: widget.highlighter,
                       style: style,
                       onOpenLink: widget.onOpenLink,
                     ),

@@ -17,6 +17,7 @@ import '../editor/text_encoding.dart';
 import '../native/backend.dart';
 import '../settings/config_file.dart';
 import '../settings/editor_settings.dart';
+import '../syntax/code_highlighter.dart';
 import '../syntax/syntax_layer.dart';
 import '../syntax/syntax_palette.dart';
 import '../syntax/syntax_tree.dart';
@@ -337,6 +338,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   AppTheme? _syntaxFor;
   Map<String, String>? _syntaxStylesFor;
   SyntaxTheme? _syntaxTheme;
+  CodeHighlighter? _codeHighlighter;
 
   Future<void> _loadSyntaxQuery() async {
     try {
@@ -367,6 +369,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       _syntaxFor = theme;
       _syntaxStylesFor = styles;
       _syntaxTheme = syntaxThemeFor(theme, fontStyles: styles);
+      // the code in what the server says of a symbol has the colors of the text
+      _codeHighlighter = CodeHighlighter(query, _syntaxTheme!);
     }
     final syntaxTheme = _syntaxTheme!;
     for (final tab in _tabs.tabs) {
@@ -736,6 +740,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       showLineNumbers: prefs.lineNumbers,
       scrollbars: prefs.scrollbar,
       hover: prefs.hover,
+      codeHighlighter: () => _codeHighlighter,
       tooltip: (message, child) =>
           _tip(theme: theme, label: message, keys: null, child: child),
       mouseWheelZoom: prefs.mouseWheelZoom,
