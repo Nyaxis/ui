@@ -1549,6 +1549,7 @@ class _StatusItem extends StatefulWidget {
 
 class _StatusItemState extends State<_StatusItem> {
   bool _hovered = false;
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1556,6 +1557,9 @@ class _StatusItemState extends State<_StatusItem> {
     return Clickable(
       onEnter: () => setState(() => _hovered = true),
       onExit: () => setState(() => _hovered = false),
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
       onTap: widget.onPressed,
       onSecondaryTapUp: (details) => widget.onMenu(details.globalPosition),
       child: _tip(
@@ -1567,8 +1571,10 @@ class _StatusItemState extends State<_StatusItem> {
           padding: const EdgeInsets.symmetric(horizontal: 6),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: _hovered
-                ? theme.hover.withValues(alpha: 0.3)
+            color: _pressed
+                ? theme.active.withValues(alpha: 0x99 / 255)
+                : _hovered
+                ? theme.hover.withValues(alpha: 0x4D / 255)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(4),
           ),
@@ -1649,7 +1655,7 @@ class _BarButtonState extends State<_BarButton> {
           : theme.red;
     }
     return (_pressed ? theme.active : theme.hover).withValues(
-      alpha: _pressed ? 0.6 : 0.3,
+      alpha: (_pressed ? 0x99 : 0x4D) / 255,
     );
   }
 

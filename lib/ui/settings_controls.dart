@@ -103,7 +103,7 @@ class SettingRow extends StatelessWidget {
 }
 
 /// an on and off switch
-class SwitchControl extends StatelessWidget {
+class SwitchControl extends StatefulWidget {
   const SwitchControl({
     super.key,
     required this.theme,
@@ -120,9 +120,38 @@ class SwitchControl extends StatelessWidget {
   final ValueChanged<bool> onChanged;
 
   @override
+  State<SwitchControl> createState() => _SwitchControlState();
+}
+
+class _SwitchControlState extends State<SwitchControl> {
+  static const _width = SwitchControl._width;
+  static const _height = SwitchControl._height;
+  static const _knob = SwitchControl._knob;
+
+  bool _hovered = false;
+
+  AppTheme get theme => widget.theme;
+  bool get value => widget.value;
+
+  /// the track, with the text color over it while the pointer is on it: a
+  /// twentieth of it when the switch is off, and a sixth when it is on, and
+  /// one and a half times that in a light theme
+  Color get _track {
+    final track = value ? theme.accent : theme.disabled;
+    if (!_hovered) {
+      return track;
+    }
+    final light = theme.background.computeLuminance() >= 0.5;
+    final share = (value ? 0.16 : 0.05) * (light ? 1.5 : 1.0);
+    return Color.alphaBlend(theme.textPrimary.withValues(alpha: share), track);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Clickable(
-      onTap: () => onChanged(!value),
+      onEnter: () => setState(() => _hovered = true),
+      onExit: () => setState(() => _hovered = false),
+      onTap: () => widget.onChanged(!value),
       child: Semantics(
         toggled: value,
         child: AnimatedContainer(
@@ -132,7 +161,7 @@ class SwitchControl extends StatelessWidget {
           padding: const EdgeInsets.all((_height - _knob) / 2),
           alignment: value ? Alignment.centerRight : Alignment.centerLeft,
           decoration: BoxDecoration(
-            color: value ? theme.accent : theme.disabled,
+            color: _track,
             borderRadius: BorderRadius.circular(_height / 2),
           ),
           child: Container(
@@ -319,9 +348,14 @@ class _StepButtonState extends State<_StepButton> {
         height: 26,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: enabled && _hovered ? theme.border : theme.background,
+          // on the surface, with the faint border, and the color of a hovered
+          // element, which in the palettes is the one of the line
+          color: enabled && _hovered ? theme.border : theme.surface,
           borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
-          border: Border.all(color: theme.border, width: theme.borderWidth),
+          border: Border.all(
+            color: theme.borderVariant,
+            width: theme.borderWidth,
+          ),
         ),
         child: Text(
           widget.label,
@@ -400,7 +434,9 @@ class _ChoiceButtonState extends State<_ChoiceButton> {
         decoration: BoxDecoration(
           color: widget.selected
               ? theme.accent
-              : (_hovered ? theme.border : theme.background),
+              : (_hovered
+                    ? theme.hover.withValues(alpha: 0x4D / 255)
+                    : theme.background),
           borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
           border: Border.all(
             color: widget.selected ? theme.accent : theme.border,
@@ -490,6 +526,7 @@ class DropdownControl<T> extends StatefulWidget {
 
 class _DropdownControlState<T> extends State<DropdownControl<T>> {
   bool _hovered = false;
+  bool _pressed = false;
 
   String get _label {
     for (final (option, label) in widget.options) {
@@ -528,18 +565,37 @@ class _DropdownControlState<T> extends State<DropdownControl<T>> {
         final leading = width >= _minWidthForLeading
             ? widget.leadingFor?.call(widget.value)
             : null;
+        // an outlined button of 28 rems: on the color of an element, with the
+        // faint border; hovered it is the fill of a ghost element and the
+        // border of a line, and pressed the fill is the one of an active
+        // element
         return Clickable(
           onEnter: () => setState(() => _hovered = true),
-          onExit: () => setState(() => _hovered = false),
+          onExit: () => setState(() {
+            _hovered = false;
+            _pressed = false;
+          }),
+          onTapDown: (_) => setState(() => _pressed = true),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTapCancel: () => setState(() => _pressed = false),
           onTap: widget.options.isEmpty ? null : _open,
           child: Container(
             width: width,
-            height: 30,
+            height: theme.rem(28),
             padding: EdgeInsets.only(left: leading == null ? 10 : 4, right: 6),
             decoration: BoxDecoration(
-              color: _hovered ? theme.border : theme.background,
+              color: _pressed
+                  ? theme.active.withValues(alpha: 0x4D / 255)
+                  : _hovered
+                  ? theme.hover.withValues(alpha: 0x4D / 255)
+                  : theme.titleBar,
               borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
-              border: Border.all(color: theme.border, width: theme.borderWidth),
+              border: Border.all(
+                color: _hovered && !_pressed
+                    ? theme.border
+                    : theme.borderVariant,
+                width: theme.borderWidth,
+              ),
             ),
             child: Row(
               children: [

@@ -35,6 +35,7 @@ class SidebarItem extends StatefulWidget {
 
 class _SidebarItemState extends State<SidebarItem> {
   bool _hovered = false;
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -44,15 +45,23 @@ class _SidebarItemState extends State<SidebarItem> {
     return Clickable(
       onEnter: () => setState(() => _hovered = true),
       onExit: () => setState(() => _hovered = false),
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
       onTap: widget.onTap,
       child: Container(
         height: 32,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          // as the buttons of the bars are
-          color: widget.selected
-              ? theme.active.withValues(alpha: 0.6)
-              : (_hovered ? theme.hover.withValues(alpha: 0.3) : null),
+          // a row of a list: pressed, then hovered, then the one that is
+          // selected, as the order of how they are asked for there
+          color: _pressed
+              ? theme.active.withValues(alpha: 0x99 / 255)
+              : _hovered
+              ? theme.hover.withValues(alpha: 0x4D / 255)
+              : (widget.selected
+                    ? theme.chosen.withValues(alpha: 0x66 / 255)
+                    : null),
           borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
         ),
         child: Row(
