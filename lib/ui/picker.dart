@@ -5,7 +5,38 @@ import 'package:window_manager/window_manager.dart';
 
 import '../theme/app_theme.dart';
 import 'clickable.dart';
+import 'elevation.dart';
 import 'skinnable_icon.dart';
+
+/// how a picker looks: sizes in pixels
+class PickerMetrics {
+  const PickerMetrics._();
+
+  /// a picker of a list is 34 rems wide, and one of a line of text 24
+  static const double listWidth = 544;
+  static const double inputWidth = 384;
+
+  /// the most that the list is high, which is 24 rems
+  static const double maxListHeight = 384;
+
+  /// the field, and the room at its sides
+  static const double fieldHeight = 36;
+  static const double fieldPadding = 10;
+
+  /// above and below the rows, and at the sides of what a row fills
+  static const double listPadding = 4;
+  static const double rowInset = 4;
+
+  /// between a row's fill and what is in it
+  static const double rowPadding = 6;
+
+  /// the text of a row, which has four pixels of room above and below it
+  static const double fontSize = 14;
+  static const double lineHeight = 1.618;
+  static const double rowHeight = fontSize * lineHeight + 8;
+  static const double rowRadius = 4;
+  static const double radius = 8;
+}
 
 /// a line of a list picker
 class PickerItem {
@@ -37,7 +68,7 @@ void showListPicker(
     (close) => _Picker(
       theme: theme,
       top: top,
-      width: 540,
+      width: PickerMetrics.listWidth,
       items: items,
       hint: hint,
       onSelected: onSelected,
@@ -64,7 +95,7 @@ void showInputPicker(
     (close) => _Picker(
       theme: theme,
       top: top,
-      width: 380,
+      width: PickerMetrics.inputWidth,
       hint: hint,
       initialText: initialText,
       describe: describe,
@@ -110,8 +141,8 @@ class _Picker extends StatefulWidget {
 }
 
 class _PickerState extends State<_Picker> with WindowListener {
-  static const _rowHeight = 30.0;
-  static const _maxListHeight = 400.0;
+  static const _rowHeight = PickerMetrics.rowHeight;
+  static const _maxListHeight = PickerMetrics.maxListHeight;
 
   late final _text = TextEditingController(text: widget.initialText);
   final _scroll = ScrollController();
@@ -167,12 +198,22 @@ class _PickerState extends State<_Picker> with WindowListener {
     widget.onSelected?.call(index);
   }
 
+  /// goes [by] rows down, or up for a negative number, and round the ends
   void _move(int by) {
     final count = _shown.length;
     if (count == 0) {
       return;
     }
-    setState(() => _highlight = (_highlight + by).clamp(0, count - 1));
+    _goTo((_highlight + by) % count);
+  }
+
+  /// highlights the row [index] of those that are shown
+  void _goTo(int index) {
+    final count = _shown.length;
+    if (count == 0) {
+      return;
+    }
+    setState(() => _highlight = index.clamp(0, count - 1));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) {
         return;
@@ -192,12 +233,27 @@ class _PickerState extends State<_Picker> with WindowListener {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
+    final keyboard = HardwareKeyboard.instance;
+    final control = keyboard.isControlPressed;
+    final shift = keyboard.isShiftPressed;
+    // a field keeps home and end for the cursor in it
+    final hasField = widget.hint != null;
     if (key == LogicalKeyboardKey.escape) {
       widget.onClose?.call();
-    } else if (key == LogicalKeyboardKey.arrowDown) {
+    } else if (key == LogicalKeyboardKey.arrowDown ||
+        (control && key == LogicalKeyboardKey.keyN) ||
+        (key == LogicalKeyboardKey.tab && !shift)) {
       _move(1);
-    } else if (key == LogicalKeyboardKey.arrowUp) {
+    } else if (key == LogicalKeyboardKey.arrowUp ||
+        (control && key == LogicalKeyboardKey.keyP) ||
+        (key == LogicalKeyboardKey.tab && shift)) {
       _move(-1);
+    } else if (key == LogicalKeyboardKey.pageUp ||
+        (!hasField && key == LogicalKeyboardKey.home)) {
+      _goTo(0);
+    } else if (key == LogicalKeyboardKey.pageDown ||
+        (!hasField && key == LogicalKeyboardKey.end)) {
+      _goTo(_shown.length - 1);
     } else if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter) {
       if (widget.items != null) {
@@ -222,7 +278,7 @@ class _PickerState extends State<_Picker> with WindowListener {
     final shown = _shown;
     final hint = widget.hint;
     final describe = widget.describe;
-    final line = Container(height: theme.borderWidth, color: theme.border);
+    final line = Container(height: 1, color: theme.borderVariant);
     return Stack(
       children: [
         // anything outside the picker closes it, and is not passed on
@@ -243,31 +299,34 @@ class _PickerState extends State<_Picker> with WindowListener {
                 width: widget.width,
                 decoration: BoxDecoration(
                   color: theme.surface,
-                  borderRadius: BorderRadius.circular(theme.cornerRadius),
-                  border: Border.all(
-                    color: theme.border,
-                    width: theme.borderWidth,
-                  ),
+                  borderRadius: BorderRadius.circular(PickerMetrics.radius),
+                  border: Border.all(color: theme.borderVariant),
+                  boxShadow: modalShadows(theme),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (hint != null) ...[
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        child: TextField(
-                          controller: _text,
-                          focusNode: _focus,
-                          cursorColor: theme.accent,
-                          style: theme.bodyStyle,
-                          decoration: InputDecoration.collapsed(
-                            hintText: hint,
-                            hintStyle: theme.bodyStyle.copyWith(
-                              color: theme.textDim.withValues(alpha: 0.6),
+                      SizedBox(
+                        height: PickerMetrics.fieldHeight,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: PickerMetrics.fieldPadding,
+                          ),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextField(
+                              controller: _text,
+                              focusNode: _focus,
+                              cursorColor: theme.accent,
+                              style: theme.bodyStyle,
+                              decoration: InputDecoration.collapsed(
+                                hintText: hint,
+                                hintStyle: theme.bodyStyle.copyWith(
+                                  color: theme.active,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -278,7 +337,9 @@ class _PickerState extends State<_Picker> with WindowListener {
                       Focus(focusNode: _focus, child: const SizedBox.shrink()),
                     if (items != null)
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: PickerMetrics.listPadding,
+                        ),
                         child: ConstrainedBox(
                           constraints: BoxConstraints(
                             maxHeight: _maxListHeight,
@@ -343,23 +404,40 @@ class _Row extends StatelessWidget {
       onEnter: onHover,
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 5),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        margin: const EdgeInsets.symmetric(horizontal: PickerMetrics.rowInset),
+        padding: const EdgeInsets.symmetric(
+          horizontal: PickerMetrics.rowPadding,
+          vertical: 4,
+        ),
         decoration: BoxDecoration(
+          // the row that the pointer is on is the one that is chosen
           color: highlighted
-              ? theme.active.withValues(alpha: 0.6)
+              ? theme.chosen.withValues(alpha: 0x66 / 255)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(PickerMetrics.rowRadius),
         ),
         child: Row(
           children: [
             if (item.icon != null) ...[
               SvgPicture.asset(item.icon!, width: 16, height: 16),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
             ],
-            Expanded(child: Text(item.label, style: theme.bodyStyle)),
+            Expanded(
+              child: Text(
+                item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: theme.fontFamily,
+                  fontSize: PickerMetrics.fontSize,
+                  fontWeight: FontWeight.w400,
+                  height: PickerMetrics.lineHeight,
+                  color: theme.textPrimary,
+                ),
+              ),
+            ),
             if (item.checked)
-              SkinnableIcon(name: 'checkmark', size: 14, color: theme.textDim),
+              SkinnableIcon(name: 'checkmark', size: 14, color: theme.accent),
           ],
         ),
       ),

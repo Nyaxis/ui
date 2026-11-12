@@ -7,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 import '../editor/keymap.dart';
 import '../theme/app_theme.dart';
 import 'clickable.dart';
+import 'elevation.dart';
 import 'skinnable_icon.dart';
 
 sealed class ContextMenuEntry {
@@ -363,7 +364,6 @@ class _MenuLayerState extends State<_MenuLayer> with WindowListener {
     final inner = maxHeight - 2;
     final natural = _natural;
     final scrolls = natural != null && natural.height > inner;
-    final light = theme.background.computeLuminance() > 0.5;
     return Focus(
       focusNode: _focus,
       onKeyEvent: _onKey,
@@ -396,17 +396,7 @@ class _MenuLayerState extends State<_MenuLayer> with WindowListener {
                       ContextMenuMetrics.menuRadius,
                     ),
                     border: Border.all(color: theme.borderVariant),
-                    boxShadow: [
-                      const BoxShadow(
-                        offset: Offset(0, 2),
-                        blurRadius: 3,
-                        color: Color(0x1F000000),
-                      ),
-                      BoxShadow(
-                        offset: const Offset(0, 1),
-                        color: Color(light ? 0x08000000 : 0x0F000000),
-                      ),
-                    ],
+                    boxShadow: elevatedShadows(theme),
                   ),
                   child: ConstrainedBox(
                     constraints: BoxConstraints(

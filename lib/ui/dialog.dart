@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_theme.dart';
 import 'clickable.dart';
+import 'elevation.dart';
 
 /// how a dialog looks: sizes in pixels
 class DialogMetrics {
@@ -207,32 +208,9 @@ class _DialogState extends State<_Dialog> {
     return out.toString();
   }
 
-  List<BoxShadow> _shadows(bool light) => [
-    BoxShadow(
-      offset: const Offset(0, 2),
-      blurRadius: 3,
-      color: Color.fromRGBO(0, 0, 0, light ? 0.06 : 0.12),
-    ),
-    BoxShadow(
-      offset: const Offset(0, 3),
-      blurRadius: 6,
-      color: Color.fromRGBO(0, 0, 0, light ? 0.06 : 0.08),
-    ),
-    const BoxShadow(
-      offset: Offset(0, 6),
-      blurRadius: 12,
-      color: Color.fromRGBO(0, 0, 0, 0.04),
-    ),
-    BoxShadow(
-      offset: const Offset(0, 1),
-      color: Color.fromRGBO(0, 0, 0, light ? 0.04 : 0.12),
-    ),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
-    final light = theme.background.computeLuminance() > 0.5;
     TextStyle text(double size, Color color) => TextStyle(
       fontFamily: theme.fontFamily,
       fontSize: size,
@@ -267,7 +245,7 @@ class _DialogState extends State<_Dialog> {
                   color: theme.surface,
                   borderRadius: BorderRadius.circular(DialogMetrics.radius),
                   border: Border.all(color: theme.borderVariant),
-                  boxShadow: _shadows(light),
+                  boxShadow: modalShadows(theme),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
