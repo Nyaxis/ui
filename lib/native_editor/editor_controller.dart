@@ -112,6 +112,9 @@ class EditorController extends ChangeNotifier {
   @visibleForTesting
   static bool systemAutoHide = systemAutoHidesScrollbars();
 
+  /// whether the system hides scrollbars that are not used
+  static bool get systemHidesScrollbars => systemAutoHide;
+
   static const _scrollbarsShownFor = Duration(seconds: 1);
 
   bool _scrollbarsShown = false;
