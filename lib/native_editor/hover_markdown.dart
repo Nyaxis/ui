@@ -380,11 +380,21 @@ class _HoverMarkdownState extends State<HoverMarkdown> {
       ),
     );
     final blocks = parseMarkdown(widget.markdown);
-    // every block has the margins of its own, and they do not run together
+    // every block has the margins of its own, and they do not run together;
+    // but the first has no room over it, and the last none under it
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
-      children: [for (final block in blocks) _block(block, styles, code)],
+      children: [
+        for (var i = 0; i < blocks.length; i++)
+          _block(
+            blocks[i],
+            styles,
+            code,
+            first: i == 0,
+            last: i == blocks.length - 1,
+          ),
+      ],
     );
   }
 
@@ -440,27 +450,39 @@ class _HoverMarkdownState extends State<HoverMarkdown> {
   }
 
   /// a paragraph, with the room under it that a paragraph has, which is of
-  /// pixels and not of rems
-  Widget _paragraph(String text, InlineStyles styles, [TextStyle? over]) =>
-      Padding(
-        padding: const EdgeInsets.only(bottom: EditorStyle.paragraphSpacing),
-        child: _text(
-          text,
-          _paragraphText(over == null ? styles.text : styles.text.merge(over)),
-          styles,
-        ),
-      );
+  /// pixels and not of rems, and none when it is the last block
+  Widget _paragraph(
+    String text,
+    InlineStyles styles, {
+    TextStyle? over,
+    required bool last,
+  }) => Padding(
+    padding: EdgeInsets.only(bottom: last ? 0 : EditorStyle.paragraphSpacing),
+    child: _text(
+      text,
+      _paragraphText(over == null ? styles.text : styles.text.merge(over)),
+      styles,
+    ),
+  );
 
-  Widget _block(MarkdownBlock block, InlineStyles styles, TextStyle code) {
+  /// [block], with its margins: those over the first block and under the last
+  /// are none, as the room at the ends is the popover's own
+  Widget _block(
+    MarkdownBlock block,
+    InlineStyles styles,
+    TextStyle code, {
+    required bool first,
+    required bool last,
+  }) {
     final style = widget.style;
     switch (block.kind) {
       case MarkdownBlockKind.paragraph:
-        return _paragraph(block.text, styles);
+        return _paragraph(block.text, styles, last: last);
       case MarkdownBlockKind.heading:
         // a heading is bold, of the size of a rem, with a rem over it and
         // nothing under it
         return Padding(
-          padding: EdgeInsets.only(top: style.popoverRem(16)),
+          padding: EdgeInsets.only(top: first ? 0 : style.popoverRem(16)),
           child: _text(
             block.text,
             styles.text.copyWith(
@@ -473,14 +495,18 @@ class _HoverMarkdownState extends State<HoverMarkdown> {
       case MarkdownBlockKind.code:
         // a rem over and under the code
         return Padding(
-          padding: EdgeInsets.symmetric(vertical: style.popoverRem(16)),
+          padding: EdgeInsets.only(
+            top: first ? 0 : style.popoverRem(16),
+            bottom: last ? 0 : style.popoverRem(16),
+          ),
           child: Text.rich(_code(block, code)),
         );
       case MarkdownBlockKind.rule:
         // a line of a pixel, with the room of a paragraph over and under it
         return Container(
-          margin: const EdgeInsets.symmetric(
-            vertical: EditorStyle.paragraphSpacing,
+          margin: EdgeInsets.only(
+            top: first ? 0 : EditorStyle.paragraphSpacing,
+            bottom: last ? 0 : EditorStyle.paragraphSpacing,
           ),
           height: 1,
           color: style.popoverRule,
@@ -489,7 +515,9 @@ class _HoverMarkdownState extends State<HoverMarkdown> {
         // the text of a quote is a paragraph in it; the quote has the room of
         // a paragraph under it too
         return Container(
-          margin: const EdgeInsets.only(bottom: EditorStyle.paragraphSpacing),
+          margin: EdgeInsets.only(
+            bottom: last ? 0 : EditorStyle.paragraphSpacing,
+          ),
           padding: EdgeInsets.only(left: style.popoverRem(16)),
           decoration: BoxDecoration(
             border: Border(
@@ -499,7 +527,8 @@ class _HoverMarkdownState extends State<HoverMarkdown> {
           child: _paragraph(
             block.text,
             styles,
-            TextStyle(color: style.popoverMuted),
+            over: TextStyle(color: style.popoverMuted),
+            last: last,
           ),
         );
       case MarkdownBlockKind.item:
@@ -508,7 +537,7 @@ class _HoverMarkdownState extends State<HoverMarkdown> {
         return Padding(
           padding: EdgeInsets.only(
             left: style.popoverRem(10),
-            bottom: style.popoverRem(4),
+            bottom: last ? 0 : style.popoverRem(4),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,

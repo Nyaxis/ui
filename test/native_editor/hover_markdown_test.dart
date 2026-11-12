@@ -210,15 +210,27 @@ void main() {
         expect(two.top - one.bottom, closeTo(8, 0.01));
       });
 
-      testWidgets('there is 8 pixels of a paragraph under the last one', (
+      testWidgets('there is none of a paragraph under the last one', (
         tester,
       ) async {
         await pump(tester, 'one');
         final popover = tester.getRect(find.byType(InfoPopover));
         final one = rect(tester, 'one');
-        // 8 of the padding, and the 8 of the paragraph; the border is 1
-        expect(popover.bottom - one.bottom, closeTo(1 + 8 + 8, 0.01));
+        // only the 8 of the padding, and the border of 1: the last block has
+        // no room under it
+        expect(popover.bottom - one.bottom, closeTo(1 + 8, 0.01));
         expect(one.top - popover.top, closeTo(1 + 8, 0.01));
+      });
+
+      testWidgets('there is the 8 of a paragraph under one that is not last', (
+        tester,
+      ) async {
+        await pump(tester, 'one\n\ntwo');
+        final one = rect(tester, 'one');
+        final two = rect(tester, 'two');
+        expect(two.top - one.bottom, closeTo(8, 0.01));
+        final popover = tester.getRect(find.byType(InfoPopover));
+        expect(popover.bottom - two.bottom, closeTo(1 + 8, 0.01));
       });
 
       testWidgets('a code has a rem over it and a rem under it', (
@@ -233,14 +245,74 @@ void main() {
         expect(two.top - code.bottom, closeTo(16, 0.01));
       });
 
-      testWidgets('a code at the start has its rem over it, too', (
+      testWidgets('a code that is alone has no room over it, or under', (
         tester,
       ) async {
         await pump(tester, '```luau\nlocal x\n```');
         final popover = tester.getRect(find.byType(InfoPopover));
         final code = rect(tester, 'local x');
-        expect(code.top - popover.top, closeTo(1 + 8 + 16, 0.01));
-        expect(popover.bottom - code.bottom, closeTo(1 + 8 + 16, 0.01));
+        // the border, and the 8 of the padding; the rem of the code is not at
+        // the ends
+        expect(code.top - popover.top, closeTo(1 + 8, 0.01));
+        expect(popover.bottom - code.bottom, closeTo(1 + 8, 0.01));
+      });
+
+      testWidgets('a code at the start has none over it, and one under', (
+        tester,
+      ) async {
+        await pump(tester, '```luau\nlocal x\n```\n\ntwo');
+        final popover = tester.getRect(find.byType(InfoPopover));
+        final code = rect(tester, 'local x');
+        final two = rect(tester, 'two');
+        expect(code.top - popover.top, closeTo(1 + 8, 0.01));
+        expect(two.top - code.bottom, closeTo(16, 0.01));
+      });
+
+      testWidgets('a heading at the start has no room over it', (tester) async {
+        await pump(tester, '# Title\n\ntext');
+        final popover = tester.getRect(find.byType(InfoPopover));
+        final title = rect(tester, 'Title');
+        expect(title.top - popover.top, closeTo(1 + 8, 0.01));
+      });
+
+      testWidgets('a rule at the start or the end has no room beyond it', (
+        tester,
+      ) async {
+        await pump(tester, '---\n\ntext');
+        var popover = tester.getRect(find.byType(InfoPopover));
+        var text = rect(tester, 'text');
+        // the border, the padding, the line of 1, and the 8 under it
+        expect(text.top - popover.top, closeTo(1 + 8 + 1 + 8, 0.01));
+        await pump(tester, 'text\n\n---');
+        popover = tester.getRect(find.byType(InfoPopover));
+        text = rect(tester, 'text');
+        // the 8 of the paragraph, 8, the line of 1, nothing under it, the
+        // padding and the border
+        expect(popover.bottom - text.bottom, closeTo(8 + 8 + 1 + 8 + 1, 0.01));
+      });
+
+      testWidgets('the last item and the last quote have no room under them', (
+        tester,
+      ) async {
+        await pump(tester, '- one\n- two');
+        var popover = tester.getRect(find.byType(InfoPopover));
+        var two = rect(tester, 'two');
+        expect(popover.bottom - two.bottom, closeTo(1 + 8, 0.01));
+        await pump(tester, '> said');
+        popover = tester.getRect(find.byType(InfoPopover));
+        two = rect(tester, 'said');
+        expect(popover.bottom - two.bottom, closeTo(1 + 8, 0.01));
+      });
+
+      testWidgets('is as high as the text and the padding, for one line', (
+        tester,
+      ) async {
+        // a type that is shown alone: the border of 1, the 8 of the padding,
+        // the line, the 8 of the padding and the border
+        await pump(tester, '```luau\ntype loca = *error-type*\n```');
+        final popover = tester.getRect(find.byType(InfoPopover));
+        final code = rect(tester, 'type loca');
+        expect(popover.height, closeTo(code.height + 2 * (1 + 8), 0.01));
       });
 
       testWidgets('a rule is a pixel, with 8 over it and 8 under it', (
