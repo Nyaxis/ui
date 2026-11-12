@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ui/theme/app_theme.dart';
 import 'package:ui/ui/settings_controls.dart';
 import 'package:ui/ui/sidebar.dart';
+import 'package:ui/ui/skinnable_icon.dart';
 
 const _theme = AppTheme();
 
@@ -89,6 +90,42 @@ void main() {
         _theme.disabled,
       ),
     );
+  });
+
+  testWidgets('the check mark of a dropdown menu is after the label', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: DropdownControl<int>(
+              theme: _theme,
+              value: 2,
+              options: const [(1, 'one'), (2, 'two')],
+              onChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(DropdownControl<int>));
+    await tester.pump(const Duration(milliseconds: 300));
+    // the label in the menu is the last of the two that say it
+    final label = tester.getRect(find.text('two').last);
+    final marks = find.byWidgetPredicate(
+      (w) => w is SkinnableIcon && w.name == 'checkmark',
+    );
+    expect(marks, findsWidgets);
+    for (final mark in marks.evaluate()) {
+      final rect = tester.getRect(find.byElementPredicate((e) => e == mark));
+      // the one in the menu is after the label; any other is in the button,
+      // which is not a menu
+      if (rect.top >= label.top - 1 && rect.bottom <= label.bottom + 1) {
+        expect(rect.left, greaterThanOrEqualTo(label.right));
+      }
+    }
   });
 
   testWidgets('a dropdown is an outlined button of 28 rems', (tester) async {

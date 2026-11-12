@@ -368,7 +368,8 @@ class _StepButtonState extends State<_StepButton> {
   }
 }
 
-/// a row of options that one is chosen from
+/// one option chosen from a list, which is a dropdown, as it is for settings
+/// that have a few values
 class ChoiceControl<T> extends StatelessWidget {
   const ChoiceControl({
     super.key,
@@ -385,72 +386,11 @@ class ChoiceControl<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 4,
-      runSpacing: 4,
-      alignment: WrapAlignment.end,
-      children: [
-        for (final (option, label) in options)
-          _ChoiceButton(
-            theme: theme,
-            label: label,
-            selected: option == value,
-            onTap: () => onChanged(option),
-          ),
-      ],
-    );
-  }
-}
-
-class _ChoiceButton extends StatefulWidget {
-  const _ChoiceButton({
-    required this.theme,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final AppTheme theme;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  State<_ChoiceButton> createState() => _ChoiceButtonState();
-}
-
-class _ChoiceButtonState extends State<_ChoiceButton> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = widget.theme;
-    return Clickable(
-      onEnter: () => setState(() => _hovered = true),
-      onExit: () => setState(() => _hovered = false),
-      onTap: widget.onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: widget.selected
-              ? theme.accent
-              : (_hovered
-                    ? theme.hover.withValues(alpha: 0x4D / 255)
-                    : theme.background),
-          borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
-          border: Border.all(
-            color: widget.selected ? theme.accent : theme.border,
-            width: theme.borderWidth,
-          ),
-        ),
-        child: Text(
-          widget.label,
-          style: theme.captionStyle.copyWith(
-            color: widget.selected ? theme.titleBar : theme.textPrimary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
+    return DropdownControl<T>(
+      theme: theme,
+      value: value,
+      options: options,
+      onChanged: onChanged,
     );
   }
 }
@@ -548,6 +488,7 @@ class _DropdownControlState<T> extends State<DropdownControl<T>> {
           ContextMenuItem(
             label,
             checked: option == widget.value,
+            checkAtEnd: true,
             leading: widget.leadingFor?.call(option),
             onPressed: () => widget.onChanged(option),
           ),

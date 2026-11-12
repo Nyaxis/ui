@@ -21,10 +21,14 @@ class ContextMenuItem extends ContextMenuEntry {
     this.onPressed,
     this.action,
     this.checked,
+    this.checkAtEnd = false,
     this.leading,
   });
 
   final String label;
+
+  /// the check mark is after the label, and the keys, instead of before it
+  final bool checkAtEnd;
 
   /// drawn between the check mark and the label, such as a preview of what
   /// the item chooses
@@ -545,6 +549,17 @@ class _ItemState extends State<_Item> {
     final metrics = ContextMenuMetrics(theme);
     final labelColor = enabled ? theme.textPrimary : theme.disabled;
     final keysColor = enabled ? theme.textDim : theme.disabled;
+    // the mark is a room of its own size, empty when there is no mark
+    Widget checkMark(bool checked, bool enabled) => SizedBox(
+      width: metrics.checkSize,
+      child: checked
+          ? SkinnableIcon(
+              name: 'checkmark',
+              size: metrics.checkSize,
+              color: enabled ? theme.accent : theme.disabled,
+            )
+          : null,
+    );
     final fill = !enabled
         ? Colors.transparent
         : _pressed && _hovered
@@ -586,19 +601,10 @@ class _ItemState extends State<_Item> {
             padding: EdgeInsets.symmetric(horizontal: metrics.itemPadding),
             child: Row(
               children: [
-                if (item.checked != null) ...[
+                if (item.checked != null && !item.checkAtEnd) ...[
                   // the room is kept when there is no mark, so that the labels
                   // of a menu of choices line up
-                  SizedBox(
-                    width: metrics.checkSize,
-                    child: item.checked!
-                        ? SkinnableIcon(
-                            name: 'checkmark',
-                            size: metrics.checkSize,
-                            color: enabled ? theme.accent : theme.disabled,
-                          )
-                        : null,
-                  ),
+                  checkMark(item.checked!, enabled),
                   SizedBox(width: metrics.itemGap),
                 ],
                 if (item.leading != null) ...[
@@ -622,6 +628,10 @@ class _ItemState extends State<_Item> {
                       style: TextStyle(color: keysColor),
                     ),
                   ),
+                if (item.checked != null && item.checkAtEnd) ...[
+                  SizedBox(width: metrics.itemGap),
+                  checkMark(item.checked!, enabled),
+                ],
               ],
             ),
           ),

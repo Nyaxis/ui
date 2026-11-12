@@ -187,16 +187,23 @@ void main() {
     testWidgets('the choices of auto save are named as there', (tester) async {
       AutoSave? chosen;
       await pump(tester, onAutoSave: (a) => chosen = a);
+      // a dropdown, which shows the one that is chosen and has the others in
+      // its menu
+      await tester.tap(find.text('After Delay'));
+      await tester.pump(const Duration(milliseconds: 300));
       for (final name in [
         'Off',
         'After Delay',
         'On Focus Change',
         'On Window Change',
       ]) {
-        expect(find.text(name), findsOneWidget, reason: name);
+        expect(find.text(name), findsWidgets, reason: name);
       }
       await tester.tap(find.text('On Focus Change'));
       expect(chosen, AutoSave.onFocusChange);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('After Delay'));
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.text('On Window Change'));
       expect(chosen, AutoSave.onWindowChange);
     });
@@ -213,12 +220,11 @@ void main() {
     testWidgets('soft wrap is none or the width of the editor', (tester) async {
       EditorPrefs? chosen;
       await pump(tester, onPrefs: (p) => chosen = p);
-      // the last, as the choices of the diagnostics of the scrollbar have one
-      // above it
-      await tester.tap(find.text('None').last);
-      expect(chosen?.wordWrap, isFalse);
+      // the width of the editor is what it is at the start
       await tester.tap(find.text('Editor Width'));
-      expect(chosen?.wordWrap, isTrue);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text('None'));
+      expect(chosen?.wordWrap, isFalse);
     });
 
     testWidgets('the old names are gone', (tester) async {
@@ -241,6 +247,18 @@ void main() {
   });
 
   group('code styles', () {
+    /// opens the dropdown that [trigger] is in, and chooses [option] of it
+    Future<void> choose(
+      WidgetTester tester,
+      Finder trigger,
+      String option,
+    ) async {
+      await tester.tap(trigger);
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.text(option).last);
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
     late Directory dir;
     late ThemeController controller;
 
@@ -300,10 +318,11 @@ void main() {
       Map<String, String>? chosen;
       await pump(tester, const {}, (styles) => chosen = styles);
       expect(find.text('Code styles'), findsOneWidget);
-      // the rows go comments, keywords, ...
-      await tester.tap(find.text('Bold').at(1));
+      // the rows go comments, keywords, ...; the comments are italic, so the
+      // first one that says regular is the keywords
+      await choose(tester, find.text('Regular').at(0), 'Bold');
       expect(chosen, {'keyword': 'bold'});
-      await tester.tap(find.text('Bold italic').at(2));
+      await choose(tester, find.text('Regular').at(1), 'Bold italic');
       expect(chosen, {'string': 'bold italic'});
     });
 
@@ -312,15 +331,15 @@ void main() {
     ) async {
       Map<String, String>? chosen;
       await pump(tester, const {}, (styles) => chosen = styles);
-      await tester.tap(find.text('Regular').at(0));
+      await choose(tester, find.text('Italic').first, 'Regular');
       expect(chosen, {'comment': 'none'});
-      await tester.tap(find.text('Bold').at(0));
+      await choose(tester, find.text('Italic').first, 'Bold');
       expect(chosen, {'comment': 'bold'});
       // back to what it was is not kept
       await pump(tester, const {
         'comment': 'none',
       }, (styles) => chosen = styles);
-      await tester.tap(find.text('Italic').at(0));
+      await choose(tester, find.text('Regular').first, 'Italic');
       expect(chosen, <String, String>{});
     });
 
@@ -363,13 +382,13 @@ void main() {
       ]) {
         expect(find.text(label), findsOneWidget, reason: label);
       }
-      await tester.tap(find.text('Always'));
+      await choose(tester, find.text('Auto'), 'Always');
       expect(chosen?.scrollbar.show, ScrollbarVisibility.always);
-      await tester.tap(find.text('System'));
+      await choose(tester, find.text('Auto'), 'System');
       expect(chosen?.scrollbar.show, ScrollbarVisibility.system);
-      await tester.tap(find.text('Never'));
+      await choose(tester, find.text('Auto'), 'Never');
       expect(chosen?.scrollbar.show, ScrollbarVisibility.never);
-      await tester.tap(find.text('Error'));
+      await choose(tester, find.text('All'), 'Error');
       expect(chosen?.scrollbar.diagnostics, ScrollbarDiagnostics.error);
     });
 
