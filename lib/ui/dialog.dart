@@ -6,10 +6,74 @@ import 'package:flutter/services.dart';
 import '../theme/app_theme.dart';
 import 'clickable.dart';
 
+/// how a dialog looks: sizes in pixels
+class DialogMetrics {
+  const DialogMetrics._();
+
+  static const double width = 320;
+
+  /// around everything in it, and between the message, the lines under it and
+  /// the buttons
+  static const double padding = 16;
+  static const double gap = 16;
+
+  /// between the buttons, which are one under the other
+  static const double buttonGap = 4;
+  static const double buttonHeight = 22;
+  static const double buttonPadding = 4;
+  static const double buttonRadius = 4;
+  static const double radius = 8;
+
+  /// the size of the message, of what is under it, and of a button's label
+  static const double messageSize = 16;
+  static const double detailSize = 12;
+  static const double labelSize = 14;
+  static const double lineHeight = 1.618;
+
+  /// how much of the window shows through what is behind the dialog
+  static const double backdropOpacity = 0.2;
+
+  /// the label of the button that escape chooses
+  static const String cancelLabel = 'Cancel';
+}
+
+/// the fills and lines of a button, as the theme has them
+class DialogButtonColors {
+  const DialogButtonColors(this.theme);
+
+  final AppTheme theme;
+
+  bool get _light => theme.background.computeLuminance() > 0.5;
+
+  /// a button at rest
+  Color get fill => theme.titleBar;
+  Color get line => theme.borderVariant;
+
+  /// the pointer is on it
+  Color get hoverFill => theme.hover.withValues(alpha: 0x4D / 255);
+  Color get hoverLine => theme.border;
+
+  /// it is pressed
+  Color get pressedFill => theme.active.withValues(alpha: 0x4D / 255);
+
+  /// the button that enter chooses, which has the color for information
+  Color get tintFill => theme.info.withValues(alpha: 0x33 / 255);
+  Color get tintLine => theme.info;
+
+  /// the tinted button with the pointer on it, which is darker
+  Color get tintHoverFill {
+    final hsl = HSLColor.fromColor(tintFill);
+    return hsl
+        .withLightness((hsl.lightness - (_light ? 0.05 : 0.2)).clamp(0.0, 1.0))
+        .toColor();
+  }
+}
+
 /// asks [message] in the middle of the window, with the lines of [details]
-/// under it, and resolves to the index in [buttons] that was chosen, or null
-/// for escape. the first button is the one enter chooses, and the arrow keys
-/// move between them. nothing behind the dialog takes clicks while it is open
+/// under it, and resolves to the index in [buttons] that was chosen. the first
+/// button is the one enter chooses; up and down move between them, and escape
+/// chooses the one labeled Cancel, and does nothing when there is none.
+/// nothing behind the dialog takes clicks while it is open
 Future<int?> showConfirmDialog(
   BuildContext context, {
   required AppTheme theme,
@@ -57,12 +121,10 @@ class _Dialog extends StatefulWidget {
 }
 
 class _DialogState extends State<_Dialog> {
-  static final _pad = String.fromCharCode(0x202f);
-
   late final FocusNode _focus;
 
   /// the button enter chooses
-  var _highlight = 0;
+  var _active = 0;
 
   @override
   void initState() {
@@ -78,51 +140,106 @@ class _DialogState extends State<_Dialog> {
     super.dispose();
   }
 
+  void _next() =>
+      setState(() => _active = (_active + 1) % widget.buttons.length);
+
+  void _previous() => setState(
+    () => _active = _active > 0 ? _active - 1 : widget.buttons.length - 1,
+  );
+
+  /// chooses the button labeled Cancel, if there is one
+  void _cancel() {
+    final index = widget.buttons.indexOf(DialogMetrics.cancelLabel);
+    if (index >= 0) {
+      widget.onChosen(index);
+    }
+  }
+
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    // the editor behind must not see keys typed into the dialog
     if (event is KeyUpEvent) {
       return KeyEventResult.handled;
     }
     final key = event.logicalKey;
-    final count = widget.buttons.length;
-    if (key == LogicalKeyboardKey.escape) {
-      widget.onChosen(null);
-    } else if (key == LogicalKeyboardKey.enter) {
-      widget.onChosen(_highlight);
-    } else if (key == LogicalKeyboardKey.arrowRight) {
-      setState(() => _highlight = (_highlight + 1) % count);
-    } else if (key == LogicalKeyboardKey.arrowLeft) {
-      setState(() => _highlight = (_highlight + count - 1) % count);
+    final keyboard = HardwareKeyboard.instance;
+    final control = keyboard.isControlPressed;
+    final shift = keyboard.isShiftPressed;
+    final first = event is KeyDownEvent;
+    if (first &&
+        (key == LogicalKeyboardKey.escape ||
+            (control && key == LogicalKeyboardKey.keyC))) {
+      _cancel();
+    } else if (first &&
+        (key == LogicalKeyboardKey.enter ||
+            key == LogicalKeyboardKey.numpadEnter)) {
+      widget.onChosen(_active);
+    } else if (key == LogicalKeyboardKey.arrowDown ||
+        (control && key == LogicalKeyboardKey.keyN) ||
+        (key == LogicalKeyboardKey.tab && !shift)) {
+      _next();
+    } else if (key == LogicalKeyboardKey.arrowUp ||
+        (control && key == LogicalKeyboardKey.keyP) ||
+        (key == LogicalKeyboardKey.tab && shift)) {
+      _previous();
+    } else if (key == LogicalKeyboardKey.home ||
+        key == LogicalKeyboardKey.pageUp) {
+      // the buttons are in the order of how they are asked, and the one that
+      // is chosen first is the last
+      setState(() => _active = widget.buttons.length - 1);
+    } else if (key == LogicalKeyboardKey.end ||
+        key == LogicalKeyboardKey.pageDown) {
+      setState(() => _active = 0);
     }
-    // the editor behind must not see keys typed into the dialog
     return KeyEventResult.handled;
   }
 
-  /// the text between backticks is drawn as code, without the backticks
-  List<InlineSpan> _spans(String message) {
-    final theme = widget.theme;
+  /// the message as it is shown: the text between two backticks is the text
+  /// itself, and a backtick that has no other stays
+  static String _plain(String message) {
     final parts = message.split('`');
-    return [
-      for (var i = 0; i < parts.length; i++)
-        if (parts[i].isNotEmpty)
-          // an odd part is between two backticks, and an unmatched one stays
-          // plain; a background has no padding, so the code is set between
-          // narrow no-break spaces
-          if (i.isOdd && i < parts.length - 1)
-            TextSpan(
-              text: '$_pad${parts[i]}$_pad',
-              style: theme.headingStyle.copyWith(
-                fontFamily: theme.monospaceFontFamily,
-                backgroundColor: theme.titleBar,
-              ),
-            )
-          else
-            TextSpan(text: parts[i]),
-    ];
+    final out = StringBuffer();
+    for (var i = 0; i < parts.length; i++) {
+      if (i.isOdd && i == parts.length - 1) {
+        out.write('`');
+      }
+      out.write(parts[i]);
+    }
+    return out.toString();
   }
+
+  List<BoxShadow> _shadows(bool light) => [
+    BoxShadow(
+      offset: const Offset(0, 2),
+      blurRadius: 3,
+      color: Color.fromRGBO(0, 0, 0, light ? 0.06 : 0.12),
+    ),
+    BoxShadow(
+      offset: const Offset(0, 3),
+      blurRadius: 6,
+      color: Color.fromRGBO(0, 0, 0, light ? 0.06 : 0.08),
+    ),
+    const BoxShadow(
+      offset: Offset(0, 6),
+      blurRadius: 12,
+      color: Color.fromRGBO(0, 0, 0, 0.04),
+    ),
+    BoxShadow(
+      offset: const Offset(0, 1),
+      color: Color.fromRGBO(0, 0, 0, light ? 0.04 : 0.12),
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
+    final light = theme.background.computeLuminance() > 0.5;
+    TextStyle text(double size, Color color) => TextStyle(
+      fontFamily: theme.fontFamily,
+      fontSize: size,
+      fontWeight: FontWeight.w400,
+      height: DialogMetrics.lineHeight,
+      color: color,
+    );
     return Focus(
       focusNode: _focus,
       child: Stack(
@@ -132,55 +249,54 @@ class _DialogState extends State<_Dialog> {
               behavior: HitTestBehavior.opaque,
               onTap: () {},
               onSecondaryTap: () {},
-              child: ColoredBox(color: Colors.black.withValues(alpha: 0.4)),
+              child: ColoredBox(
+                color: Colors.black.withValues(
+                  alpha: DialogMetrics.backdropOpacity,
+                ),
+              ),
             ),
           ),
           Center(
             child: Material(
               type: MaterialType.transparency,
+              // a container, so that the border takes room as it does in a box
               child: Container(
-                width: 420,
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                width: DialogMetrics.width,
+                padding: const EdgeInsets.all(DialogMetrics.padding),
                 decoration: BoxDecoration(
                   color: theme.surface,
-                  borderRadius: BorderRadius.circular(theme.cornerRadius),
-                  border: Border.all(
-                    color: theme.border,
-                    width: theme.borderWidth,
-                  ),
+                  borderRadius: BorderRadius.circular(DialogMetrics.radius),
+                  border: Border.all(color: theme.borderVariant),
+                  boxShadow: _shadows(light),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text.rich(
-                      TextSpan(children: _spans(widget.message)),
-                      style: theme.headingStyle,
+                    Text(
+                      _plain(widget.message),
+                      style: text(DialogMetrics.messageSize, theme.textPrimary),
                     ),
                     if (widget.details.isNotEmpty) ...[
-                      const SizedBox(height: 10),
+                      const SizedBox(height: DialogMetrics.gap),
                       for (final line in widget.details)
                         Text(
                           line,
-                          style: theme.bodyStyle.copyWith(color: theme.textDim),
+                          style: text(DialogMetrics.detailSize, theme.textDim),
                         ),
                     ],
-                    const SizedBox(height: 18),
-                    Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (var i = 0; i < widget.buttons.length; i++)
-                          _DialogButton(
-                            label: widget.buttons[i],
-                            theme: theme,
-                            highlighted: i == _highlight,
-                            onHover: () => setState(() => _highlight = i),
-                            onTap: () => widget.onChosen(i),
-                          ),
-                      ],
-                    ),
+                    const SizedBox(height: DialogMetrics.gap),
+                    for (var i = 0; i < widget.buttons.length; i++) ...[
+                      if (i > 0)
+                        const SizedBox(height: DialogMetrics.buttonGap),
+                      _DialogButton(
+                        label: widget.buttons[i],
+                        theme: theme,
+                        style: text(DialogMetrics.labelSize, theme.textPrimary),
+                        active: i == _active,
+                        onTap: () => widget.onChosen(i),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -192,37 +308,77 @@ class _DialogState extends State<_Dialog> {
   }
 }
 
-class _DialogButton extends StatelessWidget {
+class _DialogButton extends StatefulWidget {
   const _DialogButton({
     required this.label,
     required this.theme,
-    required this.highlighted,
-    required this.onHover,
+    required this.style,
+    required this.active,
     required this.onTap,
   });
 
   final String label;
   final AppTheme theme;
-  final bool highlighted;
-  final VoidCallback onHover;
+  final TextStyle style;
+
+  /// whether it is the one that enter chooses
+  final bool active;
   final VoidCallback onTap;
 
   @override
+  State<_DialogButton> createState() => _DialogButtonState();
+}
+
+class _DialogButtonState extends State<_DialogButton> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final colors = DialogButtonColors(widget.theme);
+    final Color fill;
+    final Color line;
+    if (widget.active) {
+      // a tinted button is not changed by a press
+      fill = _hovered ? colors.tintHoverFill : colors.tintFill;
+      line = colors.tintLine;
+    } else if (_pressed) {
+      fill = colors.pressedFill;
+      line = colors.line;
+    } else if (_hovered) {
+      fill = colors.hoverFill;
+      line = colors.hoverLine;
+    } else {
+      fill = colors.fill;
+      line = colors.line;
+    }
     return Clickable(
-      onEnter: onHover,
-      onTap: onTap,
+      onEnter: () => setState(() => _hovered = true),
+      onExit: () => setState(() {
+        _hovered = false;
+        _pressed = false;
+      }),
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: widget.onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: highlighted ? theme.titleBar : Colors.transparent,
-          borderRadius: BorderRadius.circular(theme.cornerRadius / 2),
-          border: Border.all(
-            color: highlighted ? theme.focus : theme.border,
-            width: theme.borderWidth,
-          ),
+        height: DialogMetrics.buttonHeight,
+        padding: const EdgeInsets.symmetric(
+          horizontal: DialogMetrics.buttonPadding,
         ),
-        child: Text(label, style: theme.bodyStyle),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: fill,
+          borderRadius: BorderRadius.circular(DialogMetrics.buttonRadius),
+          border: Border.all(color: line),
+        ),
+        child: Text(
+          widget.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: widget.style,
+        ),
       ),
     );
   }
