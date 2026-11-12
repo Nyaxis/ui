@@ -5,6 +5,15 @@
 #include "flutter_window.h"
 #include "utils.h"
 
+// whether a message is to be turned into a character message before it is
+// delivered. windows hides the mouse pointer while the user types, which it
+// does when a key press makes a character message, and the escape key makes one
+// (the character 0x1b) though it types nothing, so the pointer went away when
+// it was pressed. the key press is delivered as it is, and the pointer stays
+static bool MakesCharacter(const ::MSG &msg) {
+  return !(msg.message == WM_KEYDOWN && msg.wParam == VK_ESCAPE);
+}
+
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
   // attach to the parent console (e.g. 'flutter run'), or create one under a
@@ -33,7 +42,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {
-    ::TranslateMessage(&msg);
+    if (MakesCharacter(msg)) {
+      ::TranslateMessage(&msg);
+    }
     ::DispatchMessage(&msg);
   }
 
