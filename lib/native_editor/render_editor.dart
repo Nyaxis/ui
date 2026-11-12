@@ -448,9 +448,10 @@ class RenderEditor extends RenderBox {
     return _snapshot.displayPointToOffset(clipped);
   }
 
-  /// the text offset that the pointer at [position] rests on, or null when it
-  /// is not on text: in the gutter, at a scrollbar, below the last row, or
-  /// further along a row than its end, by more than half a column
+  /// the text offset of the character that the pointer at [position] rests on,
+  /// which is the start of it, or null when it is not on text: in the gutter,
+  /// at a scrollbar, below the last row, or further along a row than its end,
+  /// by more than half a column
   int? hoverOffsetAt(Offset position) {
     if (!hasSize ||
         position.dx < textLeft ||
@@ -466,7 +467,14 @@ class RenderEditor extends RenderBox {
     if (x > _row(row).painter.width + _charWidth / 2) {
       return null;
     }
-    return offsetForPosition(position);
+    // the character that the pointer is on: the nearest place between
+    // characters is the one after it when the pointer is on its right half
+    var offset = offsetForPosition(position);
+    if (position.dx < caretRectForOffset(offset).left &&
+        _snapshot.offsetToDisplayPoint(offset, Bias.left).column > 0) {
+      offset--;
+    }
+    return offset;
   }
 
   // scrollbars

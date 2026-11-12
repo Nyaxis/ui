@@ -139,6 +139,44 @@ class LspDiagnostic {
   }
 }
 
+/// what a server says of the place that was asked about: text in markdown, and
+/// the range of what it is about, when the server gives one
+class LspHover {
+  const LspHover(this.markdown, this.range);
+
+  final String markdown;
+  final LspRange? range;
+
+  /// reads the answer of `textDocument/hover`, which is null for nothing. the
+  /// contents are a markup, a string that is a code or a text, or a list of
+  /// those, and all of them are made into markdown, in the order given
+  static LspHover? fromJson(Object? json) {
+    if (json is! Map) {
+      return null;
+    }
+    final blocks = <String>[];
+    void add(Object? content) {
+      switch (content) {
+        case final String text:
+          blocks.add(text);
+        case {'language': final String language, 'value': final String value}:
+          blocks.add('```$language\n$value\n```');
+        case {'value': final String value}:
+          blocks.add(value);
+        case final List list:
+          list.forEach(add);
+      }
+    }
+
+    add(json['contents']);
+    final markdown = blocks.where((b) => b.trim().isNotEmpty).join('\n\n');
+    if (markdown.isEmpty) {
+      return null;
+    }
+    return LspHover(markdown, LspRange.fromJson(json['range']));
+  }
+}
+
 /// the diagnostics that the server has for a document, all of them: a new list
 /// replaces what it sent before
 class PublishedDiagnostics {
@@ -234,6 +272,10 @@ class LspClient {
         'willSave': false,
         'didSave': false,
       },
+      'hover': {
+        'dynamicRegistration': false,
+        'contentFormat': ['markdown', 'plaintext'],
+      },
       'publishDiagnostics': {
         'relatedInformation': false,
         'versionSupport': true,
@@ -270,6 +312,19 @@ class LspClient {
     connection.notify('textDocument/didClose', {
       'textDocument': {'uri': uri},
     });
+  }
+
+  /// what the server says of the place [position] of the document [uri], or
+  /// null when it says nothing, or when it cannot be asked
+  Future<LspHover?> hover(String uri, LspPosition position) async {
+    if (!_initialized || connection.isClosed) {
+      return null;
+    }
+    final result = await connection.request('textDocument/hover', {
+      'textDocument': {'uri': uri},
+      'position': position.toJson(),
+    });
+    return LspHover.fromJson(result);
   }
 
   Future<Object?> _onRequest(String method, Object? params) async {

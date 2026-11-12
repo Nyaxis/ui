@@ -15,8 +15,11 @@ class LspTestPair {
   /// every notification that the client sent
   final List<JsonRpcNotification> received;
 
+  /// [onHover] answers `textDocument/hover`, with what it is asked as its
+  /// parameter; the server has no answer for it without
   static LspTestPair create({
     Map<String, Object?> capabilities = const {'textDocumentSync': 2},
+    Object? Function(Object? params)? onHover,
   }) {
     final toServer = StreamController<List<int>>();
     final toClient = StreamController<List<int>>();
@@ -29,6 +32,9 @@ class LspTestPair {
       }
       if (method == 'shutdown') {
         return null;
+      }
+      if (method == 'textDocument/hover' && onHover != null) {
+        return onHover(params);
       }
       throw const JsonRpcException(JsonRpcException.methodNotFound, 'no');
     };

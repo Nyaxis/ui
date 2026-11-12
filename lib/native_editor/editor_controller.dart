@@ -42,6 +42,20 @@ class DiagnosticDetail {
   final String? codeHref;
 }
 
+/// what the language server said about the symbol at a place: the text, in
+/// markdown, and the range of the symbol, which is shown as lit when the
+/// pointer rests on it
+class HoverInfo {
+  const HoverInfo({required this.range, required this.markdown});
+
+  final AnchorRange range;
+  final String markdown;
+}
+
+/// asks for what is said of the place at an offset of the text, which is null
+/// when nothing is
+typedef HoverProvider = Future<HoverInfo?> Function(int offset);
+
 /// where the language server found something wrong, by how bad it is
 class DiagnosticRanges {
   const DiagnosticRanges({
@@ -359,6 +373,34 @@ class EditorController extends ChangeNotifier {
 
   /// the fade of unused code has a key of its own, as it is not a color
   static const int _unnecessaryKey = 6;
+
+  /// the symbol that the pointer rests on, while what is said of it is shown
+  static const int _hoverKey = 7;
+
+  /// asks what the language server says of the symbol at an offset
+  HoverProvider? hoverProvider;
+
+  /// how the symbol under a popover is drawn behind the text: `0xAARRGGBB`
+  int hoverBackground = 0x4D44475A;
+
+  /// the range of the symbol that is lit, or null
+  AnchorRange? get hoverRange =>
+      _highlights.textHighlights[_hoverKey]?.ranges.firstOrNull;
+
+  /// lights the symbol in [range], or puts the light out for null
+  void setHoverRange(AnchorRange? range) {
+    // a view that is closed after its editor has nothing to put out
+    if (_disposed) {
+      return;
+    }
+    _highlights = _highlights.withTextHighlight(
+      _hoverKey,
+      range == null
+          ? null
+          : TextHighlight(HighlightStyle(background: hoverBackground), [range]),
+    );
+    _changed();
+  }
 
   /// the most that unused code can be faded
   static const double maxUnnecessaryCodeFade = 0.9;

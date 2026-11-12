@@ -10,7 +10,7 @@ import '../lsp/json_rpc.dart';
 import '../lsp/lsp_client.dart';
 import '../native/backend.dart';
 import '../native_editor/editor_controller.dart'
-    show DetailSeverity, DiagnosticDetail, DiagnosticRanges;
+    show DetailSeverity, DiagnosticDetail, DiagnosticRanges, HoverInfo;
 import 'tab_document.dart';
 
 /// the language server of the backend, told of the documents that flutter
@@ -71,6 +71,7 @@ class LuauLanguageService {
   void detach(NativeTabDocument document) {
     _documents.remove(document);
     _syncs.remove(document)?.close();
+    document.controller.hoverProvider = null;
   }
 
   void _open(NativeTabDocument document) {
@@ -81,6 +82,66 @@ class LuauLanguageService {
       languageId: 'luau',
     )..open();
     _syncs[document] = sync;
+    document.controller.hoverProvider = (offset) => _hover(document, offset);
+  }
+
+  /// what the server says of the symbol at [offset] of [document]: where the
+  /// symbol is, as the server says, and else the word that [offset] is in
+  Future<HoverInfo?> _hover(NativeTabDocument document, int offset) async {
+    final sync = _syncs[document];
+    final client = _client;
+    if (sync == null || client == null || !sync.isOpen) {
+      return null;
+    }
+    final buffer = document.controller.buffer;
+    final text = buffer.text;
+    final LspHover? hover;
+    try {
+      hover = await client.hover(
+        sync.uri,
+        LspDocumentSync.positionAt(text, offset),
+      );
+    } on Object catch (e) {
+      debugPrint('luau-lsp: hover failed ($e)');
+      return null;
+    }
+    // the text may have changed while the server was answering, and its answer
+    // is then of a text that is not there
+    if (hover == null || !sync.isOpen || !identical(buffer.text, text)) {
+      return null;
+    }
+    final range = hover.range;
+    final (start, end) = range == null
+        ? _wordAround(text.toString(), offset)
+        : diagnosticOffsets(text, range);
+    if (end <= start) {
+      return null;
+    }
+    return HoverInfo(
+      range: AnchorRange(
+        buffer.anchorAt(start, Bias.right),
+        buffer.anchorAt(end, Bias.left),
+      ),
+      markdown: hover.markdown,
+    );
+  }
+
+  /// the word that [offset] is in or at the end of, as the range of the symbol
+  /// when the server gives none
+  static (int, int) _wordAround(String text, int offset) {
+    bool word(int at) =>
+        at >= 0 &&
+        at < text.length &&
+        RegExp(r'[A-Za-z0-9_]').hasMatch(text[at]);
+    var start = offset;
+    var end = offset;
+    while (word(start - 1)) {
+      start--;
+    }
+    while (word(end)) {
+      end++;
+    }
+    return (start, end);
   }
 
   void _onDiagnostics(PublishedDiagnostics published) {

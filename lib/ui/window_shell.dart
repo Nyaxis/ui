@@ -411,6 +411,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     for (final tab in _tabs.tabs) {
       tab.document.controller
         ..occurrenceBackground = color
+        ..hoverBackground = theme.hover.toARGB32()
         ..diagnosticColors = diagnostics
         ..unnecessaryCodeFade = _editorSettings.value.unnecessaryCodeFade;
     }
@@ -708,6 +709,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       popoverScale: theme.uiFontSize / AppTheme.remPixels,
       popoverRadius: theme.rem(8),
       popoverSurface: theme.acrylic ? const Color(0x00000000) : theme.surface,
+      popoverBorder: theme.borderVariant,
+      popoverCodeBackground: theme.background,
       popoverMuted: theme.textDim,
       popoverSuccess: theme.string,
       // the palettes do not have one for a thumb that is pressed, so it is the

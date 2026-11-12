@@ -40,7 +40,14 @@ class EditorStyle {
     this.popoverScale = 1,
     this.popoverMuted = const Color(0xFF9399B2),
     this.popoverSuccess = const Color(0xFFA6E3A1),
+    this.popoverBorder = const Color(0xFF2C293D),
+    this.popoverCodeBackground = const Color(0xFF1E1E2E),
   });
+
+  /// the border of a popover that has no color of how bad something is, and
+  /// what the code in its text lies on
+  final Color popoverBorder;
+  final Color popoverCodeBackground;
 
   /// the size of the text of a popover is that of the interface's text, and
   /// its lines are this high, as a share of it; what else is in a popover is in

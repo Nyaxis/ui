@@ -66,69 +66,148 @@ Size popoverContentLimit({
 /// the space between a popover and the right edge of the editor
 const double popoverRightMargin = 8;
 
+/// the space between popovers that are one over the other, which is of pixels
+const double popoverGap = 10;
+
 /// where a popover of [size] goes for the place [target] in an [area]: directly
 /// above the row when it fits there, and otherwise directly below it. it is
 /// moved to the left, as far as it takes, to keep clear of the right edge. when
 /// it fits in neither place it is below, kept inside the area
-Offset placePopover(Rect target, Size size, Size area) {
-  final shift = math.min(
-    0.0,
-    area.width - popoverRightMargin - (target.left + size.width),
-  );
-  final x = target.left + shift;
+Offset placePopover(Rect target, Size size, Size area) =>
+    placePopovers(target, [size], area).single;
+
+/// where popovers of [sizes] go, one over the other with [popoverGap] between
+/// them, the first nearest the row: all of them above the row when they fit
+/// there, and otherwise all below it, and when they fit in neither place they
+/// are below, kept inside the area
+List<Offset> placePopovers(Rect target, List<Size> sizes, Size area) {
   final bounds = Offset.zero & area;
-  bool fits(Offset origin) {
-    final box = origin & size;
+  Offset origin(double y, Size size) => Offset(
+    target.left +
+        math.min(
+          0.0,
+          area.width - popoverRightMargin - (target.left + size.width),
+        ),
+    y,
+  );
+  bool fits(Offset at, Size size) {
+    final box = at & size;
     return box.left >= bounds.left &&
         box.top >= bounds.top &&
         box.right <= bounds.right &&
         box.bottom <= bounds.bottom;
   }
 
-  final above = Offset(x, target.top - size.height);
-  if (fits(above)) {
+  final above = <Offset>[];
+  var y = target.top;
+  for (final size in sizes) {
+    final at = origin(y - size.height, size);
+    above.add(at);
+    y = at.dy - popoverGap;
+  }
+  if (List.generate(
+    sizes.length,
+    (i) => fits(above[i], sizes[i]),
+  ).every((f) => f)) {
     return above;
   }
-  final below = Offset(x, target.bottom);
-  if (fits(below)) {
+  final below = <Offset>[];
+  y = target.bottom;
+  for (final size in sizes) {
+    final at = origin(y, size);
+    below.add(at);
+    y = at.dy + size.height + popoverGap;
+  }
+  if (List.generate(
+    sizes.length,
+    (i) => fits(below[i], sizes[i]),
+  ).every((f) => f)) {
     return below;
   }
-  return Offset(
-    below.dx.clamp(0.0, math.max(0.0, area.width - size.width)),
-    below.dy.clamp(0.0, math.max(0.0, area.height - size.height)),
-  );
+  return [
+    for (var i = 0; i < sizes.length; i++)
+      Offset(
+        below[i].dx.clamp(0.0, math.max(0.0, area.width - sizes[i].width)),
+        below[i].dy.clamp(0.0, math.max(0.0, area.height - sizes[i].height)),
+      ),
+  ];
 }
 
-class _PopoverPlacement extends SingleChildLayoutDelegate {
-  const _PopoverPlacement(this.target);
+class _PopoverPlacement extends MultiChildLayoutDelegate {
+  _PopoverPlacement(this.target, this.count);
 
   final Rect target;
+  final int count;
+
+  /// the ids of the blocks that fill the space between the popovers, which the
+  /// pointer is on, and not on the text under them; they start after the ids
+  /// of the popovers, which are their places in the list
+  static int gapId(int index) => _firstGapId + index;
+
+  static const int _firstGapId = 1000;
 
   @override
-  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
-      constraints.loosen();
+  void performLayout(Size size) {
+    final sizes = [
+      for (var i = 0; i < count; i++)
+        layoutChild(i, BoxConstraints.loose(size)),
+    ];
+    final origins = placePopovers(target, sizes, size);
+    for (var i = 0; i < count; i++) {
+      positionChild(i, origins[i]);
+    }
+    // the gap is on the side of a popover that the next one is on
+    for (var i = 0; i < count - 1; i++) {
+      final above = origins[i + 1].dy < origins[i].dy;
+      final width = sizes[i].width;
+      layoutChild(gapId(i), BoxConstraints.tight(Size(width, popoverGap)));
+      positionChild(
+        gapId(i),
+        Offset(
+          origins[i].dx,
+          above ? origins[i].dy - popoverGap : origins[i].dy + sizes[i].height,
+        ),
+      );
+    }
+  }
 
   @override
-  Offset getPositionForChild(Size size, Size childSize) =>
-      placePopover(target, childSize, size);
-
-  @override
-  bool shouldRelayout(_PopoverPlacement oldDelegate) =>
-      oldDelegate.target != target;
+  bool shouldRelayout(_PopoverPlacement oldDelegate) => true;
 }
 
-/// a popover for the place [target] of an editor, which fills the space that
-/// the editor is in. the pointer is only on it where the popover itself is
+/// popovers for the place [target] of an editor, which fills the space that
+/// the editor is in, one over the other, the first nearest the place. the
+/// pointer is only on them where they are, and in the gaps between them
 class PopoverLayer extends StatelessWidget {
-  const PopoverLayer({super.key, required this.target, required this.child});
+  const PopoverLayer({
+    super.key,
+    required this.target,
+    required this.children,
+    this.onGap,
+  });
 
   final Rect target;
-  final Widget child;
+  final List<Widget> children;
+
+  /// told when the pointer is in a gap between popovers
+  final VoidCallback? onGap;
 
   @override
-  Widget build(BuildContext context) => CustomSingleChildLayout(
-    delegate: _PopoverPlacement(target),
-    child: child,
+  Widget build(BuildContext context) => CustomMultiChildLayout(
+    delegate: _PopoverPlacement(target, children.length),
+    children: [
+      for (var i = 0; i < children.length; i++)
+        LayoutId(id: i, child: children[i]),
+      for (var i = 0; i < children.length - 1; i++)
+        LayoutId(
+          id: _PopoverPlacement.gapId(i),
+          child: MouseRegion(
+            opaque: true,
+            onHover: (_) => onGap?.call(),
+            child: const SizedBox.expand(),
+          ),
+        ),
+    ],
   );
 }
 

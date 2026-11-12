@@ -11,6 +11,7 @@ import 'editor_controller.dart';
 import 'editor_keys.dart';
 import 'editor_style.dart';
 import 'editor_text_input.dart';
+import 'hover_markdown.dart';
 import 'modifier_keys.dart';
 import 'render_editor.dart';
 import 'scrollbar_layout.dart';
@@ -88,11 +89,18 @@ class EditorViewState extends State<EditorView> {
   // what the language server found, shown for the text that the pointer rests
   // on
 
-  /// what is shown now
+  /// what is shown now: what the server found wrong at the place, and what it
+  /// says of the symbol there; either of them may be missing
   DiagnosticDetail? _popover;
+  HoverInfo? _info;
   final GlobalKey _popoverKey = GlobalKey();
+  final GlobalKey _infoKey = GlobalKey();
   Timer? _showTimer;
   Timer? _hideTimer;
+
+  /// grows when what was waited for is not to be shown, so that an answer that
+  /// comes after it is let go
+  int _hoverToken = 0;
 
   /// how near the pointer has been to the popover, as it goes toward it
   double? _closest;
@@ -101,9 +109,13 @@ class EditorViewState extends State<EditorView> {
   /// outlast
   int _selectionKey = 0;
 
-  /// whether a popover is shown
+  /// what the server found wrong, when it is shown
   @visibleForTesting
   DiagnosticDetail? get popover => _popover;
+
+  /// what the server says of a symbol, when it is shown
+  @visibleForTesting
+  HoverInfo? get info => _info;
 
   int _selectionsNow() => Object.hashAll([
     for (final s in widget.controller.selections.all) ...[s.start, s.end],
@@ -111,27 +123,54 @@ class EditorViewState extends State<EditorView> {
 
   /// takes the popover away, and what was about to show one
   void _hideHover() {
-    _showTimer?.cancel();
-    _showTimer = null;
+    _cancelShow();
     _hideTimer?.cancel();
     _hideTimer = null;
     _closest = null;
-    if (_popover == null) {
+    if (_popover == null && _info == null) {
       return;
     }
+    void clear() {
+      setState(() {
+        _popover = null;
+        _info = null;
+      });
+      widget.controller.setHoverRange(null);
+    }
+
     // a change of the editor can come while the frame is built, when a view
     // cannot be set
     if (SchedulerBinding.instance.schedulerPhase ==
         SchedulerPhase.persistentCallbacks) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _popover != null) {
-          setState(() => _popover = null);
+        if (mounted && (_popover != null || _info != null)) {
+          clear();
         }
       });
     } else {
-      setState(() => _popover = null);
+      clear();
     }
   }
+
+  /// lets go of what was waited for, and of the answer that is asked for
+  void _cancelShow() {
+    _showTimer?.cancel();
+    _showTimer = null;
+    _hoverToken++;
+  }
+
+  /// whether the offset is in the symbol that is shown
+  bool _inInfo(int offset) {
+    final info = _info;
+    if (info == null) {
+      return false;
+    }
+    final snapshot = widget.controller.buffer.snapshot;
+    return offset >= snapshot.offsetForAnchor(info.range.start) &&
+        offset <= snapshot.offsetForAnchor(info.range.end);
+  }
+
+  bool get _hoverShown => _popover != null || _info != null;
 
   /// the pointer is at [position] of the editor, and [global] on the screen;
   /// [position] is null when it is not on text
@@ -148,17 +187,28 @@ class EditorViewState extends State<EditorView> {
       _hideTimer?.cancel();
       _hideTimer = null;
       _closest = null;
-      if (_popover != null) {
+      // what is shown stays while the pointer is on the symbol that it is of,
+      // and when something wrong is shown, wherever on the text the pointer is;
+      // else it goes, and the place that the pointer is at is asked about
+      if (_popover != null || _inInfo(offset)) {
         return;
       }
-      _showTimer?.cancel();
+      if (_info != null) {
+        _hideHover();
+      }
+      _cancelShow();
       _selectionKey = _selectionsNow();
-      _showTimer = Timer(settings.delay, () => _showHover(offset));
+      // the server is asked for the symbol halfway through the wait, so that
+      // its answer is there when the wait is over
+      final early = settings.delay ~/ 2;
+      _showTimer = Timer(
+        settings.delay - early,
+        () => _askHover(offset, early),
+      );
       return;
     }
-    _showTimer?.cancel();
-    _showTimer = null;
-    if (_popover == null) {
+    _cancelShow();
+    if (!_hoverShown) {
       return;
     }
     if (!settings.sticky) {
@@ -173,36 +223,73 @@ class EditorViewState extends State<EditorView> {
     _hideTimer = Timer(settings.hidingDelay, _hideHover);
   }
 
-  void _showHover(int offset) {
+  /// asks the server about the symbol at [offset], and shows what it says, and
+  /// what it found wrong there, when [rest] has gone by
+  Future<void> _askHover(int offset, Duration rest) async {
     _showTimer = null;
     if (!mounted) {
       return;
     }
+    final token = _hoverToken;
+    final provider = widget.controller.hoverProvider;
+    Future<HoverInfo?> request() async {
+      try {
+        return await provider?.call(offset);
+      } on Object {
+        // a server that cannot say has said nothing
+        return null;
+      }
+    }
+
+    final asked = request();
+    await Future<void>.delayed(rest);
+    final info = await asked;
+    // the pointer has moved on, or the text has, while it was waited for
+    if (!mounted || token != _hoverToken || _selectionsNow() != _selectionKey) {
+      return;
+    }
+    _showHover(offset, info);
+  }
+
+  void _showHover(int offset, HoverInfo? info) {
     final detail = widget.controller.diagnosticAt(offset);
-    if (detail == null) {
+    if (detail == null && info == null) {
       return;
     }
     _selectionKey = _selectionsNow();
-    setState(() => _popover = detail);
+    setState(() {
+      _popover = detail;
+      _info = info;
+    });
+    widget.controller.setHoverRange(info?.range);
   }
 
   /// whether the pointer at [global] is not further from the popover than it
   /// has been, by more than four pixels, as it is when it goes toward it
   bool _gettingCloser(Offset global) {
-    final box = _popoverKey.currentContext?.findRenderObject();
-    if (box is! RenderBox || !box.attached || !box.hasSize) {
+    // the distance is to the nearest of the popovers that are shown
+    double? nearest;
+    for (final key in [_popoverKey, _infoKey]) {
+      final box = key.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.attached || !box.hasSize) {
+        continue;
+      }
+      final bounds = box.localToGlobal(Offset.zero) & box.size;
+      final dx = math.max(
+        0.0,
+        (global.dx - bounds.center.dx).abs() - bounds.width / 2,
+      );
+      final dy = math.max(
+        0.0,
+        (global.dy - bounds.center.dy).abs() - bounds.height / 2,
+      );
+      final distance = math.sqrt(dx * dx + dy * dy);
+      nearest = nearest == null ? distance : math.min(nearest, distance);
+    }
+    if (nearest == null) {
       return false;
     }
-    final bounds = box.localToGlobal(Offset.zero) & box.size;
-    final dx = math.max(
-      0.0,
-      (global.dx - bounds.center.dx).abs() - bounds.width / 2,
-    );
-    final dy = math.max(
-      0.0,
-      (global.dy - bounds.center.dy).abs() - bounds.height / 2,
-    );
-    final distance = math.sqrt(dx * dx + dy * dy);
+    final distance = nearest;
     final closest = _closest;
     if (closest != null && distance > closest + 4) {
       return false;
@@ -295,7 +382,7 @@ class EditorViewState extends State<EditorView> {
     final controller = widget.controller;
     // the popover does not outlast a change of where the selections are, which
     // is also what typing does
-    if ((_popover != null || _showTimer != null) &&
+    if ((_hoverShown || _showTimer != null) &&
         _selectionsNow() != _selectionKey) {
       _hideHover();
     }
@@ -340,7 +427,7 @@ class EditorViewState extends State<EditorView> {
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (_popover != null &&
+    if (_hoverShown &&
         event is KeyDownEvent &&
         event.logicalKey == LogicalKeyboardKey.escape) {
       _hideHover();
@@ -584,20 +671,26 @@ class EditorViewState extends State<EditorView> {
   @override
   void dispose() {
     _blink?.cancel();
-    _showTimer?.cancel();
+    _cancelShow();
     _hideTimer?.cancel();
     _input.detach();
     widget.controller.scrollbarHeld = null;
     widget.controller.removeListener(_onControllerChange);
+    // the symbol is not lit for a view that is gone
+    if (_info != null) {
+      widget.controller.setHoverRange(null);
+    }
     focusNode.removeListener(_onFocusChange);
     super.dispose();
   }
 
-  /// the popover, over the place that the diagnostic starts at, or null
+  /// the popovers, over the place that the diagnostic starts at, or else the
+  /// symbol, or null: what was found wrong is the nearest to the place
   Widget? _popoverLayer() {
     final detail = _popover;
+    final info = _info;
     final render = _render;
-    if (detail == null || render == null || !render.hasSize) {
+    if ((detail == null && info == null) || render == null || !render.hasSize) {
       return null;
     }
     final controller = widget.controller;
@@ -607,7 +700,12 @@ class EditorViewState extends State<EditorView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final start = controller.buffer.snapshot.offsetForAnchor(
-          detail.range.start,
+          (detail?.range ?? info!.range).start,
+        );
+        final limit = popoverContentLimit(
+          area: render.size,
+          charWidth: render.charWidth,
+          lineHeight: render.lineHeight,
         );
         var target = render.caretRectForOffset(start);
         // a place that is out of sight is at the nearest row that is in sight
@@ -622,24 +720,37 @@ class EditorViewState extends State<EditorView> {
         );
         return PopoverLayer(
           target: target,
-          child: KeyedSubtree(
-            key: _popoverKey,
-            child: DiagnosticPopover(
-              key: ObjectKey(detail),
-              detail: detail,
-              colors: controller.diagnosticColors,
-              style: widget.style,
-              contentLimit: popoverContentLimit(
-                area: render.size,
-                charWidth: render.charWidth,
-                lineHeight: render.lineHeight,
+          onGap: _onPopoverPointer,
+          children: [
+            if (detail != null)
+              KeyedSubtree(
+                key: _popoverKey,
+                child: DiagnosticPopover(
+                  key: ObjectKey(detail),
+                  detail: detail,
+                  colors: controller.diagnosticColors,
+                  style: widget.style,
+                  contentLimit: limit,
+                  onPointer: _onPopoverPointer,
+                  tooltip: widget.tooltip,
+                  scrollbarShow: widget.scrollbars.show,
+                  systemAutoHide: EditorController.systemHidesScrollbars,
+                ),
               ),
-              onPointer: _onPopoverPointer,
-              tooltip: widget.tooltip,
-              scrollbarShow: widget.scrollbars.show,
-              systemAutoHide: EditorController.systemHidesScrollbars,
-            ),
-          ),
+            if (info != null)
+              KeyedSubtree(
+                key: _infoKey,
+                child: InfoPopover(
+                  key: ObjectKey(info),
+                  info: info,
+                  style: widget.style,
+                  contentLimit: limit,
+                  onPointer: _onPopoverPointer,
+                  scrollbarShow: widget.scrollbars.show,
+                  systemAutoHide: EditorController.systemHidesScrollbars,
+                ),
+              ),
+          ],
         );
       },
     );
