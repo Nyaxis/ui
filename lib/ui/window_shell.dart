@@ -26,6 +26,7 @@ import '../theme/theme_controller.dart';
 import 'clickable.dart';
 import 'context_menu.dart';
 import 'dialog.dart';
+import 'elevation.dart' show isLightTheme;
 import 'hover_tooltip.dart';
 import 'picker.dart';
 import 'settings_view.dart';
@@ -333,6 +334,10 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   /// what the parser finds to color, as the grammar says
   String? _syntaxQuery;
 
+  /// the query of the pairs that are lit around the cursor, which the editor is
+  /// without when it cannot be read
+  String? _bracketsQuery;
+
   /// set when the parser cannot be used, which is not tried again
   bool _syntaxUnavailable = false;
   AppTheme? _syntaxFor;
@@ -349,6 +354,14 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       debugPrint('WindowShell: cannot read the syntax query ($e)');
       _syntaxUnavailable = true;
       return;
+    }
+    try {
+      _bracketsQuery = await rootBundle.loadString(
+        'native/tree_sitter/queries/luau/brackets.scm',
+      );
+    } catch (e) {
+      // the editor is without the lit pairs, and has all else
+      debugPrint('WindowShell: cannot read the query of pairs ($e)');
     }
     await _syntaxStyles.load();
     _tabs.addListener(_applySyntax);
@@ -382,6 +395,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
           controller.buffer,
           syntaxTheme,
           query,
+          bracketsText: _bracketsQuery,
           error: (error) => failure = error,
         );
         if (attached == null) {
@@ -415,6 +429,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     for (final tab in _tabs.tabs) {
       tab.document.controller
         ..occurrenceBackground = color
+        ..bracketBackground = isLightTheme(theme) ? 0x3B019C39 : 0x4B44FFAA
         ..hoverBackground = theme.hover.toARGB32()
         ..diagnosticColors = diagnostics
         ..unnecessaryCodeFade = _editorSettings.value.unnecessaryCodeFade;

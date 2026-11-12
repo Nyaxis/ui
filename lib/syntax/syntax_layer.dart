@@ -25,10 +25,31 @@ class SyntaxLayer implements SyntaxHighlights {
     TextBuffer buffer,
     SyntaxTheme theme,
     String queryText, {
+    String? bracketsText,
     void Function(String error)? error,
   }) {
-    final tree = SyntaxTree.create(buffer.text, queryText, error: error);
+    final tree = SyntaxTree.create(
+      buffer.text,
+      queryText,
+      bracketsText: bracketsText,
+      error: error,
+    );
     return tree == null ? null : SyntaxLayer._(buffer, tree, theme);
+  }
+
+  /// whether the layer is of the text of [buffer] now, which it is not for a
+  /// moment after an edit, before it has been told of it
+  bool isOf(BufferSnapshot buffer) => identical(buffer.text, _tree.text);
+
+  /// the ends of the smallest pair that has the text from [head] to [tail] in
+  /// it or at its edges, which is none when the layer is not of the text of
+  /// [buffer] now
+  ({int openStart, int openEnd, int closeStart, int closeEnd})?
+  enclosingBrackets(BufferSnapshot buffer, int head, int tail) {
+    if (!identical(buffer.text, _tree.text)) {
+      return null;
+    }
+    return _tree.enclosingBrackets(head, tail);
   }
 
   void _onChange(BufferChange _) {

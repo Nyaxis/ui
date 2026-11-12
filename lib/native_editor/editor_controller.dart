@@ -336,7 +336,107 @@ class EditorController extends ChangeNotifier {
   void notifyListeners() {
     _dropAutocloseRegions();
     _refreshOccurrences(notify: false);
+    _refreshMatchingBrackets();
     super.notifyListeners();
+  }
+
+  // the pair of brackets, or of the words of a block, that the cursor is in
+
+  /// whether the pair that the cursor is in is lit
+  bool highlightMatchingBrackets = true;
+
+  /// how the two ends of the pair are drawn behind the text: `0xAARRGGBB`
+  int get bracketBackground => _bracketBackground;
+
+  int _bracketBackground = 0x4B44FFAA;
+
+  set bracketBackground(int value) {
+    if (value == _bracketBackground) {
+      return;
+    }
+    _bracketBackground = value;
+    final lit = _highlights.textHighlights[_bracketsKey]?.ranges;
+    if (lit != null && lit.isNotEmpty) {
+      _setBrackets(lit);
+      _changed();
+    }
+  }
+
+  /// the highlights of the pair go under this key
+  static const int _bracketsKey = 8;
+
+  /// where the pair was looked for last: in which text, and at which place
+  Rope? _bracketsIn;
+  int? _bracketsAt;
+
+  /// the two ends of the pair that is lit, which are ranges of the text
+  List<AnchorRange> get matchingBrackets =>
+      _highlights.textHighlights[_bracketsKey]?.ranges ?? const [];
+
+  void _setBrackets(List<AnchorRange> ranges) {
+    _highlights = _highlights.withTextHighlight(
+      _bracketsKey,
+      ranges.isEmpty
+          ? null
+          : TextHighlight(
+              HighlightStyle(background: _bracketBackground),
+              ranges,
+            ),
+    );
+    // the rows that were laid out have the old highlights in them
+    _revision++;
+  }
+
+  /// lights the smallest pair that the cursor is in or at an edge of, which is
+  /// not done while something is selected, as the pair is of the cursor
+  void _refreshMatchingBrackets() {
+    final layer = _syntax;
+    final newest = selections.newest;
+    if (!highlightMatchingBrackets || layer == null || !newest.isEmpty) {
+      _bracketsIn = null;
+      _bracketsAt = null;
+      if (matchingBrackets.isNotEmpty) {
+        _setBrackets(const []);
+      }
+      return;
+    }
+    final snapshot = buffer.snapshot;
+    final head = newest.head;
+    if (identical(snapshot.text, _bracketsIn) && head == _bracketsAt) {
+      return;
+    }
+    if (!layer.isOf(snapshot)) {
+      // the layer is told of an edit after this is, and is looked at again
+      // when it has been
+      scheduleMicrotask(() {
+        if (!_disposed && identical(layer, _syntax)) {
+          final before = matchingBrackets;
+          _refreshMatchingBrackets();
+          if (!identical(before, matchingBrackets)) {
+            _changed();
+          }
+        }
+      });
+      return;
+    }
+    _bracketsIn = snapshot.text;
+    _bracketsAt = head;
+    final pair = layer.enclosingBrackets(snapshot, head, head);
+    final lit = matchingBrackets;
+    if (pair == null) {
+      if (lit.isNotEmpty) {
+        _setBrackets(const []);
+      }
+      return;
+    }
+    AnchorRange range(int start, int end) => AnchorRange(
+      buffer.anchorAt(start, Bias.right),
+      buffer.anchorAt(end, Bias.left),
+    );
+    _setBrackets([
+      range(pair.openStart, pair.openEnd),
+      range(pair.closeStart, pair.closeEnd),
+    ]);
   }
 
   // the other places in the text where the selected text is

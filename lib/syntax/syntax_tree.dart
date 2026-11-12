@@ -1,4 +1,5 @@
 import 'dart:ffi';
+import 'dart:math' as math;
 
 import 'package:ffi/ffi.dart';
 
@@ -51,11 +52,15 @@ class _Capture {
 /// the syntax tree of a text, kept up to date as the text changes, and what
 /// its query says of the parts of it
 class SyntaxTree {
-  SyntaxTree._(this._ts, this._parser, this.query);
+  SyntaxTree._(this._ts, this._parser, this.query, this._brackets);
 
   final TreeSitter _ts;
   final Pointer<Void> _parser;
   final SyntaxQuery query;
+
+  /// the query of the pairs, which is not there when none was given or it does
+  /// not compile
+  final SyntaxQuery? _brackets;
   Pointer<Void> _tree = nullptr;
   Rope _text = Rope.empty;
 
@@ -63,10 +68,13 @@ class SyntaxTree {
   Rope get text => _text;
 
   /// the tree of [text] with [queryText] as its highlight query, or null when
-  /// the parser library is not there or the query does not compile
+  /// the parser library is not there or the query does not compile.
+  /// [bracketsText] is the query of the pairs, whose ends are captured as
+  /// `open` and `close`; the tree is made without it when it does not compile
   static SyntaxTree? create(
     Rope text,
     String queryText, {
+    String? bracketsText,
     void Function(String error)? error,
   }) {
     final ts = TreeSitter.instance;
@@ -85,9 +93,84 @@ class SyntaxTree {
       error?.call('the language does not fit the parser library');
       return null;
     }
-    final tree = SyntaxTree._(ts, parser, query);
+    final brackets = bracketsText == null
+        ? null
+        : SyntaxQuery.compile(ts, bracketsText);
+    final tree = SyntaxTree._(ts, parser, query, brackets);
     tree._parse(text);
     return tree;
+  }
+
+  /// the pair of ends, as the ranges of the two, that is the smallest that has
+  /// the text from [head] to [tail] in it, or at an edge of it: the opening
+  /// starts at or before [head], and the closing ends at or after [tail]. of
+  /// pairs that are as big, the one that the query has later. null when no pair
+  /// has it, or there is no query of pairs
+  ({int openStart, int openEnd, int closeStart, int closeEnd})?
+  enclosingBrackets(int head, int tail) {
+    final brackets = _brackets;
+    if (brackets == null || _tree == nullptr) {
+      return null;
+    }
+    final names = brackets.captureNames;
+    final open = names.indexOf('open');
+    final close = names.indexOf('close');
+    if (open < 0 || close < 0) {
+      return null;
+    }
+    ({int openStart, int openEnd, int closeStart, int closeEnd})? best;
+    var bestLength = 0;
+    final cursor = _ts.cursorNew();
+    final match = malloc<TSQueryMatch>();
+    try {
+      // the pairs that overlap, or are next to, the place
+      _ts.cursorSetByteRange(
+        cursor,
+        math.max(0, head - 1) * 2,
+        math.min(_text.length, tail + 1) * 2,
+      );
+      _ts.cursorExec(cursor, brackets.pointer, _ts.treeRootNode(_tree));
+      while (_ts.cursorNextMatch(cursor, match)) {
+        int? openStart;
+        int? openEnd;
+        int? closeStart;
+        int? closeEnd;
+        final found = match.ref.captures;
+        for (var i = 0; i < match.ref.captureCount; i++) {
+          final c = found[i];
+          final from = _ts.nodeStartByte(c.node) ~/ 2;
+          final to = _ts.nodeEndByte(c.node) ~/ 2;
+          if (c.index == open && openStart == null) {
+            openStart = from;
+            openEnd = to;
+          } else if (c.index == close && closeStart == null) {
+            closeStart = from;
+            closeEnd = to;
+          }
+        }
+        if (openStart == null || closeStart == null) {
+          continue;
+        }
+        if (openStart > head || closeEnd! < tail) {
+          continue;
+        }
+        final length = closeEnd - openStart;
+        if (best != null && length > bestLength) {
+          continue;
+        }
+        best = (
+          openStart: openStart,
+          openEnd: openEnd!,
+          closeStart: closeStart,
+          closeEnd: closeEnd,
+        );
+        bestLength = length;
+      }
+    } finally {
+      malloc.free(match);
+      _ts.cursorDelete(cursor);
+    }
+    return best;
   }
 
   /// makes the tree the one of [text], which is [old] after the edits of
@@ -319,5 +402,6 @@ class SyntaxTree {
     }
     _ts.parserDelete(_parser);
     query.dispose();
+    _brackets?.dispose();
   }
 }
