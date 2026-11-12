@@ -163,6 +163,27 @@ void main() {
       }
     });
 
+    testWidgets('the hover popover has the section and the titles there', (
+      tester,
+    ) async {
+      await pump(tester);
+      expect(find.text('Hover Popover'), findsOneWidget);
+      const settings = {
+        'Enabled': 'Show the informational hover box when moving the mouse over symbols in the editor.',
+        'Delay': 'Time to wait in milliseconds before showing the informational hover box.',
+        'Sticky': 'Whether the hover popover sticks when the mouse moves toward it, allowing interaction with its contents.',
+        'Hiding Delay': 'Time to wait in milliseconds before hiding the hover popover after the mouse moves away.',
+      };
+      for (final MapEntry(key: title, value: description) in settings.entries) {
+        expect(find.text(title), findsOneWidget, reason: title);
+        expect(find.text(description), findsOneWidget, reason: title);
+      }
+      // the section goes between the scrolling and the gutter
+      double top(String text) => tester.getTopLeft(find.text(text)).dy;
+      expect(top('Hover Popover'), greaterThan(top('Scrolling')));
+      expect(top('Hover Popover'), lessThan(top('Gutter')));
+    });
+
     testWidgets('the choices of auto save are named as there', (tester) async {
       AutoSave? chosen;
       await pump(tester, onAutoSave: (a) => chosen = a);
