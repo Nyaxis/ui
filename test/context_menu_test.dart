@@ -93,6 +93,110 @@ void main() {
     expect(window.contains(box.bottomRight - const Offset(1, 1)), isTrue);
   });
 
+  group('where it opens', () {
+    const window = Size(800, 600);
+    const size = Size(200, 100);
+
+    test('has its top left at the position when it is inside the window', () {
+      expect(
+        placeContextMenu(const Offset(300, 200), size, window),
+        const Offset(300, 200),
+      );
+    });
+
+    test('is not moved from near an edge when it does not go past it', () {
+      // three pixels from the left and the top is inside, so it stays
+      expect(
+        placeContextMenu(const Offset(3, 3), size, window),
+        const Offset(3, 3),
+      );
+      expect(
+        placeContextMenu(const Offset(598, 498), size, window),
+        const Offset(598, 498),
+      );
+    });
+
+    test(
+      'is eight pixels from the right and bottom edges when it goes past',
+      () {
+        expect(
+          placeContextMenu(const Offset(700, 560), size, window),
+          const Offset(592, 492),
+        );
+      },
+    );
+
+    test(
+      'is eight pixels from the left and the top when it goes past them',
+      () {
+        expect(
+          placeContextMenu(
+            const Offset(20, 10),
+            size,
+            window,
+            anchor: ContextMenuAnchor.bottomRight,
+          ),
+          const Offset(8, 8),
+        );
+      },
+    );
+
+    test('has its bottom left at the position of a button below it', () {
+      expect(
+        placeContextMenu(
+          const Offset(300, 580),
+          size,
+          window,
+          anchor: ContextMenuAnchor.bottomLeft,
+        ),
+        const Offset(300, 480),
+      );
+    });
+
+    test('has its bottom right at the position of a button on the right', () {
+      expect(
+        placeContextMenu(
+          const Offset(780, 580),
+          size,
+          window,
+          anchor: ContextMenuAnchor.bottomRight,
+        ),
+        const Offset(580, 480),
+      );
+    });
+
+    test(
+      'is at the margin of the left and the top when bigger than the window',
+      () {
+        expect(
+          placeContextMenu(
+            const Offset(100, 100),
+            const Size(900, 700),
+            window,
+          ),
+          const Offset(8, 8),
+        );
+      },
+    );
+
+    testWidgets('opens above a button when the bottom left is at its top', (
+      tester,
+    ) async {
+      await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+      showContextMenu(
+        tester.element(find.byType(Scaffold)),
+        position: const Offset(100, 580),
+        anchor: ContextMenuAnchor.bottomLeft,
+        entries: [ContextMenuItem('Left', onPressed: () {})],
+        theme: theme,
+      );
+      await tester.pump();
+      await tester.pump();
+      final box = tester.getRect(find.byType(DecoratedBox).first);
+      expect(box.bottomLeft, const Offset(100, 580));
+    });
+  });
+
   group('how it looks', () {
     testWidgets('is at least 200 wide, and an item is a line of text high', (
       tester,

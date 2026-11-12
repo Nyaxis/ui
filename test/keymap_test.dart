@@ -46,6 +46,7 @@ void main() {
     expect(
       show(Keymap.resolve([defaults])),
       'ctrl-s=workspace::Save '
+      'ctrl-n=workspace::NewFile '
       'ctrl-alt-n=workspace::Open '
       'ctrl-g=go_to_line::Toggle '
       'ctrl-1=workspace::ShowEditor '
@@ -57,14 +58,45 @@ void main() {
       'ctrl-0=zed::ResetBufferFontSize '
       'ctrl-k m=language_selector::Toggle '
       'ctrl-k n=encoding_selector::Toggle '
+      'ctrl-f4=pane::CloseActiveItem '
+      'ctrl-w=pane::CloseActiveItem '
       'ctrl-alt-shift-t=pane::CloseOtherItems '
       'ctrl-k e=pane::CloseItemsToTheLeft '
       'ctrl-k t=pane::CloseItemsToTheRight '
+      'ctrl-k u=pane::CloseCleanItems '
       'ctrl-k w=pane::CloseAllItems '
-      'ctrl-k p=workspace::CopyPath '
-      'ctrl-k r=workspace::RevealInFileManager '
+      'alt-shift-c=workspace::CopyPath '
+      'ctrl-k ctrl-shift-c=workspace::CopyRelativePath '
+      'ctrl-k p=editor::CopyPath '
+      'ctrl-k r=editor::RevealInFileManager '
       'ctrl-k shift-enter=pane::TogglePinTab',
     );
+  });
+
+  test('the tab menu shows the keys of the actions that it names', () {
+    final defaults = File('assets/keymaps/default.json').readAsStringSync();
+    final keymap = Keymap.resolve([defaults]);
+    String? keys(String action) {
+      // the last binding of an action is the one that counts
+      final found = [
+        for (final b in keymap)
+          if (b.action == action) b.keys,
+      ];
+      return found.isEmpty ? null : found.last;
+    }
+
+    expect(keys('pane::CloseActiveItem'), 'ctrl-w');
+    expect(keys('pane::CloseOtherItems'), 'ctrl-alt-shift-t');
+    expect(keys('pane::CloseItemsToTheLeft'), 'ctrl-k e');
+    expect(keys('pane::CloseItemsToTheRight'), 'ctrl-k t');
+    expect(keys('pane::CloseCleanItems'), 'ctrl-k u');
+    expect(keys('pane::CloseAllItems'), 'ctrl-k w');
+    expect(keys('workspace::CopyPath'), 'alt-shift-c');
+    expect(keys('workspace::CopyRelativePath'), 'ctrl-k ctrl-shift-c');
+    expect(keys('editor::RevealInFileManager'), 'ctrl-k r');
+    expect(keys('pane::TogglePinTab'), 'ctrl-k shift-enter');
+    expect(keys('workspace::NewFile'), 'ctrl-n');
+    expect(keys('language_selector::Toggle'), 'ctrl-k m');
   });
 
   test('keymaps apply in order, with comments and trailing commas', () {

@@ -111,15 +111,57 @@ class ContextMenuColors {
   Color get selected => theme.chosen.withValues(alpha: 0x66 / 255);
 }
 
-/// opens a menu of [entries] with its corner at [position], in the overlay's
-/// coordinates, moved to stay inside it. the menu closes when an item is chosen
-/// or anything else is pressed. [keysFor] finds the keys of an item's action,
-/// such as [Keymap.keysFor]. [onClosed] runs once the menu is gone
+/// which corner of a menu is at the place that it opens at: the top left when
+/// it opens at the pointer, and the bottom left or right when it opens above a
+/// button, with that corner at the button's top left or right
+enum ContextMenuAnchor {
+  topLeft,
+  topRight,
+  bottomLeft,
+  bottomRight;
+
+  bool get _right => this == topRight || this == bottomRight;
+  bool get _bottom => this == bottomLeft || this == bottomRight;
+}
+
+/// where the menu's top left is, for a menu of [size] whose [anchor] corner is
+/// at [position] in a window of [window]. a menu is moved only when it goes
+/// past an edge of the window, and then so that it is [margin] from it; one
+/// that is bigger than the window is at the margin of its left and top
+Offset placeContextMenu(
+  Offset position,
+  Size size,
+  Size window, {
+  ContextMenuAnchor anchor = ContextMenuAnchor.topLeft,
+  double margin = ContextMenuMetrics.windowEdge,
+}) {
+  var x = position.dx - (anchor._right ? size.width : 0);
+  var y = position.dy - (anchor._bottom ? size.height : 0);
+  if (x + size.width > window.width) {
+    x -= x + size.width - window.width + margin;
+  }
+  if (x < 0) {
+    x = margin;
+  }
+  if (y + size.height > window.height) {
+    y -= y + size.height - window.height + margin;
+  }
+  if (y < 0) {
+    y = margin;
+  }
+  return Offset(x.roundToDouble(), y.roundToDouble());
+}
+
+/// opens a menu of [entries] with its [anchor] corner at [position], in the
+/// overlay's coordinates, moved to stay inside it. the menu closes when an item
+/// is chosen or anything else is pressed. [keysFor] finds the keys of an item's
+/// action, such as [Keymap.keysFor]. [onClosed] runs once the menu is gone
 void showContextMenu(
   BuildContext context, {
   required Offset position,
   required List<ContextMenuEntry> entries,
   required AppTheme theme,
+  ContextMenuAnchor anchor = ContextMenuAnchor.topLeft,
   String? Function(String action)? keysFor,
   VoidCallback? onClosed,
 }) {
@@ -127,6 +169,7 @@ void showContextMenu(
   overlay = OverlayEntry(
     builder: (context) => _MenuLayer(
       position: position,
+      anchor: anchor,
       entries: entries,
       theme: theme,
       keysFor: keysFor,
@@ -142,6 +185,7 @@ void showContextMenu(
 class _MenuLayer extends StatefulWidget {
   const _MenuLayer({
     required this.position,
+    required this.anchor,
     required this.entries,
     required this.theme,
     required this.keysFor,
@@ -149,6 +193,7 @@ class _MenuLayer extends StatefulWidget {
   });
 
   final Offset position;
+  final ContextMenuAnchor anchor;
   final List<ContextMenuEntry> entries;
   final AppTheme theme;
   final String? Function(String action)? keysFor;
@@ -378,7 +423,11 @@ class _MenuLayerState extends State<_MenuLayer> with WindowListener {
             ),
           ),
           CustomSingleChildLayout(
-            delegate: _MenuLayout(widget.position, measuring: natural == null),
+            delegate: _MenuLayout(
+              widget.position,
+              widget.anchor,
+              measuring: natural == null,
+            ),
             child: Material(
               type: MaterialType.transparency,
               child: DefaultTextStyle(
@@ -426,12 +475,13 @@ class _MenuLayerState extends State<_MenuLayer> with WindowListener {
   }
 }
 
-/// puts the menu's corner at the position, or as close as keeps it inside and
-/// off the window's edge
+/// puts the menu's [anchor] corner at the position, and moves it when it goes
+/// past an edge of the window
 class _MenuLayout extends SingleChildLayoutDelegate {
-  _MenuLayout(this.position, {required this.measuring});
+  _MenuLayout(this.position, this.anchor, {required this.measuring});
 
   final Offset position;
+  final ContextMenuAnchor anchor;
 
   /// whether the menu is laid out to find how high its items are all together,
   /// which they are free to be then
@@ -442,21 +492,15 @@ class _MenuLayout extends SingleChildLayoutDelegate {
       ? BoxConstraints(maxWidth: constraints.maxWidth)
       : constraints.loosen();
 
-  double _fit(double at, double space, double child) {
-    const edge = ContextMenuMetrics.windowEdge;
-    final high = space - child - edge;
-    return at.clamp(edge, high < edge ? edge : high).toDouble();
-  }
-
   @override
-  Offset getPositionForChild(Size size, Size childSize) => Offset(
-    _fit(position.dx, size.width, childSize.width),
-    _fit(position.dy, size.height, childSize.height),
-  );
+  Offset getPositionForChild(Size size, Size childSize) =>
+      placeContextMenu(position, childSize, size, anchor: anchor);
 
   @override
   bool shouldRelayout(_MenuLayout oldDelegate) =>
-      oldDelegate.position != position || oldDelegate.measuring != measuring;
+      oldDelegate.position != position ||
+      oldDelegate.anchor != anchor ||
+      oldDelegate.measuring != measuring;
 }
 
 class _Item extends StatefulWidget {

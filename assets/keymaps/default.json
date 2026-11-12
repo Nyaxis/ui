@@ -3,6 +3,7 @@
     "context": "Workspace",
     "bindings": {
       "ctrl-s": "workspace::Save",
+      "ctrl-n": "workspace::NewFile",
       "ctrl-alt-n": "workspace::Open",
       "ctrl-g": "go_to_line::Toggle",
       "ctrl-1": "workspace::ShowEditor",
@@ -14,12 +15,17 @@
       "ctrl-0": "zed::ResetBufferFontSize",
       "ctrl-k m": "language_selector::Toggle",
       "ctrl-k n": "encoding_selector::Toggle",
+      "ctrl-f4": "pane::CloseActiveItem",
+      "ctrl-w": "pane::CloseActiveItem",
       "ctrl-alt-shift-t": "pane::CloseOtherItems",
       "ctrl-k e": "pane::CloseItemsToTheLeft",
       "ctrl-k t": "pane::CloseItemsToTheRight",
+      "ctrl-k u": "pane::CloseCleanItems",
       "ctrl-k w": "pane::CloseAllItems",
-      "ctrl-k p": "workspace::CopyPath",
-      "ctrl-k r": "workspace::RevealInFileManager",
+      "shift-alt-c": "workspace::CopyPath",
+      "ctrl-k ctrl-shift-c": "workspace::CopyRelativePath",
+      "ctrl-k p": "editor::CopyPath",
+      "ctrl-k r": "editor::RevealInFileManager",
       "ctrl-k shift-enter": "pane::TogglePinTab"
     }
   }

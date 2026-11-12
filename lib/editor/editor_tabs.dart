@@ -371,6 +371,15 @@ class EditorTabs extends ChangeNotifier with WindowListener {
   Future<void> closeAll() =>
       _closeAll([for (var i = tabs.length - 1; i >= 0; i--) i]);
 
+  /// whether a tab has no unsaved changes
+  bool get hasCleanTabs => tabs.any((tab) => !tab.dirty);
+
+  /// closes the tabs that have no unsaved changes, and keeps the others
+  Future<void> closeClean() => _closeAll([
+    for (var i = tabs.length - 1; i >= 0; i--)
+      if (!tabs[i].dirty) i,
+  ]);
+
   /// closes the tabs at [indexes], highest first, after asking about the ones
   /// with unsaved changes; cancelling closes none
   Future<void> _closeAll(List<int> indexes, {bool single = false}) async {

@@ -102,6 +102,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
   final _editorKey = GlobalKey();
 
   final _tabs = EditorTabs();
+  final _sidebarButtonKey = GlobalKey();
   final _keymap = Keymap();
   Backend? _backend;
   LuauLanguageService? _luau;
@@ -142,7 +143,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     action: 'line_ending_selector::Toggle',
     onPressed: _openLineEndingPicker,
   );
-  late final _language = _BottomButton('language', 'Language');
+  late final _language = _BottomButton(
+    'language',
+    'Select Language',
+    action: 'language_selector::Toggle',
+  );
   late final _sidebar = _BottomButton(
     'sidebar',
     'Toggle Sidebar',
@@ -470,11 +475,18 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       () => _tabs.closeRight(_tabs.active),
     );
     _keymap.on('pane::CloseAllItems', _tabs.closeAll);
-    _keymap.on('workspace::CopyPath', () => _tabs.copyPath(_tabs.active));
+    _keymap.on('workspace::NewFile', _tabs.newTab);
+    _keymap.on('pane::CloseActiveItem', () => _tabs.close(_tabs.active));
+    _keymap.on('pane::CloseCleanItems', _tabs.closeClean);
+    // the menu of a tab and the keys have each their own name for these
+    for (final name in ['workspace::CopyPath', 'editor::CopyPath']) {
+      _keymap.on(name, () => _tabs.copyPath(_tabs.active));
+    }
     _keymap.on(
-      'workspace::RevealInFileManager',
-      () => _tabs.reveal(_tabs.active),
+      'workspace::CopyRelativePath',
+      () => _tabs.copyPath(_tabs.active, relative: true),
     );
+    _keymap.on('editor::RevealInFileManager', () => _tabs.reveal(_tabs.active));
     _keymap.on('workspace::ShowEditor', () async => _showView(_View.editor));
     _keymap.on(
       'workspace::ShowSettings',
@@ -840,7 +852,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       keysFor: _keymap.keysFor,
       onClosed: () => setState(() => _newMenuOpen = false),
       entries: [
-        ContextMenuItem('New File', onPressed: _tabs.newTab),
+        ContextMenuItem(
+          'New File',
+          action: 'workspace::NewFile',
+          onPressed: _tabs.newTab,
+        ),
         ContextMenuItem(
           'Open File',
           action: 'workspace::Open',
@@ -863,7 +879,11 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       theme: theme,
       keysFor: _keymap.keysFor,
       entries: [
-        ContextMenuItem('Close', onPressed: () => _tabs.close(index)),
+        ContextMenuItem(
+          'Close',
+          action: 'pane::CloseActiveItem',
+          onPressed: () => _tabs.close(index),
+        ),
         ContextMenuItem(
           'Close Others',
           action: 'pane::CloseOtherItems',
@@ -886,28 +906,35 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
         ),
         const ContextMenuSeparator(),
         ContextMenuItem(
+          'Close Clean',
+          action: 'pane::CloseCleanItems',
+          onPressed: _tabs.hasCleanTabs ? _tabs.closeClean : null,
+        ),
+        ContextMenuItem(
           'Close All',
           action: 'pane::CloseAllItems',
           onPressed: _tabs.closeAll,
         ),
-        const ContextMenuSeparator(),
-        ContextMenuItem(
-          'Copy Path',
-          action: 'workspace::CopyPath',
-          onPressed: hasFile ? () => _tabs.copyPath(index) : null,
-        ),
-        ContextMenuItem(
-          'Copy Relative Path',
-          onPressed: hasFile
-              ? () => _tabs.copyPath(index, relative: true)
-              : null,
-        ),
-        const ContextMenuSeparator(),
-        ContextMenuItem(
-          'Reveal in File Explorer',
-          action: 'workspace::RevealInFileManager',
-          onPressed: hasFile ? () => _tabs.reveal(index) : null,
-        ),
+        // a tab with no file has no path to copy and nothing to reveal
+        if (hasFile) ...[
+          const ContextMenuSeparator(),
+          ContextMenuItem(
+            'Copy Path',
+            action: 'workspace::CopyPath',
+            onPressed: () => _tabs.copyPath(index),
+          ),
+          ContextMenuItem(
+            'Copy Relative Path',
+            action: 'workspace::CopyRelativePath',
+            onPressed: () => _tabs.copyPath(index, relative: true),
+          ),
+          const ContextMenuSeparator(),
+          ContextMenuItem(
+            'Reveal in File Explorer',
+            action: 'editor::RevealInFileManager',
+            onPressed: () => _tabs.reveal(index),
+          ),
+        ],
         const ContextMenuSeparator(),
         ContextMenuItem(
           'Pin Tab',
@@ -1106,11 +1133,17 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
 
   /// the menu of a bottom bar button: the side it can be docked to, and hiding
   /// it when it can be hidden
-  void _showButtonMenu(AppTheme theme, _BottomButton button, Offset position) {
+  void _showButtonMenu(
+    AppTheme theme,
+    _BottomButton button,
+    Offset position, {
+    ContextMenuAnchor anchor = ContextMenuAnchor.topLeft,
+  }) {
     final dock = button.dock;
     showContextMenu(
       context,
       position: position,
+      anchor: anchor,
       theme: theme,
       entries: [
         if (dock != null)
@@ -1150,9 +1183,27 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
     );
     // the icon is drawn for the left, and mirrored for the right
     final sidebarButton = GestureDetector(
-      onSecondaryTapUp: (details) =>
-          _showButtonMenu(theme, _sidebar, details.globalPosition),
+      // the menu opens above the button, with its corner at the button's top
+      // corner on the side that it is docked to
+      onSecondaryTapUp: (details) {
+        final box = _sidebarButtonKey.currentContext?.findRenderObject();
+        final right = dock == _Dock.right;
+        if (box is! RenderBox || !box.attached) {
+          _showButtonMenu(theme, _sidebar, details.globalPosition);
+          return;
+        }
+        final top = box.localToGlobal(Offset.zero);
+        _showButtonMenu(
+          theme,
+          _sidebar,
+          right ? top + Offset(box.size.width, 0) : top,
+          anchor: right
+              ? ContextMenuAnchor.bottomRight
+              : ContextMenuAnchor.bottomLeft,
+        );
+      },
       child: Transform.flip(
+        key: _sidebarButtonKey,
         flipX: dock == _Dock.right,
         child: _BarButton(
           label: _sidebar.label,
