@@ -14,6 +14,7 @@ class AppTheme {
     this.fontSizeHeading = 16,
     this.fontSizeBody = 13,
     this.fontSizeCaption = 11,
+    this.uiFontSize = remPixels,
     this.background = const Color(0xff1e1e2e),
     this.titleBar = const Color(0xff11111b),
     this.surface = const Color(0xff181825),
@@ -61,6 +62,18 @@ class AppTheme {
   final double fontSizeHeading;
   final double fontSizeBody;
   final double fontSizeCaption;
+
+  /// the size of the text of the interface that the menus, tooltips, dialogs,
+  /// pickers and popovers are in, and what a rem is: their sizes are in rems,
+  /// so that all of them change with it
+  final double uiFontSize;
+
+  /// the pixels of a rem when the interface's text is at its default size
+  static const double remPixels = 16;
+
+  /// [pixels], which are of a rem at the default size, as they are at the size
+  /// of the interface's text
+  double rem(double pixels) => pixels * uiFontSize / remPixels;
 
   final Color background;
 
@@ -184,6 +197,7 @@ class AppTheme {
     double? fontSizeHeading,
     double? fontSizeBody,
     double? fontSizeCaption,
+    double? uiFontSize,
     Color? background,
     Color? titleBar,
     Color? surface,
@@ -227,6 +241,7 @@ class AppTheme {
       fontSizeHeading: fontSizeHeading ?? this.fontSizeHeading,
       fontSizeBody: fontSizeBody ?? this.fontSizeBody,
       fontSizeCaption: fontSizeCaption ?? this.fontSizeCaption,
+      uiFontSize: uiFontSize ?? this.uiFontSize,
       background: background ?? this.background,
       titleBar: titleBar ?? this.titleBar,
       surface: surface ?? this.surface,
@@ -311,6 +326,7 @@ class AppTheme {
           (sizes['body'] as num?)?.toDouble() ?? _fallback.fontSizeBody,
       fontSizeCaption:
           (sizes['caption'] as num?)?.toDouble() ?? _fallback.fontSizeCaption,
+      uiFontSize: (sizes['ui'] as num?)?.toDouble() ?? _fallback.uiFontSize,
       acrylic: json['acrylic'] is bool
           ? json['acrylic'] as bool
           : _fallback.acrylic,

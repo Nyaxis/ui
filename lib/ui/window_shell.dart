@@ -697,11 +697,13 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       // a theme, so the one of strings is used
       popoverText: TextStyle(
         fontFamily: theme.fontFamily,
-        fontSize: EditorStyle.popoverFontSize,
+        fontSize: theme.uiFontSize,
         height: EditorStyle.popoverLineHeight,
         fontWeight: FontWeight.w400,
         color: theme.textPrimary,
       ),
+      popoverScale: theme.uiFontSize / AppTheme.remPixels,
+      popoverRadius: theme.rem(8),
       popoverSurface: theme.acrylic ? const Color(0x00000000) : theme.surface,
       popoverMuted: theme.textDim,
       popoverSuccess: theme.string,
@@ -727,6 +729,8 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       showLineNumbers: prefs.lineNumbers,
       scrollbars: prefs.scrollbar,
       hover: prefs.hover,
+      tooltip: (message, child) =>
+          _tip(theme: theme, label: message, keys: null, child: child),
       mouseWheelZoom: prefs.mouseWheelZoom,
       onZoom: _zoom,
       autofocus: true,

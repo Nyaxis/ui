@@ -207,8 +207,34 @@ void main() {
       // the item, and four pixels above and below it, and the border
       expect(
         panel.height,
-        closeTo(ContextMenuMetrics.itemHeight + 2 * 4 + 2, 0.5),
+        closeTo(ContextMenuMetrics(theme).itemHeight + 2 * 4 + 2, 0.5),
       );
+    });
+
+    testWidgets('goes with the size of the interface, as everything in rems', (
+      tester,
+    ) async {
+      Future<Rect> panel(AppTheme size) async {
+        await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+        showContextMenu(
+          tester.element(find.byType(Scaffold)),
+          position: const Offset(20, 20),
+          entries: [ContextMenuItem('A', onPressed: () {})],
+          theme: size,
+        );
+        await tester.pump();
+        final rect = tester.getRect(find.byType(DecoratedBox).first);
+        await tester.tapAt(const Offset(700, 500));
+        await tester.pump();
+        return rect;
+      }
+
+      final normal = await panel(theme);
+      final bigger = await panel(theme.copyWith(uiFontSize: 20));
+      // the room around an item and its height go with the size; the least
+      // width of 200 does not
+      expect(bigger.height, greaterThan(normal.height * 1.2));
+      expect(bigger.width, normal.width);
     });
 
     testWidgets('is as wide as its widest item when that is more than 200', (
@@ -251,7 +277,7 @@ void main() {
       final b = tester.getRect(find.text('B'));
       expect(
         b.top - a.top,
-        closeTo(ContextMenuMetrics.itemHeight + 6 + 1 + 6, 0.5),
+        closeTo(ContextMenuMetrics(theme).itemHeight + 6 + 1 + 6, 0.5),
       );
     });
 

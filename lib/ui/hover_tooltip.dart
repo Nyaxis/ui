@@ -8,32 +8,35 @@ import '../editor/keymap.dart';
 import '../theme/app_theme.dart';
 import 'elevation.dart';
 
-/// how a tooltip looks and when it comes: sizes in pixels
+/// how a tooltip looks and when it comes: what is in rems goes with the size of
+/// the interface's text, which [AppTheme.rem] says
 class TooltipMetrics {
-  const TooltipMetrics._();
+  const TooltipMetrics(this.theme);
+
+  final AppTheme theme;
 
   /// how long the pointer is on what has the tooltip before it is shown, from
   /// the first time that it moves there
   static const Duration showDelay = Duration(milliseconds: 500);
 
-  /// between the pointer and the tooltip, which has room of its own above and
-  /// to the left so that it does not come up under the pointer
+  /// between the pointer and the tooltip, in pixels, which has room of its own
+  /// above and to the left so that it does not come up under the pointer
   static const double pointerGap = 1;
-  static const double roomLeft = 8;
-  static const double roomTop = 10;
+  double get roomLeft => theme.rem(8);
+  double get roomTop => theme.rem(10);
 
   /// inside the panel
-  static const double paddingX = 8;
-  static const double paddingY = 4;
+  double get paddingX => theme.rem(8);
+  double get paddingY => theme.rem(4);
 
   /// the most that the title and the line under it are wide
-  static const double maxWidth = 288;
+  double get maxWidth => theme.rem(288);
 
   /// between the title and the keys
-  static const double keysGap = 16;
-  static const double radius = 8;
-  static const double fontSize = 14;
-  static const double metaSize = 12;
+  double get keysGap => theme.rem(16);
+  double get radius => theme.rem(8);
+  double get fontSize => theme.rem(14);
+  double get metaSize => theme.rem(12);
   static const double lineHeight = 1.618;
 }
 
@@ -105,23 +108,21 @@ class TooltipPanel extends StatelessWidget {
     );
     final keys = this.keys;
     final meta = this.meta;
+    final metrics = TooltipMetrics(theme);
     return Padding(
-      padding: const EdgeInsets.only(
-        left: TooltipMetrics.roomLeft,
-        top: TooltipMetrics.roomTop,
-      ),
+      padding: EdgeInsets.only(left: metrics.roomLeft, top: metrics.roomTop),
       // a container, so that the border takes room as it does in a box
       child: Container(
         decoration: BoxDecoration(
           color: theme.surface,
-          borderRadius: BorderRadius.circular(TooltipMetrics.radius),
+          borderRadius: BorderRadius.circular(metrics.radius),
           border: Border.all(color: theme.borderVariant),
           boxShadow: elevatedShadows(theme),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: TooltipMetrics.paddingX,
-            vertical: TooltipMetrics.paddingY,
+          padding: EdgeInsets.symmetric(
+            horizontal: metrics.paddingX,
+            vertical: metrics.paddingY,
           ),
           child: IntrinsicWidth(
             child: Column(
@@ -133,31 +134,27 @@ class TooltipPanel extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: TooltipMetrics.maxWidth,
-                      ),
+                      constraints: BoxConstraints(maxWidth: metrics.maxWidth),
                       child: Text(
                         title,
-                        style: text(TooltipMetrics.fontSize, theme.textPrimary),
+                        style: text(metrics.fontSize, theme.textPrimary),
                       ),
                     ),
                     if (keys != null) ...[
-                      const SizedBox(width: TooltipMetrics.keysGap),
+                      SizedBox(width: metrics.keysGap),
                       Text(
                         Keymap.formatKeys(keys),
-                        style: text(TooltipMetrics.fontSize, theme.textDim),
+                        style: text(metrics.fontSize, theme.textDim),
                       ),
                     ],
                   ],
                 ),
                 if (meta != null)
                   ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: TooltipMetrics.maxWidth,
-                    ),
+                    constraints: BoxConstraints(maxWidth: metrics.maxWidth),
                     child: Text(
                       meta,
-                      style: text(TooltipMetrics.metaSize, theme.textDim),
+                      style: text(metrics.metaSize, theme.textDim),
                     ),
                   ),
               ],

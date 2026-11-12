@@ -134,7 +134,7 @@ void main() {
     ) async {
       await openList(tester);
       final box = panel(tester);
-      expect(box.width, PickerMetrics.listWidth);
+      expect(box.width, PickerMetrics(theme).listWidth);
       final field = tester.getRect(
         find
             .ancestor(
@@ -149,6 +149,27 @@ void main() {
       expect(first.top, greaterThan(box.top + 1 + 36 + 1 + 4));
     });
 
+    testWidgets('goes with the size of the interface, as everything in rems', (
+      tester,
+    ) async {
+      final context = await host(tester);
+      final big = theme.copyWith(uiFontSize: 20);
+      showListPicker(
+        context,
+        theme: big,
+        hint: 'Pick',
+        items: const [PickerItem('Item 0'), PickerItem('Item 1')],
+        onSelected: (_) {},
+      );
+      await tester.pumpAndSettle();
+      // 20 over 16 of 544
+      expect(panel(tester).width, 680);
+      expect(tester.widget<Text>(find.text('Item 0')).style!.fontSize, 17.5);
+      final a = tester.getRect(find.text('Item 0'));
+      final b = tester.getRect(find.text('Item 1'));
+      expect(b.top - a.top, closeTo(PickerMetrics(big).rowHeight, 0.01));
+    });
+
     testWidgets('is 384 wide for a line of text', (tester) async {
       final context = await host(tester);
       showInputPicker(
@@ -159,7 +180,7 @@ void main() {
         onSubmitted: (_) {},
       );
       await tester.pumpAndSettle();
-      expect(panel(tester).width, PickerMetrics.inputWidth);
+      expect(panel(tester).width, PickerMetrics(theme).inputWidth);
     });
 
     testWidgets('has rows of one line of 14 pixel text with four around it', (
@@ -168,7 +189,7 @@ void main() {
       await openList(tester);
       final a = tester.getRect(find.text('Item 0'));
       final b = tester.getRect(find.text('Item 1'));
-      expect(b.top - a.top, closeTo(PickerMetrics.rowHeight, 0.01));
+      expect(b.top - a.top, closeTo(PickerMetrics(theme).rowHeight, 0.01));
       expect(tester.widget<Text>(find.text('Item 0')).style!.fontSize, 14);
       // the border, four of inset, and six in the fill
       expect(a.left - panel(tester).left, closeTo(1 + 4 + 6, 0.5));
@@ -181,7 +202,7 @@ void main() {
       expect(find.byType(ListView), findsOneWidget);
       expect(
         tester.getSize(find.byType(ListView)).height,
-        lessThanOrEqualTo(PickerMetrics.maxListHeight),
+        lessThanOrEqualTo(PickerMetrics(theme).maxListHeight),
       );
     });
 

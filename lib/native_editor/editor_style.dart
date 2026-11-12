@@ -37,14 +37,22 @@ class EditorStyle {
     ),
     this.popoverSurface = const Color(0xFF181825),
     this.popoverRadius = 8,
+    this.popoverScale = 1,
     this.popoverMuted = const Color(0xFF9399B2),
     this.popoverSuccess = const Color(0xFFA6E3A1),
   });
 
-  /// the size of the text of a popover, which is the size of the interface's
-  /// text, and the height of its lines
+  /// the size of the text of a popover is that of the interface's text, and
+  /// its lines are this high, as a share of it; what else is in a popover is in
+  /// rems, which are [popoverScale] pixels for each that there are at the
+  /// default size, as with [AppTheme.rem]
   static const double popoverFontSize = 16;
   static const double popoverLineHeight = 1.618;
+  final double popoverScale;
+
+  /// [pixels], which are of a rem at the default size, as they are at the size
+  /// that the interface's text has
+  double popoverRem(double pixels) => pixels * popoverScale;
 
   /// the color of a button in a popover, and of it once it has done its work
   final Color popoverMuted;

@@ -616,7 +616,8 @@ void main() {
     });
 
     Future<void> pumpSettings(WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1000, 3000);
+      // tall enough for the last of the sliders to be on the screen
+      tester.view.physicalSize = const Size(1000, 5000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(
@@ -834,8 +835,8 @@ void main() {
       tester,
     ) async {
       await pumpSettings(tester);
-      // corner radius, rounding power, border width, opacity, four sizes
-      expect(find.byType(Slider), findsNWidgets(8));
+      // corner radius, rounding power, border width, opacity, five sizes
+      expect(find.byType(Slider), findsNWidgets(9));
 
       await tester.drag(find.byType(Slider).at(0), const Offset(1000, 0));
       await tester.pump();
@@ -852,6 +853,11 @@ void main() {
       await tester.drag(find.byType(Slider).at(6), const Offset(1000, 0));
       await tester.pump();
       expect(controller.value.fontSizeBody, ThemeController.maxFontSize);
+
+      // the size of the interface is the last of them
+      await tester.drag(find.byType(Slider).at(8), const Offset(1000, 0));
+      await tester.pump();
+      expect(controller.value.uiFontSize, ThemeController.maxFontSize);
       await work(tester);
     });
 
@@ -870,10 +876,16 @@ void main() {
       await tester.pump();
       expect(controller.value.roundingPower, powerBefore + 0.5);
 
+      // the sizes are title, heading, body, caption and the interface's
       final bodyBefore = controller.value.fontSizeBody;
-      await tester.tap(plus.at(plus.evaluate().length - 2));
+      await tester.tap(plus.at(plus.evaluate().length - 3));
       await tester.pump();
       expect(controller.value.fontSizeBody, bodyBefore + 1);
+
+      final uiBefore = controller.value.uiFontSize;
+      await tester.tap(plus.last);
+      await tester.pump();
+      expect(controller.value.uiFontSize, uiBefore + 1);
       await work(tester);
     });
   });

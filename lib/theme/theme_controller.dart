@@ -853,10 +853,11 @@ class ThemeController extends ValueNotifier<AppTheme> {
   static const minFontSize = 8.0;
   static const maxFontSize = 48.0;
 
-  /// `title`, `heading`, `body` or `caption`
+  /// `title`, `heading`, `body`, `caption` or `ui`
   void setFontSize(String role, double size) {
     final clamped = size.clamp(minFontSize, maxFontSize).toDouble();
     value = switch (role) {
+      'ui' => value.copyWith(uiFontSize: clamped),
       'title' => value.copyWith(fontSizeTitle: clamped),
       'heading' => value.copyWith(fontSizeHeading: clamped),
       'body' => value.copyWith(fontSizeBody: clamped),
@@ -915,6 +916,7 @@ class ThemeController extends ValueNotifier<AppTheme> {
         'heading': _num(t.fontSizeHeading),
         'body': _num(t.fontSizeBody),
         'caption': _num(t.fontSizeCaption),
+        'ui': _num(t.uiFontSize),
       },
       'backgroundOpacity': _num(t.backgroundOpacity),
       'acrylic': t.acrylic,

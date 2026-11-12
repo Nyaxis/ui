@@ -424,6 +424,7 @@ class ThemeSettings extends StatelessWidget {
             _size('Heading size', 'heading', theme.fontSizeHeading),
             _size('Body size', 'body', theme.fontSizeBody),
             _size('Caption size', 'caption', theme.fontSizeCaption),
+            _size('Interface size', 'ui', theme.uiFontSize),
           ],
         ),
       ],

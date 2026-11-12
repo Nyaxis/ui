@@ -50,10 +50,13 @@ class ContextMenuSeparator extends ContextMenuEntry {
   const ContextMenuSeparator();
 }
 
-/// how a menu looks: sizes in pixels, as the menus of the editor it follows
-/// have them
+/// how a menu looks. what is in rems goes with the size of the interface's
+/// text, which [AppTheme.rem] says; the least width, the margin to the window
+/// and the lines are in pixels
 class ContextMenuMetrics {
-  const ContextMenuMetrics._();
+  const ContextMenuMetrics(this.theme);
+
+  final AppTheme theme;
 
   /// the least that a menu is wide
   static const double minWidth = 200;
@@ -62,37 +65,38 @@ class ContextMenuMetrics {
   /// there is more
   static const double maxHeightShare = 0.75;
 
-  /// above and below the items
-  static const double listPadding = 4;
-
-  /// between the menu's edge and where an item's fill starts
-  static const double itemInset = 4;
-
-  /// between an item's fill and what is in it
-  static const double itemPadding = 6;
-
-  /// between the parts of an item: the check mark, the preview and the label
-  static const double itemGap = 6;
-  static const double itemRadius = 4;
-  static const double menuRadius = 8;
-
-  /// the size of the text, and of a line of it, which is also what an item is
-  /// high
-  static const double fontSize = 14;
-  static const double lineHeight = 1.618;
-  static const double checkSize = 14;
-
-  /// between the label and the keys of its action
-  static const double keysGap = 16;
-
-  /// above and below a separator, which is a line of one pixel
-  static const double separatorMargin = 6;
-
   /// kept between the menu and the window's edge
   static const double windowEdge = 8;
 
+  /// the height of a line of text, as a share of its size
+  static const double lineHeight = 1.618;
+
+  /// above and below the items
+  double get listPadding => theme.rem(4);
+
+  /// between the menu's edge and where an item's fill starts
+  double get itemInset => theme.rem(4);
+
+  /// between an item's fill and what is in it
+  double get itemPadding => theme.rem(6);
+
+  /// between the parts of an item: the check mark, the preview and the label
+  double get itemGap => theme.rem(6);
+  double get itemRadius => theme.rem(4);
+  double get menuRadius => theme.rem(8);
+
+  /// the size of the text, which a line of is also what an item is high
+  double get fontSize => theme.rem(14);
+  double get checkSize => theme.rem(14);
+
+  /// between the label and the keys of its action
+  double get keysGap => theme.rem(16);
+
+  /// above and below a separator, which is a line of one pixel
+  double get separatorMargin => theme.rem(6);
+
   /// what an item is high
-  static const double itemHeight = fontSize * lineHeight;
+  double get itemHeight => fontSize * lineHeight;
 }
 
 /// the fills that an item has, in the colors of the theme
@@ -363,10 +367,9 @@ class _MenuLayerState extends State<_MenuLayer> with WindowListener {
 
   Widget _items() {
     final theme = widget.theme;
+    final metrics = ContextMenuMetrics(theme);
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: ContextMenuMetrics.listPadding,
-      ),
+      padding: EdgeInsets.symmetric(vertical: metrics.listPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -377,8 +380,8 @@ class _MenuLayerState extends State<_MenuLayer> with WindowListener {
               child: switch (widget.entries[i]) {
                 ContextMenuSeparator() => Container(
                   height: 1,
-                  margin: const EdgeInsets.symmetric(
-                    vertical: ContextMenuMetrics.separatorMargin,
+                  margin: EdgeInsets.symmetric(
+                    vertical: metrics.separatorMargin,
                   ),
                   color: theme.borderVariant,
                 ),
@@ -403,6 +406,7 @@ class _MenuLayerState extends State<_MenuLayer> with WindowListener {
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
+    final metrics = ContextMenuMetrics(theme);
     final maxHeight =
         MediaQuery.sizeOf(context).height * ContextMenuMetrics.maxHeightShare;
     // what the border takes is not for the items
@@ -433,7 +437,7 @@ class _MenuLayerState extends State<_MenuLayer> with WindowListener {
               child: DefaultTextStyle(
                 style: TextStyle(
                   fontFamily: theme.fontFamily,
-                  fontSize: ContextMenuMetrics.fontSize,
+                  fontSize: metrics.fontSize,
                   height: ContextMenuMetrics.lineHeight,
                   color: theme.textPrimary,
                 ),
@@ -441,9 +445,7 @@ class _MenuLayerState extends State<_MenuLayer> with WindowListener {
                 child: Container(
                   decoration: BoxDecoration(
                     color: theme.surface,
-                    borderRadius: BorderRadius.circular(
-                      ContextMenuMetrics.menuRadius,
-                    ),
+                    borderRadius: BorderRadius.circular(metrics.menuRadius),
                     border: Border.all(color: theme.borderVariant),
                     boxShadow: elevatedShadows(theme),
                   ),
@@ -540,6 +542,7 @@ class _ItemState extends State<_Item> {
     final enabled = onPressed != null;
     final keys = widget.keys;
     final colors = ContextMenuColors(theme);
+    final metrics = ContextMenuMetrics(theme);
     final labelColor = enabled ? theme.textPrimary : theme.disabled;
     final keysColor = enabled ? theme.textDim : theme.disabled;
     final fill = !enabled
@@ -573,38 +576,34 @@ class _ItemState extends State<_Item> {
             }
           : null,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: ContextMenuMetrics.itemInset,
-        ),
+        padding: EdgeInsets.symmetric(horizontal: metrics.itemInset),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: fill,
-            borderRadius: BorderRadius.circular(ContextMenuMetrics.itemRadius),
+            borderRadius: BorderRadius.circular(metrics.itemRadius),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: ContextMenuMetrics.itemPadding,
-            ),
+            padding: EdgeInsets.symmetric(horizontal: metrics.itemPadding),
             child: Row(
               children: [
                 if (item.checked != null) ...[
                   // the room is kept when there is no mark, so that the labels
                   // of a menu of choices line up
                   SizedBox(
-                    width: ContextMenuMetrics.checkSize,
+                    width: metrics.checkSize,
                     child: item.checked!
                         ? SkinnableIcon(
                             name: 'checkmark',
-                            size: ContextMenuMetrics.checkSize,
+                            size: metrics.checkSize,
                             color: enabled ? theme.accent : theme.disabled,
                           )
                         : null,
                   ),
-                  const SizedBox(width: ContextMenuMetrics.itemGap),
+                  SizedBox(width: metrics.itemGap),
                 ],
                 if (item.leading != null) ...[
                   item.leading!,
-                  const SizedBox(width: ContextMenuMetrics.itemGap),
+                  SizedBox(width: metrics.itemGap),
                 ],
                 Flexible(
                   child: Text(
@@ -617,9 +616,7 @@ class _ItemState extends State<_Item> {
                 const Spacer(),
                 if (keys != null)
                   Padding(
-                    padding: const EdgeInsets.only(
-                      left: ContextMenuMetrics.keysGap,
-                    ),
+                    padding: EdgeInsets.only(left: metrics.keysGap),
                     child: Text(
                       Keymap.formatKeys(keys),
                       style: TextStyle(color: keysColor),

@@ -26,6 +26,7 @@ class EditorView extends StatefulWidget {
     this.showLineNumbers = true,
     this.scrollbars = const ScrollbarSettings(),
     this.hover = const HoverSettings(),
+    this.tooltip,
     this.mouseWheelZoom = false,
     this.onZoom,
     this.focusNode,
@@ -37,6 +38,9 @@ class EditorView extends StatefulWidget {
   /// when what the language server found is shown for the text that the
   /// pointer rests on
   final HoverSettings hover;
+
+  /// the tooltip of the buttons in what is shown for it
+  final Widget Function(String message, Widget child)? tooltip;
 
   /// told when the editor gains or loses the focus
   final void Function(bool focused)? onFocusChanged;
@@ -621,6 +625,7 @@ class EditorViewState extends State<EditorView> {
             lineHeight: render.lineHeight,
           ),
           onPointer: _onPopoverPointer,
+          tooltip: widget.tooltip,
           scrollbarShow: widget.scrollbars.show,
           systemAutoHide: EditorController.systemHidesScrollbars,
         ),

@@ -209,7 +209,12 @@ class DiagnosticPopover extends StatefulWidget {
     this.onPointer,
     this.scrollbarShow = ScrollbarVisibility.auto,
     this.systemAutoHide = false,
+    this.tooltip,
   });
+
+  /// names [child] with [message] when the pointer rests on it; the editor
+  /// gives its own tooltips, and a plain one is used without
+  final Widget Function(String message, Widget child)? tooltip;
 
   /// when the scrollbar of the text is shown, which is the setting of the
   /// editor's scrollbars; with system, whether the system hides them is
@@ -240,6 +245,10 @@ class _DiagnosticPopoverState extends State<DiagnosticPopover> {
   bool _copied = false;
 
   static const _copiedFor = Duration(seconds: 2);
+
+  Widget _tooltip(String message, Widget child) =>
+      widget.tooltip?.call(message, child) ??
+      Tooltip(message: message, child: child);
 
   void _openLink() {
     final href = widget.detail.codeHref;
@@ -328,7 +337,12 @@ class _DiagnosticPopoverState extends State<DiagnosticPopover> {
               child: Stack(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 4, 32, 4),
+                    padding: EdgeInsets.fromLTRB(
+                      style.popoverRem(8),
+                      style.popoverRem(4),
+                      style.popoverRem(32),
+                      style.popoverRem(4),
+                    ),
                     child: SizedBox(
                       width: width,
                       height: height,
@@ -342,20 +356,20 @@ class _DiagnosticPopoverState extends State<DiagnosticPopover> {
                     ),
                   ),
                   Positioned(
-                    top: 4,
-                    right: 4,
-                    child: Tooltip(
-                      message: tip,
-                      child: MouseRegion(
+                    top: style.popoverRem(4),
+                    right: style.popoverRem(4),
+                    child: _tooltip(
+                      tip,
+                      MouseRegion(
                         cursor: SystemMouseCursors.click,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: _copy,
                           child: Padding(
-                            padding: const EdgeInsets.all(2),
+                            padding: EdgeInsets.all(style.popoverRem(2)),
                             child: Icon(
                               _copied ? Icons.check : Icons.content_copy,
-                              size: 14,
+                              size: style.popoverRem(14),
                               color: _copied
                                   ? style.popoverSuccess
                                   : style.popoverMuted,

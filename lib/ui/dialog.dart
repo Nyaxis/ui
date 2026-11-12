@@ -7,28 +7,32 @@ import '../theme/app_theme.dart';
 import 'clickable.dart';
 import 'elevation.dart';
 
-/// how a dialog looks: sizes in pixels
+/// how a dialog looks: its sizes are in rems, which [AppTheme.rem] says, so
+/// that they go with the size of the interface's text
 class DialogMetrics {
-  const DialogMetrics._();
+  const DialogMetrics(this.theme);
 
-  static const double width = 320;
+  final AppTheme theme;
+
+  double get width => theme.rem(320);
 
   /// around everything in it, and between the message, the lines under it and
   /// the buttons
-  static const double padding = 16;
-  static const double gap = 16;
+  double get padding => theme.rem(16);
+  double get gap => theme.rem(16);
 
   /// between the buttons, which are one under the other
-  static const double buttonGap = 4;
-  static const double buttonHeight = 22;
-  static const double buttonPadding = 4;
-  static const double buttonRadius = 4;
-  static const double radius = 8;
+  double get buttonGap => theme.rem(4);
+  double get buttonHeight => theme.rem(22);
+  double get buttonPadding => theme.rem(4);
+  double get buttonRadius => theme.rem(4);
+  double get radius => theme.rem(8);
 
-  /// the size of the message, of what is under it, and of a button's label
-  static const double messageSize = 16;
-  static const double detailSize = 12;
-  static const double labelSize = 14;
+  /// the size of the message, which is that of the interface's text, of what
+  /// is under it, and of a button's label
+  double get messageSize => theme.uiFontSize;
+  double get detailSize => theme.rem(12);
+  double get labelSize => theme.rem(14);
   static const double lineHeight = 1.618;
 
   /// how much of the window shows through what is behind the dialog
@@ -211,6 +215,7 @@ class _DialogState extends State<_Dialog> {
   @override
   Widget build(BuildContext context) {
     final theme = widget.theme;
+    final metrics = DialogMetrics(theme);
     TextStyle text(double size, Color color) => TextStyle(
       fontFamily: theme.fontFamily,
       fontSize: size,
@@ -239,11 +244,11 @@ class _DialogState extends State<_Dialog> {
               type: MaterialType.transparency,
               // a container, so that the border takes room as it does in a box
               child: Container(
-                width: DialogMetrics.width,
-                padding: const EdgeInsets.all(DialogMetrics.padding),
+                width: metrics.width,
+                padding: EdgeInsets.all(metrics.padding),
                 decoration: BoxDecoration(
                   color: theme.surface,
-                  borderRadius: BorderRadius.circular(DialogMetrics.radius),
+                  borderRadius: BorderRadius.circular(metrics.radius),
                   border: Border.all(color: theme.borderVariant),
                   boxShadow: modalShadows(theme),
                 ),
@@ -253,24 +258,23 @@ class _DialogState extends State<_Dialog> {
                   children: [
                     Text(
                       _plain(widget.message),
-                      style: text(DialogMetrics.messageSize, theme.textPrimary),
+                      style: text(metrics.messageSize, theme.textPrimary),
                     ),
                     if (widget.details.isNotEmpty) ...[
-                      const SizedBox(height: DialogMetrics.gap),
+                      SizedBox(height: metrics.gap),
                       for (final line in widget.details)
                         Text(
                           line,
-                          style: text(DialogMetrics.detailSize, theme.textDim),
+                          style: text(metrics.detailSize, theme.textDim),
                         ),
                     ],
-                    const SizedBox(height: DialogMetrics.gap),
+                    SizedBox(height: metrics.gap),
                     for (var i = 0; i < widget.buttons.length; i++) ...[
-                      if (i > 0)
-                        const SizedBox(height: DialogMetrics.buttonGap),
+                      if (i > 0) SizedBox(height: metrics.buttonGap),
                       _DialogButton(
                         label: widget.buttons[i],
                         theme: theme,
-                        style: text(DialogMetrics.labelSize, theme.textPrimary),
+                        style: text(metrics.labelSize, theme.textPrimary),
                         active: i == _active,
                         onTap: () => widget.onChosen(i),
                       ),
@@ -314,6 +318,7 @@ class _DialogButtonState extends State<_DialogButton> {
   @override
   Widget build(BuildContext context) {
     final colors = DialogButtonColors(widget.theme);
+    final metrics = DialogMetrics(widget.theme);
     final Color fill;
     final Color line;
     if (widget.active) {
@@ -341,14 +346,12 @@ class _DialogButtonState extends State<_DialogButton> {
       onTapCancel: () => setState(() => _pressed = false),
       onTap: widget.onTap,
       child: Container(
-        height: DialogMetrics.buttonHeight,
-        padding: const EdgeInsets.symmetric(
-          horizontal: DialogMetrics.buttonPadding,
-        ),
+        height: metrics.buttonHeight,
+        padding: EdgeInsets.symmetric(horizontal: metrics.buttonPadding),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: fill,
-          borderRadius: BorderRadius.circular(DialogMetrics.buttonRadius),
+          borderRadius: BorderRadius.circular(metrics.buttonRadius),
           border: Border.all(color: line),
         ),
         child: Text(

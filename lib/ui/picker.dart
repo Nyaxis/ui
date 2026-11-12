@@ -8,34 +8,38 @@ import 'clickable.dart';
 import 'elevation.dart';
 import 'skinnable_icon.dart';
 
-/// how a picker looks: sizes in pixels
+/// how a picker looks: its sizes are in rems, which [AppTheme.rem] says, so
+/// that they go with the size of the interface's text
 class PickerMetrics {
-  const PickerMetrics._();
+  const PickerMetrics(this.theme);
+
+  final AppTheme theme;
 
   /// a picker of a list is 34 rems wide, and one of a line of text 24
-  static const double listWidth = 544;
-  static const double inputWidth = 384;
+  double get listWidth => theme.rem(544);
+  double get inputWidth => theme.rem(384);
 
   /// the most that the list is high, which is 24 rems
-  static const double maxListHeight = 384;
+  double get maxListHeight => theme.rem(384);
 
   /// the field, and the room at its sides
-  static const double fieldHeight = 36;
-  static const double fieldPadding = 10;
+  double get fieldHeight => theme.rem(36);
+  double get fieldPadding => theme.rem(10);
 
   /// above and below the rows, and at the sides of what a row fills
-  static const double listPadding = 4;
-  static const double rowInset = 4;
+  double get listPadding => theme.rem(4);
+  double get rowInset => theme.rem(4);
 
   /// between a row's fill and what is in it
-  static const double rowPadding = 6;
+  double get rowPadding => theme.rem(6);
 
-  /// the text of a row, which has four pixels of room above and below it
-  static const double fontSize = 14;
+  /// the text of a row, which has room above and below it
+  double get fontSize => theme.rem(14);
   static const double lineHeight = 1.618;
-  static const double rowHeight = fontSize * lineHeight + 8;
-  static const double rowRadius = 4;
-  static const double radius = 8;
+  double get rowRoom => theme.rem(4);
+  double get rowHeight => fontSize * lineHeight + 2 * rowRoom;
+  double get rowRadius => theme.rem(4);
+  double get radius => theme.rem(8);
 }
 
 /// a line of a list picker
@@ -68,7 +72,7 @@ void showListPicker(
     (close) => _Picker(
       theme: theme,
       top: top,
-      width: PickerMetrics.listWidth,
+      width: PickerMetrics(theme).listWidth,
       items: items,
       hint: hint,
       onSelected: onSelected,
@@ -95,7 +99,7 @@ void showInputPicker(
     (close) => _Picker(
       theme: theme,
       top: top,
-      width: PickerMetrics.inputWidth,
+      width: PickerMetrics(theme).inputWidth,
       hint: hint,
       initialText: initialText,
       describe: describe,
@@ -141,8 +145,9 @@ class _Picker extends StatefulWidget {
 }
 
 class _PickerState extends State<_Picker> with WindowListener {
-  static const _rowHeight = PickerMetrics.rowHeight;
-  static const _maxListHeight = PickerMetrics.maxListHeight;
+  PickerMetrics get _metrics => PickerMetrics(widget.theme);
+  double get _rowHeight => _metrics.rowHeight;
+  double get _maxListHeight => _metrics.maxListHeight;
 
   late final _text = TextEditingController(text: widget.initialText);
   final _scroll = ScrollController();
@@ -299,7 +304,7 @@ class _PickerState extends State<_Picker> with WindowListener {
                 width: widget.width,
                 decoration: BoxDecoration(
                   color: theme.surface,
-                  borderRadius: BorderRadius.circular(PickerMetrics.radius),
+                  borderRadius: BorderRadius.circular(_metrics.radius),
                   border: Border.all(color: theme.borderVariant),
                   boxShadow: modalShadows(theme),
                 ),
@@ -309,10 +314,10 @@ class _PickerState extends State<_Picker> with WindowListener {
                   children: [
                     if (hint != null) ...[
                       SizedBox(
-                        height: PickerMetrics.fieldHeight,
+                        height: _metrics.fieldHeight,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: PickerMetrics.fieldPadding,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: _metrics.fieldPadding,
                           ),
                           child: Align(
                             alignment: Alignment.centerLeft,
@@ -337,8 +342,8 @@ class _PickerState extends State<_Picker> with WindowListener {
                       Focus(focusNode: _focus, child: const SizedBox.shrink()),
                     if (items != null)
                       Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: PickerMetrics.listPadding,
+                        padding: EdgeInsets.symmetric(
+                          vertical: _metrics.listPadding,
                         ),
                         child: ConstrainedBox(
                           constraints: BoxConstraints(
@@ -400,27 +405,32 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final metrics = PickerMetrics(theme);
     return Clickable(
       onEnter: onHover,
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: PickerMetrics.rowInset),
-        padding: const EdgeInsets.symmetric(
-          horizontal: PickerMetrics.rowPadding,
-          vertical: 4,
+        margin: EdgeInsets.symmetric(horizontal: metrics.rowInset),
+        padding: EdgeInsets.symmetric(
+          horizontal: metrics.rowPadding,
+          vertical: metrics.rowRoom,
         ),
         decoration: BoxDecoration(
           // the row that the pointer is on is the one that is chosen
           color: highlighted
               ? theme.chosen.withValues(alpha: 0x66 / 255)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(PickerMetrics.rowRadius),
+          borderRadius: BorderRadius.circular(metrics.rowRadius),
         ),
         child: Row(
           children: [
             if (item.icon != null) ...[
-              SvgPicture.asset(item.icon!, width: 16, height: 16),
-              const SizedBox(width: 6),
+              SvgPicture.asset(
+                item.icon!,
+                width: theme.rem(16),
+                height: theme.rem(16),
+              ),
+              SizedBox(width: metrics.rowPadding),
             ],
             Expanded(
               child: Text(
@@ -429,7 +439,7 @@ class _Row extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontFamily: theme.fontFamily,
-                  fontSize: PickerMetrics.fontSize,
+                  fontSize: metrics.fontSize,
                   fontWeight: FontWeight.w400,
                   height: PickerMetrics.lineHeight,
                   color: theme.textPrimary,
@@ -437,7 +447,11 @@ class _Row extends StatelessWidget {
               ),
             ),
             if (item.checked)
-              SkinnableIcon(name: 'checkmark', size: 14, color: theme.accent),
+              SkinnableIcon(
+                name: 'checkmark',
+                size: theme.rem(14),
+                color: theme.accent,
+              ),
           ],
         ),
       ),

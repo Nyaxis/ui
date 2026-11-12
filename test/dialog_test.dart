@@ -77,7 +77,7 @@ void main() {
             )
             .first,
       );
-      expect(box.width, DialogMetrics.width);
+      expect(box.width, DialogMetrics(theme).width);
       final message = tester.getRect(find.text('Save changes?'));
       // the border, and the padding
       expect(message.left - box.left, 1 + 16);
@@ -88,6 +88,40 @@ void main() {
           .first;
       expect(tester.getRect(lastButton).bottom, box.bottom - 1 - 16);
       expect(first.top - message.bottom, greaterThanOrEqualTo(16));
+    });
+
+    testWidgets('goes with the size of the interface, as everything in rems', (
+      tester,
+    ) async {
+      await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+      showConfirmDialog(
+        tester.element(find.byType(Scaffold)),
+        theme: theme.copyWith(uiFontSize: 20),
+        message: 'Save changes?',
+        buttons: const ['OK'],
+      );
+      await tester.pumpAndSettle();
+      final box = tester.getRect(
+        find
+            .ancestor(
+              of: find.text('Save changes?'),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
+      // 20 over 16 of 320
+      expect(box.width, 400);
+      expect(
+        tester.widget<Text>(find.text('Save changes?')).style!.fontSize,
+        20,
+      );
+      expect(tester.widget<Text>(find.text('OK')).style!.fontSize, 17.5);
+      final button = tester.getRect(
+        find
+            .ancestor(of: find.text('OK'), matching: find.byType(Container))
+            .first,
+      );
+      expect(button.height, 27.5);
     });
 
     testWidgets(
