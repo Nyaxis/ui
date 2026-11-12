@@ -49,8 +49,8 @@ List<double> _gammaRatios(double gamma) {
 
 /// what a pixel that is covered by [coverage] of an icon that is [brightness]
 /// bright is drawn with, once the contrast and the gamma of the screen are
-/// taken into account. this is the correction that the renderer of Zed puts on
-/// the coverage of text and icons on Windows, for the edges of what is drawn:
+/// taken into account. this is the correction that the text renderer of Windows
+/// puts on the coverage of text, and that an icon is given too, for the edges:
 /// they come out a little more covered when the icon is light, which makes them
 /// softer.
 double correctCoverage(
@@ -68,10 +68,24 @@ double correctCoverage(
   return contrasted + contrasted * (1 - contrasted) * correction;
 }
 
-/// an icon of the bundled ones, drawn with the correction of the edges above,
-/// which makes it look as it does in Zed. the plain icon is shown until the
-/// corrected one is ready, and when it cannot be made, and an icon that the
-/// theme has its own file for is left as the theme has it.
+/// the numbers of device pixels that the box of an icon of [size] logical
+/// pixels can come to on a screen of [ratio] device pixels to a logical one:
+/// its two edges are each put on a pixel, so it is the one below its size on
+/// the screen or the one above it, or just the size when that is a whole number
+Set<int> iconSides(double size, double ratio) {
+  final exact = size * ratio;
+  return {math.max(1, exact.floor()), math.max(1, exact.ceil())};
+}
+
+/// an icon that is an svg, the bundled ones and those that the theme has files
+/// for, drawn with the correction of the edges above, which makes them soft.
+/// the plain icon is shown until the corrected one is ready, and when it cannot
+/// be made.
+///
+/// the icon is made for each number of device pixels that its box can have on
+/// the screen, which is one of two when it does not come to a whole number, as
+/// the two edges of the box are each put on a pixel; [SnappedImage] has the one
+/// that fits where the box is
 class GammaIcon extends StatefulWidget {
   const GammaIcon({
     super.key,
@@ -91,7 +105,7 @@ class GammaIcon extends StatefulWidget {
 class _GammaIconState extends State<GammaIcon> {
   static final _cache = <String, ui.Image>{};
 
-  ui.Image? _image;
+  Map<int, ui.Image>? _images;
   String? _key;
 
   @override
@@ -114,8 +128,7 @@ class _GammaIconState extends State<GammaIcon> {
       return;
     }
     final ratio = MediaQuery.devicePixelRatioOf(context);
-    // the box of the icon on the screen is of whole device pixels
-    final pixels = math.max(1, roundToDevicePixel(widget.size, ratio).toInt());
+    final sides = iconSides(widget.size, ratio).toList()..sort();
     final brightness = colorBrightness(widget.color);
     final bundled = widget.size >= 32 ? 32 : (widget.size >= 22 ? 22 : 16);
     // a file that is changed, or put in its place, is read again
@@ -131,15 +144,18 @@ class _GammaIconState extends State<GammaIcon> {
         return;
       }
     }
-    final key =
-        '${widget.name}|$source|$pixels|${brightness.toStringAsFixed(3)}';
+    final prefix = '${widget.name}|$source|${brightness.toStringAsFixed(3)}';
+    final key = '$prefix|${sides.join(',')}';
     if (key == _key) {
       return;
     }
     _key = key;
-    final cached = _cache[key];
-    if (cached != null) {
-      setState(() => _image = cached);
+    final cached = {
+      for (final side in sides)
+        if (_cache['$prefix|$side'] != null) side: _cache['$prefix|$side']!,
+    };
+    if (cached.length == sides.length) {
+      setState(() => _images = cached);
       return;
     }
     try {
@@ -153,79 +169,97 @@ class _GammaIconState extends State<GammaIcon> {
           // name, and would give the old drawing for a file that was changed
           : SvgStringLoader(await file.readAsString(), theme: theme);
       final info = await vg.loadPicture(loader, null);
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      // Zed draws the mask of an icon at twice its size and has the screen
-      // take it down by sampling, which is what makes the edges soft
-      const smooth = 2;
-      final large = pixels * smooth;
-      canvas.scale(large / info.size.width, large / info.size.height);
-      canvas.drawPicture(info.picture);
-      final raw = await recorder.endRecording().toImage(large, large);
-      final data = await raw.toByteData(
-        format: ui.ImageByteFormat.rawStraightRgba,
-      );
-      raw.dispose();
-      if (data == null) {
-        return;
-      }
-      final bytes = data.buffer.asUint8List();
-      final corrected = Uint8List(pixels * pixels * 4);
-      // the gamma and the contrast that the system draws text with
-      final rendering = TextRendering.system;
-      for (var i = 0; i < corrected.length; i += 4) {
-        final x = (i ~/ 4) % pixels;
-        final y = (i ~/ 4) ~/ pixels;
-        // the sample at the corner of four texels of the mask is their mean
-        var sum = 0;
-        for (var dy = 0; dy < smooth; dy++) {
-          for (var dx = 0; dx < smooth; dx++) {
-            final texel = (y * smooth + dy) * large + x * smooth + dx;
-            sum += bytes[texel * 4 + 3];
-          }
+      final made = <int, ui.Image>{};
+      for (final side in sides) {
+        final image = await _make(info, side, brightness);
+        if (image == null) {
+          return;
         }
-        final coverage = sum / (smooth * smooth * 255);
-        final alpha =
-            (correctCoverage(
-                      coverage,
-                      brightness,
-                      gamma: rendering.gamma,
-                      enhancedContrast: rendering.grayscaleContrast,
-                    ) *
-                    255)
-                .round()
-                .clamp(0, 255);
-        // white, as much as is covered: the color is put on when it is drawn
-        corrected[i] = alpha;
-        corrected[i + 1] = alpha;
-        corrected[i + 2] = alpha;
-        corrected[i + 3] = alpha;
+        _cache['$prefix|$side'] = image;
+        made[side] = image;
       }
-      final completer = Completer<ui.Image>();
-      ui.decodeImageFromPixels(
-        corrected,
-        pixels,
-        pixels,
-        ui.PixelFormat.rgba8888,
-        completer.complete,
-      );
-      final image = await completer.future;
-      _cache[key] = image;
       if (mounted && _key == key) {
-        setState(() => _image = image);
+        setState(() => _images = made);
       }
     } on Object {
       // the plain icon stays
     }
   }
 
+  /// the icon of [pixels] by [pixels] device pixels: its mask is drawn at twice
+  /// that, and each pixel is the mean of four of it, which is what the screen
+  /// does by sampling between them, and the correction is put on that
+  static Future<ui.Image?> _make(
+    PictureInfo info,
+    int pixels,
+    double brightness,
+  ) async {
+    const smooth = 2;
+    final large = pixels * smooth;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    // the drawing is scaled by its width, in both directions
+    final scale = large / info.size.width;
+    canvas.scale(scale, scale);
+    canvas.drawPicture(info.picture);
+    final raw = await recorder.endRecording().toImage(large, large);
+    final data = await raw.toByteData(
+      format: ui.ImageByteFormat.rawStraightRgba,
+    );
+    raw.dispose();
+    if (data == null) {
+      return null;
+    }
+    final bytes = data.buffer.asUint8List();
+    final corrected = Uint8List(pixels * pixels * 4);
+    // the gamma and the contrast that the system draws text with
+    final rendering = TextRendering.system;
+    for (var i = 0; i < corrected.length; i += 4) {
+      final x = (i ~/ 4) % pixels;
+      final y = (i ~/ 4) ~/ pixels;
+      // the sample at the corner of four texels of the mask is their mean
+      var sum = 0;
+      for (var dy = 0; dy < smooth; dy++) {
+        for (var dx = 0; dx < smooth; dx++) {
+          final texel = (y * smooth + dy) * large + x * smooth + dx;
+          sum += bytes[texel * 4 + 3];
+        }
+      }
+      final coverage = sum / (smooth * smooth * 255);
+      final alpha =
+          (correctCoverage(
+                    coverage,
+                    brightness,
+                    gamma: rendering.gamma,
+                    enhancedContrast: rendering.grayscaleContrast,
+                  ) *
+                  255)
+              .round()
+              .clamp(0, 255);
+      // white, as much as is covered: the color is put on when it is drawn
+      corrected[i] = alpha;
+      corrected[i + 1] = alpha;
+      corrected[i + 2] = alpha;
+      corrected[i + 3] = alpha;
+    }
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+      corrected,
+      pixels,
+      pixels,
+      ui.PixelFormat.rgba8888,
+      completer.complete,
+    );
+    return completer.future;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final image = _image;
+    final images = _images;
     // the plain icon is drawn until the corrected one is ready, and for an
     // image of the theme's own, which is not corrected
     final file = SkinnableIcon.skinFile(widget.name);
-    if (image == null ||
+    if (images == null ||
         (file != null && !SkinnableIcon.skinIsSvg(widget.name))) {
       return SkinnableIcon(
         name: widget.name,
@@ -235,7 +269,7 @@ class _GammaIconState extends State<GammaIcon> {
       );
     }
     return SnappedImage(
-      image: image,
+      images: images,
       size: widget.size,
       color: widget.color,
       ratio: MediaQuery.devicePixelRatioOf(context),
@@ -243,20 +277,26 @@ class _GammaIconState extends State<GammaIcon> {
   }
 }
 
-/// an image of whole device pixels, drawn on the pixels of the screen without
-/// being scaled, with its corner on the pixel that the corner of its box is
-/// nearest to; the colors are its alpha, in [color]. where it is turned over, or
-/// not on the screen as it is, it is drawn into its box
+/// an icon of whole device pixels, drawn on the pixels of the screen without
+/// being scaled, the colors being its alpha in [color].
+///
+/// the box of the icon has its edges each on the pixel that it is nearest to,
+/// and the icon is as many pixels as the box is wide, which is one of the
+/// numbers that [images] has, by its side in pixels. it is square, as high as
+/// it is wide, in the middle of the height of the box, and on the pixel nearest
+/// to where that puts it. where the box is turned over it is turned over, and
+/// where it is turned any other way, or scaled, it is drawn into the box
 class SnappedImage extends LeafRenderObjectWidget {
   const SnappedImage({
     super.key,
-    required this.image,
+    required this.images,
     required this.size,
     required this.color,
     required this.ratio,
   });
 
-  final ui.Image image;
+  /// the icon for each side in device pixels that it can have
+  final Map<int, ui.Image> images;
 
   /// the side of the box, in logical pixels
   final double size;
@@ -265,7 +305,7 @@ class SnappedImage extends LeafRenderObjectWidget {
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      RenderSnappedImage(image, size, color, ratio);
+      RenderSnappedImage(images, size, color, ratio);
 
   @override
   void updateRenderObject(
@@ -273,7 +313,7 @@ class SnappedImage extends LeafRenderObjectWidget {
     RenderSnappedImage renderObject,
   ) {
     renderObject
-      ..image = image
+      ..images = images
       ..side = size
       ..color = color
       ..ratio = ratio;
@@ -282,18 +322,18 @@ class SnappedImage extends LeafRenderObjectWidget {
 
 /// the render object of [SnappedImage]
 class RenderSnappedImage extends RenderBox {
-  RenderSnappedImage(this._image, this._side, this._color, this._ratio);
+  RenderSnappedImage(this._images, this._side, this._color, this._ratio);
 
-  ui.Image _image;
+  Map<int, ui.Image> _images;
   double _side;
   Color _color;
   double _ratio;
 
-  set image(ui.Image value) {
-    if (identical(value, _image)) {
+  set images(Map<int, ui.Image> value) {
+    if (identical(value, _images)) {
       return;
     }
-    _image = value;
+    _images = value;
     markNeedsPaint();
   }
 
@@ -326,47 +366,91 @@ class RenderSnappedImage extends RenderBox {
     size = constraints.constrain(Size.square(_side));
   }
 
-  @override
-  void paint(PaintingContext context, Offset offset) {
-    final source = Rect.fromLTWH(
-      0,
-      0,
-      _image.width.toDouble(),
-      _image.height.toDouble(),
-    );
-    final paint = Paint()
-      ..colorFilter = ColorFilter.mode(_color, BlendMode.srcIn);
-    final m = getTransformTo(null).storage;
-    final moved =
-        m[0] == 1 &&
-        m[5] == 1 &&
+  /// the image for [side] device pixels, or the one nearest to it
+  ui.Image _imageFor(int side) {
+    final exact = _images[side];
+    if (exact != null) {
+      return exact;
+    }
+    final sides = _images.keys.toList()
+      ..sort((a, b) => (a - side).abs().compareTo((b - side).abs()));
+    return _images[sides.first]!;
+  }
+
+  /// where the box is on the window, and the sprite that goes in it, in
+  /// device pixels: the corners of the box are put on pixels, the sprite is as
+  /// wide as that, square, and in the middle of the height, put on the pixel
+  /// nearest to that. null when the box is turned or scaled, which a pixel does
+  /// not fit
+  ({Rect box, Rect sprite})? snapped(Matrix4 toWindow) {
+    final m = toWindow.storage;
+    final upright =
         m[1] == 0 &&
         m[4] == 0 &&
         m[2] == 0 &&
-        m[6] == 0;
-    if (!moved) {
+        m[6] == 0 &&
+        m[8] == 0 &&
+        m[9] == 0 &&
+        m[10] == 1 &&
+        (m[0].abs() - 1).abs() < 1e-9 &&
+        (m[5].abs() - 1).abs() < 1e-9;
+    if (!upright) {
+      return null;
+    }
+    final window = MatrixUtils.transformRect(toWindow, Offset.zero & size);
+    final left = roundToDevicePixel(window.left, _ratio);
+    final top = roundToDevicePixel(window.top, _ratio);
+    final right = math.max(left, roundToDevicePixel(window.right, _ratio));
+    final bottom = math.max(top, roundToDevicePixel(window.bottom, _ratio));
+    final side = right - left;
+    final spriteTop = roundHalfTowardZero(top + ((bottom - top) - side) / 2);
+    return (
+      box: Rect.fromLTRB(left, top, right, bottom),
+      sprite: Rect.fromLTWH(left, spriteTop, side, side),
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final paint = Paint()
+      ..colorFilter = ColorFilter.mode(_color, BlendMode.srcIn);
+    final toWindow = getTransformTo(null);
+    final snap = snapped(toWindow);
+    if (snap == null) {
+      // the image nearest to the size, into the box
+      final image = _imageFor((_side * _ratio).round());
       paint.filterQuality = FilterQuality.low;
-      context.canvas.drawImageRect(_image, source, offset & size, paint);
+      context.canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        offset & size,
+        paint,
+      );
       return;
     }
-    // the corner of the box is on the window at (m[12], m[13]); the sprite goes
-    // to the pixel nearest to it, and is as many pixels as the image has
-    final global = Offset(m[12], m[13]);
-    final snapped = Offset(
-      roundToDevicePixel(global.dx, _ratio) / _ratio,
-      roundToDevicePixel(global.dy, _ratio) / _ratio,
+    final side = snap.sprite.width.toInt();
+    if (side <= 0) {
+      return;
+    }
+    final image = _imageFor(side);
+    // the sprite, which is on pixels of the window, in the places of the box:
+    // the box is on the window by [toWindow], which only moves it and turns it
+    // over, and that is undone for the sprite
+    final inverse = Matrix4.copy(toWindow)..invert();
+    final inBox = MatrixUtils.transformRect(
+      inverse,
+      Rect.fromLTWH(
+        snap.sprite.left / _ratio,
+        snap.sprite.top / _ratio,
+        snap.sprite.width / _ratio,
+        snap.sprite.height / _ratio,
+      ),
     );
-    final at = offset + (snapped - global);
     paint.filterQuality = FilterQuality.none;
     context.canvas.drawImageRect(
-      _image,
-      source,
-      Rect.fromLTWH(
-        at.dx,
-        at.dy,
-        _image.width / _ratio,
-        _image.height / _ratio,
-      ),
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      inBox.shift(offset),
       paint,
     );
   }

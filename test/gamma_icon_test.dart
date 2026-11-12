@@ -1,16 +1,37 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:ui/ui/device_pixels.dart';
 import 'package:ui/ui/gamma_icon.dart';
 import 'package:ui/ui/skinnable_icon.dart';
 
 /// waits, in real time, until [finder] finds something, while the icon loads
 Future<void> _until(WidgetTester tester, Finder finder) async {
   for (var i = 0; i < 100 && finder.evaluate().isEmpty; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pump();
+  }
+}
+
+/// waits, in real time, until the icon on the screen is the one that has the
+/// images of [sides], which it is not for a moment after the ratio changes
+Future<void> _untilSides(WidgetTester tester, Set<int> sides) async {
+  bool ready() {
+    final found = find.byType(SnappedImage).evaluate();
+    return found.isNotEmpty &&
+        (found.single.widget as SnappedImage).images.keys
+            .toSet()
+            .difference(sides)
+            .isEmpty &&
+        (found.single.widget as SnappedImage).images.length == sides.length;
+  }
+
+  for (var i = 0; i < 100 && !ready(); i++) {
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 20)),
     );
@@ -118,7 +139,11 @@ void main() {
       final image = tester.widget<SnappedImage>(find.byType(SnappedImage));
       expect(image.size, 14);
       expect(image.color, const Color(0xFFCDD6F4));
-      expect(image.image.width, 14);
+      // 14 pixels to the logical pixel, and there is only one side that it can
+      // come to
+      expect(image.images.keys, [14]);
+      expect(image.images[14]!.width, 14);
+      expect(image.images[14]!.height, 14);
     });
 
     testWidgets('is the corrected one for a file of the theme that is an svg', (
@@ -152,7 +177,9 @@ void main() {
       await pump(tester, 'sidebar-closed');
       await _until(tester, find.byType(SnappedImage));
       final image = tester.widget<SnappedImage>(find.byType(SnappedImage));
-      final data = (await tester.runAsync(() => image.image.toByteData()))!;
+      final data = (await tester.runAsync(
+        () => image.images.values.single.toByteData(),
+      ))!;
       // every pixel is covered, which the bundled icon, a frame, is not
       for (var i = 3; i < data.lengthInBytes; i += 4) {
         expect(data.getUint8(i), 255, reason: 'pixel ${i ~/ 4}');
@@ -182,7 +209,7 @@ void main() {
       await _until(tester, find.byType(SnappedImage));
       final first = tester.widget<SnappedImage>(find.byType(SnappedImage));
       final firstData = (await tester.runAsync(
-        () => first.image.toByteData(),
+        () => first.images.values.single.toByteData(),
       ))!;
       int covered(ByteData d) {
         var sum = 0;
@@ -207,18 +234,21 @@ void main() {
         );
         await tester.pump();
         final now = tester.widget<SnappedImage>(find.byType(SnappedImage));
-        if (!identical(now.image, first.image)) {
+        if (!identical(now.images.values.single, first.images.values.single)) {
           break;
         }
       }
       final second = tester.widget<SnappedImage>(find.byType(SnappedImage));
       final secondData = (await tester.runAsync(
-        () => second.image.toByteData(),
+        () => second.images.values.single.toByteData(),
       ))!;
       expect(covered(secondData), lessThan(covered(firstData)));
     });
 
     group('is on whole device pixels', () {
+      /// the image that the last [drawn] drew
+      ui.Image? drawnImage;
+
       /// where the icon is drawn, in device pixels, on a screen of [ratio],
       /// when it is [left] logical pixels from the left
       Future<Rect> drawn(
@@ -246,61 +276,187 @@ void main() {
             ),
           ),
         );
-        await _until(tester, find.byType(SnappedImage));
+        await _untilSides(tester, iconSides(14, ratio));
         final render = tester.renderObject<RenderBox>(
           find.byType(SnappedImage),
         );
         final canvas = TestRecordingCanvas();
         final context = TestRecordingPaintingContext(canvas);
-        render.paint(context, render.localToGlobal(Offset.zero));
+        // the box is painted at its place in the canvas of its own, and the
+        // sprite is where that puts it on the window
+        render.paint(context, Offset.zero);
         final call = canvas.invocations.firstWhere(
           (i) => i.invocation.memberName == #drawImageRect,
         );
-        final rect = call.invocation.positionalArguments[2] as Rect;
+        final image = call.invocation.positionalArguments[0] as ui.Image;
+        final inBox = call.invocation.positionalArguments[2] as Rect;
+        final window = MatrixUtils.transformRect(
+          render.getTransformTo(null),
+          inBox,
+        );
+        drawnImage = image;
         return Rect.fromLTWH(
-          rect.left * ratio,
-          rect.top * ratio,
-          rect.width * ratio,
-          rect.height * ratio,
+          window.left * ratio,
+          window.top * ratio,
+          window.width * ratio,
+          window.height * ratio,
         );
       }
 
-      testWidgets('the corner is on a pixel, and it is as many as the image', (
-        tester,
-      ) async {
-        for (final left in [4.0, 4.2, 4.5, 4.8]) {
+      testWidgets('the edges of the box are each on a pixel, and the icon is as '
+          'wide as that', (tester) async {
+        // 14 logical pixels are 17.5 device pixels at 1.25, so the box is 17
+        // or 18 wide by where its edges are put. from the left at 4.0: the
+        // edges are at 5.0 and 22.5, which are the pixels 5 and 22, the middle
+        // going toward zero; at 4.2 they are 5.25 and 22.75, the pixels 5 and
+        // 23; at 4.5, 5.625 and 23.125, the pixels 6 and 23; at 4.8, 6.0 and
+        // 23.5, the pixels 6 and 23
+        final cases = <(double, double, double)>[
+          (4.0, 5, 17),
+          (4.2, 5, 18),
+          (4.5, 6, 17),
+          (4.8, 6, 17),
+        ];
+        for (final (left, expectedLeft, expectedWidth) in cases) {
           final rect = await drawn(tester, 1.25, left, 3.3);
-          expect(rect.left, closeTo(roundToDevicePixel(left, 1.25), 1e-6));
-          expect(rect.top, closeTo(roundToDevicePixel(3.3, 1.25), 1e-6));
-          // 14 logical pixels are 17.5 device pixels, which are 17 of them
-          expect(rect.width, closeTo(17, 1e-6));
-          expect(rect.height, closeTo(17, 1e-6));
+          expect(rect.left, closeTo(expectedLeft, 1e-6), reason: 'at $left');
+          expect(rect.width, closeTo(expectedWidth, 1e-6), reason: 'at $left');
+          // it is square, and is the image of that many pixels
+          expect(rect.height, closeTo(expectedWidth, 1e-6), reason: '$left');
+          expect(drawnImage!.width, expectedWidth.toInt(), reason: '$left');
+          expect(drawnImage!.height, expectedWidth.toInt(), reason: '$left');
         }
+      });
+
+      testWidgets('is in the middle of the height of the box, the middle going '
+          'toward zero', (tester) async {
+        // from the top at 3.3 the edges are at 4.125 and 21.625, the pixels 4
+        // and 22: the box is 18 high, and an icon of 17 starts at 4 + 0.5,
+        // which is 4; one of 18 starts at 4
+        var rect = await drawn(tester, 1.25, 4.0, 3.3);
+        expect(rect.top, closeTo(4, 1e-6));
+        expect(rect.width, closeTo(17, 1e-6));
+        rect = await drawn(tester, 1.25, 4.2, 3.3);
+        expect(rect.top, closeTo(4, 1e-6));
+        expect(rect.width, closeTo(18, 1e-6));
+        // from the top at 3.0 the edges are at 3.75 and 21.25, the pixels 4 and
+        // 21: the box is 17 high, and an icon of 18 starts at 4 - 0.5, which is
+        // 3, as the middle goes toward zero
+        rect = await drawn(tester, 1.25, 4.2, 3.0);
+        expect(rect.top, closeTo(3, 1e-6));
+        expect(rect.width, closeTo(18, 1e-6));
+        rect = await drawn(tester, 1.25, 4.0, 3.0);
+        expect(rect.top, closeTo(4, 1e-6));
+        expect(rect.width, closeTo(17, 1e-6));
       });
 
       testWidgets('is not scaled, which would be what makes it blurred', (
         tester,
       ) async {
-        for (final ratio in [1.0, 1.5, 2.0]) {
+        for (final ratio in [1.0, 1.5, 2.0, 1.75]) {
           final rect = await drawn(tester, ratio, 4.37, 2.61);
-          final image = tester
-              .widget<SnappedImage>(find.byType(SnappedImage))
-              .image;
-          expect(rect.width, closeTo(image.width.toDouble(), 1e-6));
-          expect(rect.height, closeTo(image.height.toDouble(), 1e-6));
-          expect(rect.left, rect.left.roundToDouble());
-          expect(rect.top, rect.top.roundToDouble());
+          expect(rect.width, closeTo(drawnImage!.width.toDouble(), 1e-6));
+          expect(rect.height, closeTo(drawnImage!.height.toDouble(), 1e-6));
+          expect(rect.left, closeTo(rect.left.roundToDouble(), 1e-6));
+          expect(rect.top, closeTo(rect.top.roundToDouble(), 1e-6));
         }
       });
 
-      testWidgets('the image has the pixels of its box', (tester) async {
+      testWidgets('has the image for each side that the box can come to', (
+        tester,
+      ) async {
+        await drawn(tester, 1.25, 4, 4);
+        var image = tester.widget<SnappedImage>(find.byType(SnappedImage));
+        expect(image.images.keys.toList()..sort(), [17, 18]);
+        // 14 logical pixels are 21 device pixels at 1.5, and only that
         await drawn(tester, 1.5, 4, 4);
-        final image = tester
-            .widget<SnappedImage>(find.byType(SnappedImage))
-            .image;
-        // 14 logical pixels are 21 device pixels
-        expect(image.width, 21);
-        expect(image.height, 21);
+        image = tester.widget<SnappedImage>(find.byType(SnappedImage));
+        expect(image.images.keys, [21]);
+        expect(image.images[21]!.width, 21);
+      });
+
+      testWidgets('goes by where the box is when it is turned over', (
+        tester,
+      ) async {
+        tester.view.devicePixelRatio = 1.25;
+        tester.view.physicalSize = const Size(500, 500);
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            // turned over the line at 200: the box that was at 4.2 to 18.2 is
+            // at 381.8 to 395.8, which are 477.25 and 494.75 device pixels: the
+            // pixels 477 and 495, and the icon is 18
+            child: Transform(
+              transform: Matrix4.diagonal3Values(-1, 1, 1),
+              origin: const Offset(200, 0),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 4.2, top: 3.3),
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: GammaIcon(
+                    name: 'sidebar-closed',
+                    size: 14,
+                    color: const Color(0xFFCDD6F4),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await _until(tester, find.byType(SnappedImage));
+        final render = tester.renderObject<RenderBox>(
+          find.byType(SnappedImage),
+        );
+        final canvas = TestRecordingCanvas();
+        render.paint(TestRecordingPaintingContext(canvas), Offset.zero);
+        final call = canvas.invocations.firstWhere(
+          (i) => i.invocation.memberName == #drawImageRect,
+        );
+        final inBox = call.invocation.positionalArguments[2] as Rect;
+        // the rectangle is in the box, and has a positive size
+        expect(inBox.width, greaterThan(0));
+        final window = MatrixUtils.transformRect(
+          render.getTransformTo(null),
+          inBox,
+        );
+        expect(window.left * 1.25, closeTo(477, 1e-6));
+        expect(window.width * 1.25, closeTo(18, 1e-6));
+        expect((call.invocation.positionalArguments[0] as ui.Image).width, 18);
+      });
+
+      testWidgets('is drawn into its box where it is turned or scaled', (
+        tester,
+      ) async {
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: Transform.rotate(
+                angle: 0.3,
+                child: GammaIcon(
+                  name: 'sidebar-closed',
+                  size: 14,
+                  color: const Color(0xFFCDD6F4),
+                ),
+              ),
+            ),
+          ),
+        );
+        await _until(tester, find.byType(SnappedImage));
+        final render = tester.renderObject<RenderBox>(
+          find.byType(SnappedImage),
+        );
+        final canvas = TestRecordingCanvas();
+        render.paint(TestRecordingPaintingContext(canvas), Offset.zero);
+        final call = canvas.invocations.firstWhere(
+          (i) => i.invocation.memberName == #drawImageRect,
+        );
+        final inBox = call.invocation.positionalArguments[2] as Rect;
+        expect(inBox, const Rect.fromLTWH(0, 0, 14, 14));
       });
     });
   });
