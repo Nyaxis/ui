@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ui/editor/key_context.dart';
@@ -97,6 +98,37 @@ void main() {
     expect(keys('pane::TogglePinTab'), 'ctrl-k shift-enter');
     expect(keys('workspace::NewFile'), 'ctrl-n');
     expect(keys('language_selector::Toggle'), 'ctrl-k m');
+  });
+
+  testWidgets('a key that is held runs its action again for every repeat', (
+    tester,
+  ) async {
+    final keymap = Keymap();
+    var larger = 0;
+    var smaller = 0;
+    keymap.on('zed::IncreaseBufferFontSize', () async => larger++);
+    keymap.on('zed::DecreaseBufferFontSize', () async => smaller++);
+    await keymap.attachNative(() => true);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.equal);
+    expect(larger, 1);
+    for (var i = 0; i < 4; i++) {
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.equal);
+    }
+    expect(larger, 5);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.equal);
+    // letting go stops it
+    await tester.pump();
+    expect(larger, 5);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.minus);
+    for (var i = 0; i < 3; i++) {
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.minus);
+    }
+    expect(smaller, 4);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.minus);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
   });
 
   test('keymaps apply in order, with comments and trailing commas', () {

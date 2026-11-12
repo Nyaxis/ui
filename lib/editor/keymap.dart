@@ -208,7 +208,10 @@ class Keymap {
 
   bool _onKey(KeyEvent event) {
     final editorFocused = _nativeFocus;
-    final key = editorFocused == null || event is! KeyDownEvent
+    // a key that is held goes on running its action, as every press of it does
+    final key =
+        editorFocused == null ||
+            (event is! KeyDownEvent && event is! KeyRepeatEvent)
         ? null
         : _logicalName(event.logicalKey);
     if (key == null) {
