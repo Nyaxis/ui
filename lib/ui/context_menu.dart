@@ -106,13 +106,8 @@ class ContextMenuColors {
   /// the item is pressed
   Color get pressed => theme.active.withValues(alpha: 0x99 / 255);
 
-  /// the item is chosen with the keys: between the colors of a pressed item and
-  /// of selected text, as there is no color of its own
-  Color get selected => Color.lerp(
-    theme.active,
-    theme.selection,
-    0.4,
-  )!.withValues(alpha: 0x66 / 255);
+  /// the item is chosen with the keys
+  Color get selected => theme.chosen.withValues(alpha: 0x66 / 255);
 }
 
 /// opens a menu of [entries] with its corner at [position], in the overlay's
@@ -339,7 +334,7 @@ class _MenuLayerState extends State<_MenuLayer> with WindowListener {
                   margin: const EdgeInsets.symmetric(
                     vertical: ContextMenuMetrics.separatorMargin,
                   ),
-                  color: theme.border,
+                  color: theme.borderVariant,
                 ),
                 final ContextMenuItem item => _Item(
                   item: item,
@@ -400,7 +395,7 @@ class _MenuLayerState extends State<_MenuLayer> with WindowListener {
                     borderRadius: BorderRadius.circular(
                       ContextMenuMetrics.menuRadius,
                     ),
-                    border: Border.all(color: theme.border),
+                    border: Border.all(color: theme.borderVariant),
                     boxShadow: [
                       const BoxShadow(
                         offset: Offset(0, 2),

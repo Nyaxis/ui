@@ -21,4 +21,23 @@ void main() {
       );
     }
   });
+
+  // the subtle border, and the fill of an item that the keys have chosen
+  const items = {
+    'Catppuccin Latte': ['#e7e2f5', '#8f94a7'],
+    'Catppuccin Frappé': ['#3c3c53', '#7c829a'],
+    'Catppuccin Macchiato': ['#313148', '#737995'],
+    'Catppuccin Mocha': ['#2c293d', '#6f728d'],
+  };
+
+  test('the palettes have the colors of the borders and chosen items', () {
+    for (final entry in items.entries) {
+      final palette = catppuccinPalettes[entry.key]!;
+      expect(
+        [palette['borderVariant'], palette['chosen']],
+        entry.value,
+        reason: entry.key,
+      );
+    }
+  });
 }

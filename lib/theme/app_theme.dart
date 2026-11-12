@@ -20,6 +20,7 @@ class AppTheme {
     this.backgroundOpacity = 1.0,
     this.acrylic = false,
     this.border = const Color(0xff313244),
+    this.borderVariant = const Color(0xff2c293d),
     this.textPrimary = const Color(0xffcdd6f4),
     this.textDim = const Color(0xffbac2de),
     this.accent = const Color(0xffcba6f7),
@@ -28,6 +29,7 @@ class AppTheme {
     this.selection = const Color(0xff9399b2),
     this.hover = const Color(0xff45475a),
     this.active = const Color(0xff585b70),
+    this.chosen = const Color(0xff6f728d),
     this.focus = const Color(0xffb4befe),
     this.disabled = const Color(0xff6c7086),
     this.comment = const Color(0xff9399b2),
@@ -76,6 +78,9 @@ class AppTheme {
 
   final bool acrylic;
   final Color border;
+
+  /// the line of a menu and between its groups, and the outline of a button
+  final Color borderVariant;
   final Color textPrimary;
   final Color textDim;
   final Color accent;
@@ -91,6 +96,9 @@ class AppTheme {
 
   final Color hover;
   final Color active;
+
+  /// the fill of the item that the keys have chosen in a menu or a list
+  final Color chosen;
 
   /// the outline of what has the keyboard's focus
   final Color focus;
@@ -182,6 +190,7 @@ class AppTheme {
     double? backgroundOpacity,
     bool? acrylic,
     Color? border,
+    Color? borderVariant,
     Color? textPrimary,
     Color? textDim,
     Color? accent,
@@ -190,6 +199,7 @@ class AppTheme {
     Color? selection,
     Color? hover,
     Color? active,
+    Color? chosen,
     Color? focus,
     Color? disabled,
     Color? comment,
@@ -223,6 +233,7 @@ class AppTheme {
       backgroundOpacity: backgroundOpacity ?? this.backgroundOpacity,
       acrylic: acrylic ?? this.acrylic,
       border: border ?? this.border,
+      borderVariant: borderVariant ?? this.borderVariant,
       textPrimary: textPrimary ?? this.textPrimary,
       textDim: textDim ?? this.textDim,
       accent: accent ?? this.accent,
@@ -231,6 +242,7 @@ class AppTheme {
       selection: selection ?? this.selection,
       hover: hover ?? this.hover,
       active: active ?? this.active,
+      chosen: chosen ?? this.chosen,
       focus: focus ?? this.focus,
       disabled: disabled ?? this.disabled,
       comment: comment ?? this.comment,
@@ -269,6 +281,10 @@ class AppTheme {
     Map<String, dynamic>? palette,
   }) {
     final colors = palette ?? json;
+    // a palette from before these had colors gets them from its own colors
+    final border = _color(colors['border'], _fallback.border);
+    final active = _color(colors['active'], _fallback.active);
+    final selection = _color(colors['selection'], _fallback.selection);
     final sizes = json['fontSize'] is Map<String, dynamic>
         ? json['fontSize'] as Map<String, dynamic>
         : const <String, dynamic>{};
@@ -306,15 +322,17 @@ class AppTheme {
       background: _color(colors['background'], _fallback.background),
       titleBar: _color(colors['titleBar'], _fallback.titleBar),
       surface: _color(colors['surface'], _fallback.surface),
-      border: _color(colors['border'], _fallback.border),
+      border: border,
+      borderVariant: _color(colors['borderVariant'], border),
       textPrimary: _color(colors['textPrimary'], _fallback.textPrimary),
       textDim: _color(colors['textDim'], _fallback.textDim),
       accent: _color(colors['accent'], _fallback.accent),
       red: _color(colors['red'], _fallback.red),
       lineNumber: _color(colors['lineNumber'], _fallback.lineNumber),
-      selection: _color(colors['selection'], _fallback.selection),
+      selection: selection,
       hover: _color(colors['hover'], _fallback.hover),
-      active: _color(colors['active'], _fallback.active),
+      active: active,
+      chosen: _color(colors['chosen'], Color.lerp(active, selection, 0.4)!),
       focus: _color(colors['focus'], _fallback.focus),
       disabled: _color(colors['disabled'], _fallback.disabled),
       comment: _color(colors['comment'], _fallback.comment),

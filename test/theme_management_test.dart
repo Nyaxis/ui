@@ -265,7 +265,7 @@ void main() {
         controller.setColor(role, const Color(0xff0a0b0c));
         expect(controller.colorOf(role), const Color(0xff0a0b0c), reason: role);
       }
-      expect(ThemeController.interfaceRoles, hasLength(14));
+      expect(ThemeController.interfaceRoles, hasLength(16));
       expect(ThemeController.codeRoles, hasLength(14));
       expect(ThemeController.paletteRoles, [
         ...ThemeController.interfaceRoles,
