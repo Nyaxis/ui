@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../syntax/code_highlighter.dart';
+import 'cursor_blink.dart';
 import 'diagnostic_hover.dart';
 import 'editor_controller.dart';
 import 'editor_keys.dart';
@@ -77,7 +78,13 @@ class EditorView extends StatefulWidget {
 
 class EditorViewState extends State<EditorView> {
   final GlobalKey _renderKey = GlobalKey();
-  Timer? _blink;
+  late final CursorBlink _blink = CursorBlink(
+    show: () => widget.controller.setCursorVisible(true),
+    hide: () => widget.controller.setCursorVisible(false),
+  );
+
+  /// where the selections were when the blink was last held back for them
+  int _blinkSelections = 0;
   late EditorTextInput _input;
 
   /// the connection to the input method
@@ -368,7 +375,6 @@ class EditorViewState extends State<EditorView> {
   void _onFocusChange() {
     widget.controller.setFocus(focusNode.hasFocus);
     widget.onFocusChanged?.call(focusNode.hasFocus);
-    _blink?.cancel();
     if (!focusNode.hasFocus) {
       _hideHover();
     }
@@ -376,16 +382,22 @@ class EditorViewState extends State<EditorView> {
       if (!widget.readOnly) {
         _input.attach();
       }
-      _blink = Timer.periodic(const Duration(milliseconds: 530), (_) {
-        widget.controller.setCursorVisible(!widget.controller.cursorVisible);
-      });
+      _blinkSelections = _selectionsNow();
+      _blink.enable();
     } else {
+      _blink.disable();
       _input.detach();
     }
   }
 
   void _onControllerChange() {
     final controller = widget.controller;
+    // the cursor is shown at once, and stays, where the selections changed
+    final selections = _selectionsNow();
+    if (selections != _blinkSelections) {
+      _blinkSelections = selections;
+      _blink.pause();
+    }
     // the popover does not outlast a change of where the selections are, which
     // is also what typing does
     if ((_hoverShown || _showTimer != null) &&
@@ -496,6 +508,9 @@ class EditorViewState extends State<EditorView> {
     } else {
       controller.selectLineAt(offset, add: add);
     }
+    // a click is the user doing something with the selections, also where it
+    // leaves the cursor in the place that it was at
+    _blink.pause();
     _dragging = true;
   }
 
@@ -676,7 +691,7 @@ class EditorViewState extends State<EditorView> {
 
   @override
   void dispose() {
-    _blink?.cancel();
+    _blink.dispose();
     _cancelShow();
     _hideTimer?.cancel();
     _input.detach();
