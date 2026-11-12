@@ -348,6 +348,56 @@ void main() {
       );
     });
 
+    testWidgets('stays at its row when the size of the text changes', (
+      tester,
+    ) async {
+      Future<RenderEditor> show(double fontSize) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 500,
+                height: 300,
+                child: EditorView(
+                  controller: controller,
+                  style: EditorStyle(
+                    textStyle: TextStyle(
+                      fontFamily: 'Roboto',
+                      fontSize: fontSize,
+                      height: 1.5,
+                    ),
+                  ),
+                  autofocus: true,
+                ),
+              ),
+            ),
+          ),
+        );
+        // one frame is all that it is given, as when a key is held
+        await tester.pump();
+        return tester.allRenderObjects.whereType<RenderEditor>().first;
+      }
+
+      controller.setDiagnostics(
+        DiagnosticRanges(details: [_detail(controller, 12, 14)]),
+      );
+      var render = await show(14);
+      final gesture = await mouse(tester);
+      await gesture.moveTo(at(render, 12));
+      await tester.pump(rests);
+      expect(find.byType(DiagnosticPopover), findsOneWidget);
+      // there is no room above the second row, so it is right under it
+      double gap() =>
+          tester.getTopLeft(find.byType(DiagnosticPopover)).dy -
+          render.localToGlobal(Offset(0, 2 * render.lineHeight)).dy;
+      expect(gap(), closeTo(0, 0.01));
+      for (final size in [20.0, 28.0, 12.0]) {
+        render = await show(size);
+        expect(gap(), closeTo(0, 0.01), reason: 'at $size');
+      }
+    });
+
     testWidgets('waits again when the pointer moves before it is shown', (
       tester,
     ) async {

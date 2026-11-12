@@ -601,35 +601,47 @@ class EditorViewState extends State<EditorView> {
       return null;
     }
     final controller = widget.controller;
-    final start = controller.buffer.snapshot.offsetForAnchor(
-      detail.range.start,
-    );
-    var target = render.caretRectForOffset(start);
-    // a place that is out of sight is at the nearest row that is in sight
-    final top = target.top
-        .clamp(0.0, math.max(0.0, render.size.height - render.lineHeight))
-        .toDouble();
-    target = Rect.fromLTWH(target.left, top, target.width, render.lineHeight);
-    return PopoverLayer(
-      target: target,
-      child: KeyedSubtree(
-        key: _popoverKey,
-        child: DiagnosticPopover(
-          key: ObjectKey(detail),
-          detail: detail,
-          colors: controller.diagnosticColors,
-          style: widget.style,
-          contentLimit: popoverContentLimit(
-            area: render.size,
-            charWidth: render.charWidth,
-            lineHeight: render.lineHeight,
+    // the place and the limits are taken while the layout is made, after the
+    // editor has been laid out, so that they are of the size of the text that
+    // it has now, and not of the one that it had before the zoom keys
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final start = controller.buffer.snapshot.offsetForAnchor(
+          detail.range.start,
+        );
+        var target = render.caretRectForOffset(start);
+        // a place that is out of sight is at the nearest row that is in sight
+        final top = target.top
+            .clamp(0.0, math.max(0.0, render.size.height - render.lineHeight))
+            .toDouble();
+        target = Rect.fromLTWH(
+          target.left,
+          top,
+          target.width,
+          render.lineHeight,
+        );
+        return PopoverLayer(
+          target: target,
+          child: KeyedSubtree(
+            key: _popoverKey,
+            child: DiagnosticPopover(
+              key: ObjectKey(detail),
+              detail: detail,
+              colors: controller.diagnosticColors,
+              style: widget.style,
+              contentLimit: popoverContentLimit(
+                area: render.size,
+                charWidth: render.charWidth,
+                lineHeight: render.lineHeight,
+              ),
+              onPointer: _onPopoverPointer,
+              tooltip: widget.tooltip,
+              scrollbarShow: widget.scrollbars.show,
+              systemAutoHide: EditorController.systemHidesScrollbars,
+            ),
           ),
-          onPointer: _onPopoverPointer,
-          tooltip: widget.tooltip,
-          scrollbarShow: widget.scrollbars.show,
-          systemAutoHide: EditorController.systemHidesScrollbars,
-        ),
-      ),
+        );
+      },
     );
   }
 

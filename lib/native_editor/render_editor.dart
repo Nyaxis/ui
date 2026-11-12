@@ -170,7 +170,22 @@ class RenderEditor extends RenderBox {
     _style = value;
     _metricsFor = null;
     _clearRows();
+    _markNeedsLayoutWithSiblings();
+  }
+
+  /// the editor is laid out on its own, as its size is fixed by what it is in,
+  /// so what lies over it, and goes by the places of its text, would be laid
+  /// out before it and be of the places that the text had. the parent is made
+  /// to lay out too, up to the stack that the popover is in, which lays the
+  /// children out in order, the editor first
+  void _markNeedsLayoutWithSiblings() {
     markNeedsLayout();
+    for (var up = parent; up != null; up = up.parent) {
+      up.markNeedsLayout();
+      if (up is RenderStack) {
+        break;
+      }
+    }
   }
 
   bool get softWrap => _softWrap;
@@ -180,7 +195,7 @@ class RenderEditor extends RenderBox {
       return;
     }
     _softWrap = value;
-    markNeedsLayout();
+    _markNeedsLayoutWithSiblings();
   }
 
   bool get showLineNumbers => _showLineNumbers;
@@ -190,7 +205,7 @@ class RenderEditor extends RenderBox {
       return;
     }
     _showLineNumbers = value;
-    markNeedsLayout();
+    _markNeedsLayoutWithSiblings();
   }
 
   // measures
