@@ -710,6 +710,7 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       popoverRadius: theme.rem(8),
       popoverSurface: theme.acrylic ? const Color(0x00000000) : theme.surface,
       popoverBorder: theme.borderVariant,
+      popoverRule: theme.border,
       popoverCodeBackground: theme.background,
       popoverMuted: theme.textDim,
       popoverSuccess: theme.string,

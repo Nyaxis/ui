@@ -361,32 +361,38 @@ class _HoverMarkdownState extends State<HoverMarkdown> {
       ),
     );
     final blocks = parseMarkdown(widget.markdown);
-    final children = <Widget>[];
-    for (var i = 0; i < blocks.length; i++) {
-      final block = blocks[i];
-      final previous = i == 0 ? null : blocks[i - 1];
-      // a code has a margin of a rem over and under it, the rest of a rem's half
-      final isCode = block.kind == MarkdownBlockKind.code;
-      final wasCode = previous?.kind == MarkdownBlockKind.code;
-      if (previous != null) {
-        children.add(
-          SizedBox(height: style.popoverRem(isCode || wasCode ? 16 : 8)),
-        );
-      }
-      children.add(_block(block, styles, code));
-    }
+    // every block has the margins of its own, and they do not run together
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
-      children: children,
+      children: [for (final block in blocks) _block(block, styles, code)],
     );
   }
 
-  Widget _text(String text, InlineStyles styles, [TextStyle? over]) =>
-      Text.rich(
-        TextSpan(
-          style: over == null ? styles.text : styles.text.merge(over),
-          children: inlineSpans(text, styles, onLink: _link),
+  /// the height of a line of a paragraph, as a share of the size of its text:
+  /// it is a length of 1.3 rems, and does not go with the size of the text
+  TextStyle _paragraphText(TextStyle text) => text.copyWith(
+    height:
+        widget.style.popoverRem(EditorStyle.paragraphLineHeight) /
+        text.fontSize!,
+  );
+
+  Widget _text(String text, TextStyle style, InlineStyles styles) => Text.rich(
+    TextSpan(
+      style: style,
+      children: inlineSpans(text, styles, onLink: _link),
+    ),
+  );
+
+  /// a paragraph, with the room under it that a paragraph has, which is of
+  /// pixels and not of rems
+  Widget _paragraph(String text, InlineStyles styles, [TextStyle? over]) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: EditorStyle.paragraphSpacing),
+        child: _text(
+          text,
+          _paragraphText(over == null ? styles.text : styles.text.merge(over)),
+          styles,
         ),
       );
 
@@ -394,41 +400,71 @@ class _HoverMarkdownState extends State<HoverMarkdown> {
     final style = widget.style;
     switch (block.kind) {
       case MarkdownBlockKind.paragraph:
-        return _text(block.text, styles);
+        return _paragraph(block.text, styles);
       case MarkdownBlockKind.heading:
-        return _text(
-          block.text,
-          styles,
-          const TextStyle(fontWeight: FontWeight.w700),
+        // a heading is bold, of the size of a rem, with a rem over it and
+        // nothing under it
+        return Padding(
+          padding: EdgeInsets.only(top: style.popoverRem(16)),
+          child: _text(
+            block.text,
+            styles.text.copyWith(
+              fontSize: style.popoverRem(16),
+              fontWeight: FontWeight.w700,
+            ),
+            styles,
+          ),
         );
       case MarkdownBlockKind.code:
-        return Text(block.text, style: code);
+        // a rem over and under the code
+        return Padding(
+          padding: EdgeInsets.symmetric(vertical: style.popoverRem(16)),
+          child: Text(block.text, style: code),
+        );
       case MarkdownBlockKind.rule:
-        return Container(height: 1, color: style.popoverBorder);
-      case MarkdownBlockKind.quote:
+        // a line of a pixel, with the room of a paragraph over and under it
         return Container(
-          padding: EdgeInsets.only(left: style.popoverRem(8)),
+          margin: const EdgeInsets.symmetric(
+            vertical: EditorStyle.paragraphSpacing,
+          ),
+          height: 1,
+          color: style.popoverRule,
+        );
+      case MarkdownBlockKind.quote:
+        // the text of a quote is a paragraph in it; the quote has the room of
+        // a paragraph under it too
+        return Container(
+          margin: const EdgeInsets.only(bottom: EditorStyle.paragraphSpacing),
+          padding: EdgeInsets.only(left: style.popoverRem(16)),
           decoration: BoxDecoration(
             border: Border(
-              left: BorderSide(color: style.popoverMuted, width: 2),
+              left: BorderSide(color: style.popoverMuted, width: 4),
             ),
           ),
-          child: _text(
+          child: _paragraph(
             block.text,
             styles,
             TextStyle(color: style.popoverMuted),
           ),
         );
       case MarkdownBlockKind.item:
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: style.popoverRem(20),
-              child: Text(block.marker ?? '•', style: styles.text),
-            ),
-            Flexible(child: _text(block.text, styles)),
-          ],
+        // a list is a rem and a quarter in from the left, its items have a
+        // quarter of a rem under them and between the mark and the text
+        return Padding(
+          padding: EdgeInsets.only(
+            left: style.popoverRem(10),
+            bottom: style.popoverRem(4),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(block.marker ?? '•', style: _paragraphText(styles.text)),
+              SizedBox(width: style.popoverRem(4)),
+              Flexible(
+                child: _text(block.text, _paragraphText(styles.text), styles),
+              ),
+            ],
+          ),
         );
     }
   }
@@ -483,7 +519,8 @@ class _InfoPopoverState extends State<InfoPopover> {
       onHover: (_) => widget.onPointer?.call(),
       child: Listener(
         behavior: HitTestBehavior.opaque,
-        child: DecoratedBox(
+        // a container, as its border takes room that the content is not in
+        child: Container(
           decoration: BoxDecoration(
             color: style.popoverSurface,
             borderRadius: BorderRadius.circular(style.popoverRadius),

@@ -174,6 +174,137 @@ void main() {
       );
     }
 
+    group('has the room that the blocks of a hover have', () {
+      Rect rect(WidgetTester tester, String text) =>
+          tester.getRect(find.textContaining(text, findRichText: true).first);
+
+      testWidgets('a paragraph is 1.3 rems high a line, with 8 under it', (
+        tester,
+      ) async {
+        await pump(tester, 'one\n\ntwo');
+        final one = rect(tester, 'one');
+        final two = rect(tester, 'two');
+        // the engine makes the box of a line a whole number of pixels
+        expect(one.height, closeTo(20.8, 0.5));
+        expect(two.top - one.bottom, closeTo(8, 0.01));
+      });
+
+      testWidgets('there is 8 pixels of a paragraph under the last one', (
+        tester,
+      ) async {
+        await pump(tester, 'one');
+        final popover = tester.getRect(find.byType(InfoPopover));
+        final one = rect(tester, 'one');
+        // 8 of the padding, and the 8 of the paragraph; the border is 1
+        expect(popover.bottom - one.bottom, closeTo(1 + 8 + 8, 0.01));
+        expect(one.top - popover.top, closeTo(1 + 8, 0.01));
+      });
+
+      testWidgets('a code has a rem over it and a rem under it', (
+        tester,
+      ) async {
+        await pump(tester, 'one\n\n```luau\nlocal x\n```\n\ntwo');
+        final one = rect(tester, 'one');
+        final code = rect(tester, 'local x');
+        final two = rect(tester, 'two');
+        // the 8 of the paragraph, and the 16 of the code
+        expect(code.top - one.bottom, closeTo(8 + 16, 0.01));
+        expect(two.top - code.bottom, closeTo(16, 0.01));
+      });
+
+      testWidgets('a code at the start has its rem over it, too', (
+        tester,
+      ) async {
+        await pump(tester, '```luau\nlocal x\n```');
+        final popover = tester.getRect(find.byType(InfoPopover));
+        final code = rect(tester, 'local x');
+        expect(code.top - popover.top, closeTo(1 + 8 + 16, 0.01));
+        expect(popover.bottom - code.bottom, closeTo(1 + 8 + 16, 0.01));
+      });
+
+      testWidgets('a rule is a pixel, with 8 over it and 8 under it', (
+        tester,
+      ) async {
+        await pump(tester, 'one\n\n---\n\ntwo');
+        final one = rect(tester, 'one');
+        final two = rect(tester, 'two');
+        // the 8 of the paragraph, 8, the line, and 8
+        expect(two.top - one.bottom, closeTo(8 + 8 + 1 + 8, 0.01));
+      });
+
+      testWidgets('a heading is bold, of a rem, with a rem over it', (
+        tester,
+      ) async {
+        await pump(tester, 'one\n\n# Title');
+        final one = rect(tester, 'one');
+        final title = rect(tester, 'Title');
+        expect(title.top - one.bottom, closeTo(8 + 16, 0.01));
+        final text = tester.widget<RichText>(
+          find.textContaining('Title', findRichText: true),
+        );
+        // the root of the text has the style of its surroundings, and the
+        // span of the heading is in it
+        final span = (text.text as TextSpan).children!.single as TextSpan;
+        expect(span.style!.fontSize, 16);
+        expect(span.style!.fontWeight, FontWeight.w700);
+      });
+
+      testWidgets('a quote is a rem in, with a line of 4, and 8 under it', (
+        tester,
+      ) async {
+        await pump(tester, '> said\n\nafter');
+        final said = rect(tester, 'said');
+        final after = rect(tester, 'after');
+        final popover = tester.getRect(find.byType(InfoPopover));
+        // the border of the popover, its room, the line of the quote, a rem
+        expect(said.left - popover.left, closeTo(1 + 8 + 4 + 16, 0.01));
+        // the 8 of the paragraph in it, and the 8 of the quote
+        expect(after.top - said.bottom, closeTo(8 + 8, 0.01));
+      });
+
+      testWidgets('an item is 10 in, 4 from its mark, with 4 under it', (
+        tester,
+      ) async {
+        await pump(tester, '- one\n- two');
+        final mark = rect(tester, '•');
+        final one = rect(tester, 'one');
+        final two = rect(tester, 'two');
+        final popover = tester.getRect(find.byType(InfoPopover));
+        expect(mark.left - popover.left, closeTo(1 + 8 + 10, 0.01));
+        expect(one.left - mark.right, closeTo(4, 0.01));
+        expect(one.height, closeTo(20.8, 0.5));
+        expect(two.top - one.bottom, closeTo(4, 0.01));
+      });
+
+      testWidgets(
+        'the rems go with the size of the interface, the pixels not',
+        (tester) async {
+          await pump(
+            tester,
+            'one\n\n# Title\n\n```luau\nx\n```\n\ntwo',
+            style: const EditorStyle(
+              textStyle: TextStyle(fontFamily: 'Roboto', fontSize: 14),
+              popoverText: TextStyle(
+                fontFamily: 'Roboto',
+                fontSize: 14,
+                height: 1.5,
+              ),
+              popoverScale: 2,
+            ),
+          );
+          final one = rect(tester, 'one');
+          final title = rect(tester, 'Title');
+          final code = rect(tester, 'x');
+          final two = rect(tester, 'two');
+          // a line of a paragraph is 1.3 rems, which are 32 pixels now
+          expect(one.height, closeTo(41.6, 0.5));
+          // the 8 of the paragraph is of pixels, the rem of the heading is not
+          expect(title.top - one.bottom, closeTo(8 + 32, 0.01));
+          expect(two.top - code.bottom, closeTo(32, 0.01));
+        },
+      );
+    });
+
     testWidgets('shows the code and the text of a hover', (tester) async {
       await pump(tester, '```luau\nlocal x: number\n```\n\nThe **count**.');
       expect(find.text('local x: number'), findsOneWidget);
@@ -216,8 +347,9 @@ void main() {
       final lines = List.generate(40, (i) => 'line $i').join('\n\n');
       await pump(tester, lines, limit: const Size(300, 120));
       final box = tester.getRect(find.byType(InfoPopover));
-      expect(box.height, lessThanOrEqualTo(120));
-      expect(box.width, lessThanOrEqualTo(300));
+      // the limit is of what is inside the border, which is a pixel at each side
+      expect(box.height, lessThanOrEqualTo(120 + 2));
+      expect(box.width, lessThanOrEqualTo(300 + 2));
     });
 
     testWidgets('has room in rems around the text', (tester) async {

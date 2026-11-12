@@ -42,7 +42,19 @@ class EditorStyle {
     this.popoverSuccess = const Color(0xFFA6E3A1),
     this.popoverBorder = const Color(0xFF2C293D),
     this.popoverCodeBackground = const Color(0xFF1E1E2E),
+    this.popoverRule = const Color(0xFF313244),
   });
+
+  /// the color of a rule in the text of a popover
+  final Color popoverRule;
+
+  /// the room under a paragraph, in pixels, which does not go with the size of
+  /// the interface
+  static const double paragraphSpacing = 8;
+
+  /// the height of a line of a paragraph, as it is at the default size of the
+  /// interface: 1.3 rems
+  static const double paragraphLineHeight = 20.8;
 
   /// the border of a popover that has no color of how bad something is, and
   /// what the code in its text lies on
