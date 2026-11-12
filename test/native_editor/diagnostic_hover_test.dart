@@ -38,6 +38,12 @@ DiagnosticDetail _detail(
 );
 
 void main() {
+  test('the text of a popover is at the size of the interface, 16', () {
+    const style = EditorStyle();
+    expect(style.popoverText.fontSize, 16);
+    expect(style.popoverText.height, 1.618);
+  });
+
   group('where the popover goes', () {
     const area = Size(400, 300);
     const size = Size(100, 40);

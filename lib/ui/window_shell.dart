@@ -697,8 +697,9 @@ class _WindowShellState extends State<WindowShell> with WindowListener {
       // a theme, so the one of strings is used
       popoverText: TextStyle(
         fontFamily: theme.fontFamily,
-        fontSize: theme.fontSizeBody,
-        height: 1.4,
+        fontSize: EditorStyle.popoverFontSize,
+        height: EditorStyle.popoverLineHeight,
+        fontWeight: FontWeight.w400,
         color: theme.textPrimary,
       ),
       popoverSurface: theme.acrylic ? const Color(0x00000000) : theme.surface,

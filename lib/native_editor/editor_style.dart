@@ -31,8 +31,8 @@ class EditorStyle {
     this.scrollbarMarker = const Color(0xFF94E2D5),
     this.roundedSelection = true,
     this.popoverText = const TextStyle(
-      fontSize: 13,
-      height: 1.4,
+      fontSize: popoverFontSize,
+      height: popoverLineHeight,
       color: Color(0xFFCDD6F4),
     ),
     this.popoverSurface = const Color(0xFF181825),
@@ -40,6 +40,11 @@ class EditorStyle {
     this.popoverMuted = const Color(0xFF9399B2),
     this.popoverSuccess = const Color(0xFFA6E3A1),
   });
+
+  /// the size of the text of a popover, which is the size of the interface's
+  /// text, and the height of its lines
+  static const double popoverFontSize = 16;
+  static const double popoverLineHeight = 1.618;
 
   /// the color of a button in a popover, and of it once it has done its work
   final Color popoverMuted;
