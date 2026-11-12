@@ -621,6 +621,8 @@ class EditorViewState extends State<EditorView> {
             lineHeight: render.lineHeight,
           ),
           onPointer: _onPopoverPointer,
+          scrollbarShow: widget.scrollbars.show,
+          systemAutoHide: EditorController.systemHidesScrollbars,
         ),
       ),
     );

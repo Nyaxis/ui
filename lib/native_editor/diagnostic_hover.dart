@@ -9,6 +9,8 @@ import 'package:flutter/widgets.dart';
 
 import 'editor_controller.dart';
 import 'editor_style.dart';
+import 'popover_scrollbar.dart';
+import 'scrollbar_layout.dart' show ScrollbarVisibility;
 
 /// when the editor says what the language server found about the text that the
 /// pointer rests on
@@ -205,7 +207,15 @@ class DiagnosticPopover extends StatefulWidget {
     required this.contentLimit,
     this.onOpenLink = openLink,
     this.onPointer,
+    this.scrollbarShow = ScrollbarVisibility.auto,
+    this.systemAutoHide = false,
   });
+
+  /// when the scrollbar of the text is shown, which is the setting of the
+  /// editor's scrollbars; with system, whether the system hides them is
+  /// [systemAutoHide]
+  final ScrollbarVisibility scrollbarShow;
+  final bool systemAutoHide;
 
   final DiagnosticDetail detail;
   final DiagnosticColors colors;
@@ -225,6 +235,7 @@ class DiagnosticPopover extends StatefulWidget {
 class _DiagnosticPopoverState extends State<DiagnosticPopover> {
   late final TapGestureRecognizer _link = TapGestureRecognizer()
     ..onTap = _openLink;
+  final ScrollController _scroll = ScrollController();
   Timer? _copiedTimer;
   bool _copied = false;
 
@@ -252,6 +263,7 @@ class _DiagnosticPopoverState extends State<DiagnosticPopover> {
   void dispose() {
     _copiedTimer?.cancel();
     _link.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -303,43 +315,58 @@ class _DiagnosticPopoverState extends State<DiagnosticPopover> {
               border: Border.all(color: accent),
               borderRadius: radius,
             ),
-            child: Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 4, 32, 4),
-                  child: SizedBox(
-                    width: width,
-                    height: height,
-                    child: SingleChildScrollView(
-                      child: Text.rich(text, textDirection: TextDirection.ltr),
+            child: PopoverScrollbar(
+              controller: _scroll,
+              behavior: popoverScrollbarBehavior(
+                widget.scrollbarShow,
+                systemAutoHide: widget.systemAutoHide,
+              ),
+              thumb: style.scrollbarThumb,
+              thumbHover: style.scrollbarThumbHover,
+              thumbActive: style.scrollbarThumbActive,
+              surface: style.scrollbarTrack,
+              child: Stack(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 4, 32, 4),
+                    child: SizedBox(
+                      width: width,
+                      height: height,
+                      child: SingleChildScrollView(
+                        controller: _scroll,
+                        child: Text.rich(
+                          text,
+                          textDirection: TextDirection.ltr,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: Tooltip(
-                    message: tip,
-                    child: MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _copy,
-                        child: Padding(
-                          padding: const EdgeInsets.all(2),
-                          child: Icon(
-                            _copied ? Icons.check : Icons.content_copy,
-                            size: 14,
-                            color: _copied
-                                ? style.popoverSuccess
-                                : style.popoverMuted,
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Tooltip(
+                      message: tip,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _copy,
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: Icon(
+                              _copied ? Icons.check : Icons.content_copy,
+                              size: 14,
+                              color: _copied
+                                  ? style.popoverSuccess
+                                  : style.popoverMuted,
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
